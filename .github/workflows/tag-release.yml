@@ -1,0 +1,45 @@
+# Releases new version. A release merely entails tagging the main branch with a correct semantic version
+# This approach is taken, since GitHub doesn't support private package repositories for Python.
+name: Release
+run-name: Release
+on: workflow_dispatch
+
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Test valid version
+        run: |
+          pip install poetry semver click
+          git fetch --tags --quiet
+          PREVIOUS_VERSION=$(git tag -l 'v*' | sort --version-sort | tail -n1)
+          NEW_VERSION="v$(poetry version -s)"
+
+          if [ $(git tag -l "$NEW_VERSION") ]; then
+              echo "Version $NEW_VERSION already exists"
+              exit 1
+          fi
+
+          python scripts/assert_correct_package_version.py --old-version=$PREVIOUS_VERSION --new-version=$NEW_VERSION
+      - name: Create tag
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner, 
+              repo: context.repo.repo, 
+              ref: "refs/tags/v$(poetry version -s)", 
+              sha: context.sha
+            })
+      - name: Publish documentation
+        uses: actions/github-script@v6
+        with:
+          script: |
+            poetry install --only main,docs
+            mike deploy --push --update-aliases $(poetry version -s) latest
