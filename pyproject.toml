@@ -86,6 +86,28 @@ convention = "google"
     "SLF001", # allow accessing private methods
     "T201", # allow prints in tests
 ]
+
 [tool.setuptools]
 py-modules = ["pyglaze"]
+
+[tool.bumpver]
+current_version = "0.1.0"
+version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
+commit_message = "bump version {old_version} -> {new_version}"
+tag_message = "{new_version}"
+tag_scope = "default"
+pre_commit_hook = ""
+post_commit_hook = ""
+commit = false
+tag = false
+push = false
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+    'version = "{version}"',
+]
+"pyglaze/__init__.py" = [
+    '__version__ = "{version}"',
+]
 
