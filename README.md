@@ -1,6 +1,7 @@
-# Documentation
+# Pyglaze
+Pyglaze is a python library used to operate the devices of [Glaze Technologies](https://www.glazetech.dk/).
 
-Documentation can be found [here](https://glazetech.github.io/App/).
+Documentation can be found [here](https://glazetech.github.io/pyglaze/).
 
 # Install the Glaze API
 
@@ -28,4 +29,4 @@ pip install -e .[dev] --config-settings editable_mode=strict
 The last config settings are required for Pylance to find the package.
 
 # Bug reporting or feature requests
-Please create an issue [here](https://github.com/GlazeTech/App/issues) and we will look at it ASAP!
+Please create an issue [here](https://github.com/GlazeTech/pyglaze/issues) and we will look at it ASAP!
