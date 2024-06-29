@@ -2,7 +2,6 @@ from typing import get_args
 from uuid import UUID
 
 import pytest
-
 from pyglaze.device import get_device_id
 from pyglaze.device.identifiers import DeviceName
 

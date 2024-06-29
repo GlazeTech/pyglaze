@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Literal, cast
 
@@ -110,9 +109,7 @@ class Pulse:
             d: A dictionary containing the keys 'time', 'signal' and potentially 'signal_err'.
         """
         err = (
-            np.array(d["signal_err"])
-            if type(d.get("signal_err")) != type(None)
-            else None
+            np.array(d["signal_err"]) if type(d.get("signal_err")) is not None else None
         )
         return Pulse(
             time=np.array(d["time"]), signal=np.array(d["signal"]), signal_err=err

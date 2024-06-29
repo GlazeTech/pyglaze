@@ -3,18 +3,20 @@ Pyglaze is a python library used to operate the devices of [Glaze Technologies](
 
 Documentation can be found [here](https://glazetech.github.io/pyglaze/).
 
-# Install the Glaze API
+# Installation
 
-It is currently not possible to store python packages in a private Github repository (see [this](https://github.com/community/community/discussions/8542). Therefore, to install the API using `pip`, run
+To install the latest version of the package, simply run 
 
 ```
-pip install git+https://github.com/GlazeTech/App.git@v<DESIRED_VERSION>
+pip install pyglaze
 ```
-where available versions (for `<DESIRED_VERSION>`) are shown [here](https://github.com/GlazeTech/App/tags).
+
+# Usage 
+See [this tutorial](https://glazetech.github.io/pyglaze/).
 
 # Developers
 
-To install the API with development tools, run
+To install the API with development tools, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
 
 ```
 pip install .[dev, docs]
@@ -27,6 +29,14 @@ pip install -e .[dev] --config-settings editable_mode=strict
 ```
 
 The last config settings are required for Pylance to find the package.
+
+## Documentation - local build
+To build and serve the documentation locally
+
+1. Checkout the repository (or a specific version)
+2. Install `mkdocs`
+3. Run `mkdocs serve` while standing in the project root.
+
 
 # Bug reporting or feature requests
 Please create an issue [here](https://github.com/GlazeTech/pyglaze/issues) and we will look at it ASAP!

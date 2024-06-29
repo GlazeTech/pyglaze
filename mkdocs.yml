@@ -8,7 +8,7 @@ theme:
     primary: red
 
 watch:
-  - pyglaze
+  - src/pyglaze
   
 markdown_extensions:
   - attr_list

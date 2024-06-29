@@ -15,10 +15,11 @@ dependencies = [
     "pyserial>=3.5",
     "scipy>=1.7.3",
     "bitstring>=4.1.2",
+    "typing_extensions>=4.12.2"
 ]
 
 [project.urls]
-Homepage = "https://glazetech.github.io/pyglaze/"
+Homepage = "https://github.com/GlazeTech/pyglaze"
 
 [project.optional-dependencies]
 dev = [
@@ -31,6 +32,8 @@ dev = [
     "toml>=0.10.2",
     "semver>=2.13.0",
     "types-pyserial>=3.5.0.8",
+    "build>=1.2.1",
+    "twine>=5.1.1",
 ]
 
 docs = [
@@ -46,9 +49,14 @@ docs = [
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
 
 [tool.pytest.ini_options]
-addopts = "--cov=pyglaze"
+addopts = [
+    "--cov=pyglaze", 
+    "--import-mode=importlib",
+]
 
 [tool.coverage.report]
 exclude_also = [
@@ -86,9 +94,6 @@ convention = "google"
     "SLF001", # allow accessing private methods
     "T201", # allow prints in tests
 ]
-
-[tool.setuptools]
-py-modules = ["pyglaze"]
 
 [tool.bumpver]
 current_version = "0.1.0"

@@ -7,10 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from scipy.interpolate import CubicSpline
-
 from pyglaze.device import delayunit, load_delayunit
 from pyglaze.device.delayunit import _load_delayunit_from_path
+from scipy.interpolate import CubicSpline
 
 
 @pytest.fixture()

@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
 from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse

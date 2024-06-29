@@ -2,8 +2,6 @@ from typing import Literal  # noqa: N999
 
 import numpy as np
 import pytest
-from matplotlib import pyplot as plt
-
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
 
 
