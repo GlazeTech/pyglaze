@@ -9,8 +9,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.9"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v3
@@ -23,6 +23,8 @@ jobs:
           pip install -r requirements-build.txt
           python -m build
           pip install dist/*.whl
+      - name: Run twine check
+        run: twine check dist/*
       - name: Run pytest
         run: |
           pip install -r requirements-test.txt

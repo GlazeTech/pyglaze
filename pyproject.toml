@@ -5,8 +5,7 @@ description = "Pyglaze is a library used to operate the devices of Glaze Technol
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    {name = "Bjørn Mølvig, email= bjoernmoelvig@gmail.com"},
-    {name = "Mads Ehrhorn, email= mads.ehrhorn@gmail.com"},
+    {name = "GLAZE Technologies ApS"},
 ]
 requires-python = ">=3.9"
 
@@ -19,7 +18,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/GlazeTech/pyglaze"
+Homepage = "https://www.glazetech.dk/"
+Documentation = "https://glazetech.github.io/pyglaze/latest"
+Repository = "https://github.com/GlazeTech/pyglaze"
+Issues = "https://github.com/GlazeTech/pyglaze/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -112,7 +114,7 @@ push = false
     'current_version = "{version}"',
     'version = "{version}"',
 ]
-"pyglaze/__init__.py" = [
+"src/pyglaze/__init__.py" = [
     '__version__ = "{version}"',
 ]
 

@@ -1,4 +1,5 @@
-site_name: PYGLAZE
+site_name: Pyglaze
+repo_url: https://github.com/GlazeTech/pyglaze/
 
 theme:
   name: "material"
@@ -34,6 +35,7 @@ plugins:
       default_handler: python
       handlers:
         python:
+          paths: [src]
           selection:
             docstring_style: google
           rendering:

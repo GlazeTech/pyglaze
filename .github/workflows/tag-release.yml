@@ -41,5 +41,5 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            poetry install --only main,docs
-            mike deploy --push --update-aliases $(poetry version -s) latest
+            pip install -r requirements-docs.txt
+            mike deploy --push --update-aliases $(bumpver show --environ | grep "CURRENT_VERSION" | cut -d'=' -f2 | tr -d ' ') latest

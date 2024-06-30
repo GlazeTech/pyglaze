@@ -1,5 +1,7 @@
 ## Welcome
 
+__version__: 0.1.0
+
 This is the Pyglaze API documentation. Pyglaze is a python library used to operate the devices of [Glaze Technologies](https://www.glazetech.dk/). If you have a feature request or discover a bug, please create an issue [here](https://github.com/GlazeTech/pyglaze/issues) and we will look at it ASAP!
 
 ## Usage
