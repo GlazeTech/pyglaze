@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install dependencies
-        run: pip install .[dev] --use-feature=in-tree-build
+        run: pip install -r requirements-dev.txt
       - name: Run ruff linter
         run: ruff check .
       - name: Run ruff formatter
@@ -58,6 +58,6 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install dependencies
-        run: pip install .[docs] --use-feature=in-tree-build
+        run: pip install -r requirements-docs.txt
       - name: Test docs build
         run: mkdocs build --strict

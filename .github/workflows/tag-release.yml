@@ -14,19 +14,12 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
-      - name: Test valid version
-        run: |
-          pip install poetry semver click
-          git fetch --tags --quiet
-          PREVIOUS_VERSION=$(git tag -l 'v*' | sort --version-sort | tail -n1)
-          NEW_VERSION="v$(poetry version -s)"
-
-          if [ $(git tag -l "$NEW_VERSION") ]; then
-              echo "Version $NEW_VERSION already exists"
-              exit 1
-          fi
-
-          python scripts/assert_correct_package_version.py --old-version=$PREVIOUS_VERSION --new-version=$NEW_VERSION
+      - name: Install dependencies
+        run: pip install -r requirements-build.txt
+      - name: Build package
+        run: python -m build
+      - name: Publish package
+        run: twine upload dist/*
       - name: Create tag
         uses: actions/github-script@v6
         with:
@@ -34,7 +27,7 @@ jobs:
             github.rest.git.createRef({
               owner: context.repo.owner, 
               repo: context.repo.repo, 
-              ref: "refs/tags/v$(poetry version -s)", 
+              ref: "refs/tags/v$(bumpver show --environ | grep "CURRENT_VERSION" | cut -d'=' -f2 | tr -d ' ')", 
               sha: context.sha
             })
       - name: Publish documentation
