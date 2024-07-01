@@ -25,16 +25,6 @@ jobs:
         env:
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
         run: twine upload -r testpypi dist/*
-      - name: Create tag
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.git.createRef({
-              owner: context.repo.owner, 
-              repo: context.repo.repo, 
-              ref: "refs/tags/v$(bumpver show --environ | grep "CURRENT_VERSION" | cut -d'=' -f2 | tr -d ' ')", 
-              sha: context.sha
-            })
       - name: Publish documentation
         uses: actions/github-script@v6
         with:
