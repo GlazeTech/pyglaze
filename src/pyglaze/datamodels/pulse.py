@@ -38,7 +38,7 @@ class Pulse:
         return bool(
             np.array_equal(self.time, obj.time)
             and np.array_equal(self.signal, obj.signal)
-            and np.array_equal(self.signal_err, obj.signal_err)
+            and np.array_equal(self.signal_err, obj.signal_err)  # type: ignore[arg-type]
         )
 
     @cached_property
