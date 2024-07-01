@@ -1,0 +1,99 @@
+[project]
+name = "pyglaze"
+version = "0.1.0"
+description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    {name = "GLAZE Technologies ApS"},
+]
+requires-python = ">=3.9,<3.13"
+
+dependencies = [
+    "numpy>=1.26.4,<2.0.0",
+    "pyserial>=3.5",
+    "scipy>=1.7.3",
+    "bitstring>=4.1.2",
+    "typing_extensions>=4.12.2"
+]
+
+[project.urls]
+Homepage = "https://www.glazetech.dk/"
+Documentation = "https://glazetech.github.io/pyglaze/latest"
+Repository = "https://github.com/GlazeTech/pyglaze"
+Issues = "https://github.com/GlazeTech/pyglaze/issues"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=pyglaze", 
+    "--import-mode=importlib",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:", # type checking is turned off at runtime
+    "@(abc\\.)?abstractmethod", # abstract methods aren't executed
+    ]
+
+[tool.ruff]
+target-version = "py39"
+lint.select = ["ALL"]
+lint.ignore = [
+    "D100",   # allow undocumented public modules
+    "D104",   # allow undocumented public package
+    "D106",   # allow undocumented public nested class
+    "D107",   # allow undocumented public __init__
+    "D203",   # allow 0 black lines before class docstring
+    "D213",   # allow multiline docstring to start on first line
+    "COM812", # allow missing trailing comma in type annotation
+    "E501",   # don't enforce line length
+    "N802", # allow uppercase in function names
+    "N803", # allow uppercase in function args
+    "N806", # allow uppercase in variable names
+    "S301", # allow unpickling
+    "ISC001", # disable as advised by "ruff format"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D", # allow missing docs
+    "PLR2004", # allow magic numbers
+    "S101", # allow asserts
+    "SLF001", # allow accessing private methods
+    "T201", # allow prints in tests
+]
+
+[tool.bumpver]
+current_version = "0.1.0"
+version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
+commit_message = "BUMP VERSION {old_version} -> {new_version}"
+tag_message = "v{new_version}"
+tag_scope = "default"
+pre_commit_hook = ""
+post_commit_hook = ""
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+    'version = "{version}"',
+]
+"src/pyglaze/__init__.py" = [
+    '__version__ = "{version}"',
+]
+"docs/index.md" = [
+    '**Documentation Version**: {version}'
+]
+
