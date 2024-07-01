@@ -22,9 +22,9 @@ jobs:
         run: |
           pip install -r requirements-build.txt
           python -m build
-          pip install dist/*.whl
+          python scripts/install_wheel.py
       - name: Run twine check
-        run: twine check dist/*
+        run: python scripts/check_wheel.py
       - name: Run pytest
         run: |
           pip install -r requirements-test.txt
@@ -40,13 +40,15 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: |
+          pip install .
+          pip install -r requirements-dev.txt
       - name: Run ruff linter
         run: ruff check .
       - name: Run ruff formatter
         run: ruff format . --check
       - name: Run mypy
-        run: mypy .
+        run: mypy
 
   docs:
     timeout-minutes: 15

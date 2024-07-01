@@ -7,7 +7,7 @@ license = { file = "LICENSE" }
 authors = [
     {name = "GLAZE Technologies ApS"},
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.13"
 
 dependencies = [
     "numpy>=1.26.4,<2.0.0",

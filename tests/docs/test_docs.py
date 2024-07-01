@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import ClassVar
 
 import pytest
 
@@ -38,17 +37,15 @@ class PulseExampleDeps(DoctestDep):
 
 @DOCTEST_DEPS_REGISTRY.register
 class IndexDeps(DoctestDep):
-    SAVED_PULSE_PATHS: ClassVar[list[Path]] = [
-        Path("scan_result_scanner.json"),
-        Path("scan_result.json"),
-    ]
-
-    def path(self: PulseExampleDeps) -> Path:
+    def path(self: IndexDeps) -> Path:
         return Path("docs/index.md")
 
-    def setup(self: PulseExampleDeps, monkeypatch: pytest.MonkeyPatch) -> None:
+    def setup(self: IndexDeps, monkeypatch: pytest.MonkeyPatch) -> None:
         pass
 
-    def teardown(self: PulseExampleDeps) -> None:
-        for p in self.SAVED_PULSE_PATHS:
+    def teardown(self: IndexDeps) -> None:
+        for p in [
+            Path("scan_result_scanner.json"),
+            Path("scan_result.json"),
+        ]:
             p.unlink()
