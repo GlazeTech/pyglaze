@@ -1,7 +1,7 @@
 # Pyglaze
 Pyglaze is a python library used to operate the devices of [Glaze Technologies](https://www.glazetech.dk/).
 
-Documentation can be found [here](https://glazetech.github.io/pyglaze/).
+Documentation can be found [here](https://glazetech.github.io/pyglaze/latest/).
 
 # Installation
 
@@ -12,7 +12,7 @@ pip install pyglaze
 ```
 
 # Usage 
-See [our documentation](https://glazetech.github.io/pyglaze/latest) for usage.
+See [our documentation](https://glazetech.github.io/pyglaze/latest/) for usage.
 
 # Developers
 
