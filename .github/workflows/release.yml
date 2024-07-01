@@ -2,8 +2,11 @@
 # This approach is taken, since GitHub doesn't support private package repositories for Python.
 name: Release
 run-name: Release
-on: workflow_dispatch
-
+# on: workflow_dispatch
+on: 
+  push:
+    branches:
+      - "bmo/migrate"
 jobs:
   tag-release:
     runs-on: ubuntu-latest
