@@ -40,9 +40,14 @@ class Pulse:
             return False
         if obj.signal.shape != self.signal.shape:
             return False
-        if not isinstance(obj.signal_err, type(self.signal_err)):
+        if (obj.signal_err is None and self.signal_err is not None) or (
+            obj.signal_err is not None and self.signal_err is None
+        ):
             return False
-
+        if obj.signal_err is None and self.signal_err is None:
+            return bool(
+                np.all(obj.time == self.time) and np.all(obj.signal == self.signal)
+            )
         return bool(
             np.all(obj.time == self.time)
             and np.all(obj.signal == self.signal)
