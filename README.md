@@ -12,23 +12,17 @@ pip install pyglaze
 ```
 
 # Usage 
-See [our documentation](https://glazetech.github.io/pyglaze/latest) for usage..
+See [our documentation](https://glazetech.github.io/pyglaze/latest) for usage.
 
 # Developers
 
-To install the API with development tools, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
+To install the API with development tools in editable mode, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
 
 ```
-pip install .[dev, docs]
+python -m pip install --upgrade pip
+pip install -e . --config-settings editable_mode=strict
+pip install -r requirements-dev.txt
 ```
-
-Furthermore, for developers using VS Code, to install the API in editable mode run
-
-```
-pip install -e .[dev] --config-settings editable_mode=strict
-```
-
-The last config settings are required for Pylance to find the package.
 
 ## Documentation - local build
 To build and serve the documentation locally

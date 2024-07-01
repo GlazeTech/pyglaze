@@ -41,7 +41,7 @@ When defining the configuration, a list of `scan_intervals` is set, determining 
 
 ```py
 with GlazeClient(config=device_config) as client:
-    scans = client.read(n_pulses=10)
+    scans = client.read(n_pulses=1)
     pulses = [
         pulse.from_triangular_waveform(ramp="down")
         .reconstruct(method="cubic_spline")
@@ -72,6 +72,7 @@ device_config = LeDeviceConfiguration(
     amp_port="mock_device",
     delayunit="mock_delay",
     integration_periods=10,
+    n_points=100,
     scan_intervals=[
         Interval(0.5, 1.0),
         Interval(1.0, 0.0),
