@@ -18,14 +18,19 @@ jobs:
         with:
           python-version: "3.9"
       - name: Install dependencies
-        run: pip install -r requirements-build.txt
-      - name: Build package
-        run: python -m build
-      - name: Publish package
-        env:
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
-        run: twine upload -r testpypi dist/*
+        run: |
+          pip install -r requirements-build.txt
+          pip install -r requirements-docs.txt
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      # - name: Build package
+      #   run: python -m build
+      # - name: Publish package
+      #   env:
+      #     TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      #   run: twine upload -r testpypi dist/*
       - name: Publish documentation
         run: |
-          pip install -r requirements-docs.txt
           mike deploy --push --update-aliases $(bumpver show --environ | grep "CURRENT_VERSION" | cut -d'=' -f2 | tr -d ' ') latest
