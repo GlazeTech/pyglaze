@@ -35,23 +35,10 @@ class Pulse:
         if not isinstance(obj, Pulse):
             return False
 
-        # Check if shapes are equal before using np.all (will throw error on different shapes)
-        if obj.time.shape != self.time.shape:
-            return False
-        if obj.signal.shape != self.signal.shape:
-            return False
-        if (obj.signal_err is None and self.signal_err is not None) or (
-            obj.signal_err is not None and self.signal_err is None
-        ):
-            return False
-        if obj.signal_err is None and self.signal_err is None:
-            return bool(
-                np.all(obj.time == self.time) and np.all(obj.signal == self.signal)
-            )
         return bool(
-            np.all(obj.time == self.time)
-            and np.all(obj.signal == self.signal)
-            and np.all(obj.signal_err == self.signal_err)
+            np.array_equal(self.time, obj.time)
+            and np.array_equal(self.signal, obj.signal)
+            and np.array_equal(self.signal_err, obj.signal_err)
         )
 
     @cached_property
