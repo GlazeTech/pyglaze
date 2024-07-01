@@ -12,7 +12,7 @@ pip install pyglaze
 ```
 
 # Usage 
-See [this tutorial](https://glazetech.github.io/pyglaze/).
+See [our documentation](https://glazetech.github.io/pyglaze/latest) for usage..
 
 # Developers
 
