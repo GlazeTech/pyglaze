@@ -100,9 +100,7 @@ class Pulse:
         Args:
             d: A dictionary containing the keys 'time', 'signal' and potentially 'signal_err'.
         """
-        err = (
-            np.array(d["signal_err"]) if type(d.get("signal_err")) is not None else None
-        )
+        err = np.array(d["signal_err"]) if d.get("signal_err") is not None else None
         return Pulse(
             time=np.array(d["time"]), signal=np.array(d["signal"]), signal_err=err
         )
