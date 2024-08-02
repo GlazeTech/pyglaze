@@ -67,7 +67,7 @@ def test_tukey(
 ) -> None:
     scan_data: Pulse = request.getfixturevalue(pulse_name)
     windowed = scan_data.tukey(**tukey_args)
-    assert type(windowed) == Pulse
+    assert isinstance(windowed, Pulse)
     assert len(windowed) == len(scan_data)
     assert windowed.signal[0] == 0
 
