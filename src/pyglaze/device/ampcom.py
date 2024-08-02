@@ -235,7 +235,7 @@ class _LeAmpCom:
             delayunit=load_delayunit(self.config.delayunit),
             intervals=self.config.scan_intervals,
             points_per_interval=_points_per_interval(
-                self.scanning_points, self._squished_intervals
+                self.scanning_points, self._intervals
             ),
         )
 
@@ -243,8 +243,8 @@ class _LeAmpCom:
     def scanning_list(self: _LeAmpCom) -> list[int]:
         scanning_list: list[int] = []
         for interval, n_points in zip(
-            self._squished_intervals,
-            _points_per_interval(self.scanning_points, self._squished_intervals),
+            self._intervals,
+            _points_per_interval(self.scanning_points, self._intervals),
         ):
             denormalized = self._denormalize_interval(interval)
             scanning_list.extend(
@@ -296,14 +296,9 @@ class _LeAmpCom:
         return self.START_COMMAND, output_array
 
     @cached_property
-    def _squished_intervals(self: _LeAmpCom) -> list[Interval]:
+    def _intervals(self: _LeAmpCom) -> list[Interval]:
         """Intervals squished into effective DAC range."""
-        return _squish_intervals(
-            intervals=self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)],
-            lower_bound=self.config.fs_dac_lower_bound,
-            upper_bound=self.config.fs_dac_upper_bound,
-            bitwidth=self.DAC_BITWIDTH,
-        )
+        return self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)]
 
     def _convert_to_r_angle(
         self: _LeAmpCom, Xs: list, Ys: list
