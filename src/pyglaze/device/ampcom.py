@@ -216,7 +216,6 @@ class _LeAmpCom:
     __ser: serial.Serial | LeMockDevice = field(init=False)
 
     ENCODING: ClassVar[str] = "utf-8"
-    DAC_BITWIDTH: ClassVar[int] = 4096  # 12-bit DAC
 
     OK_RESPONSE: ClassVar[str] = "ACK"
     START_COMMAND: ClassVar[str] = "G"
@@ -246,11 +245,13 @@ class _LeAmpCom:
             self._intervals,
             _points_per_interval(self.scanning_points, self._intervals),
         ):
-            denormalized = self._denormalize_interval(interval)
             scanning_list.extend(
                 np.linspace(
-                    denormalized[0], denormalized[1], n_points, endpoint=False
-                ).astype(int),
+                    interval.lower,
+                    interval.upper,
+                    n_points,
+                    endpoint=len(self._intervals) == 1,
+                ),
             )
         return scanning_list
 
@@ -306,11 +307,6 @@ class _LeAmpCom:
         r = np.sqrt(np.array(Xs) ** 2 + np.array(Ys) ** 2)
         angle = np.arctan2(np.array(Ys), np.array(Xs))
         return r, np.rad2deg(angle)
-
-    def _denormalize_interval(self: _LeAmpCom, interval: Interval) -> list[int]:
-        lower = int(interval.lower * self.DAC_BITWIDTH)
-        upper = int(interval.upper * self.DAC_BITWIDTH)
-        return [lower, upper]
 
     def _encode_send_response(self: _LeAmpCom, command: str) -> str:
         self._encode_and_send(command)
