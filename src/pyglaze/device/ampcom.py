@@ -272,14 +272,14 @@ class _LeAmpCom:
 
     def write_list_length_and_integration_periods_and_use_ema(self: _LeAmpCom) -> str:
         self._encode_send_response(self.SEND_SETTINGS_COMMAND)
-        self._raw_byte_send(
+        self._raw_byte_send_ints(
             [self.scanning_points, self.config.integration_periods, self.config.use_ema]
         )
         return self._get_response()
 
     def write_list(self: _LeAmpCom) -> str:
         self._encode_send_response(self.SEND_LIST_COMMAND)
-        self._raw_byte_send(self.scanning_list)
+        self._raw_byte_send_floats(self.scanning_list)
         return self._get_response()
 
     def start_scan(self: _LeAmpCom) -> tuple[str, np.ndarray]:
@@ -315,7 +315,13 @@ class _LeAmpCom:
     def _encode_and_send(self: _LeAmpCom, command: str) -> None:
         self.__ser.write(command.encode(self.ENCODING))
 
-    def _raw_byte_send(self: _LeAmpCom, values: list[float]) -> None:
+    def _raw_byte_send_ints(self: _LeAmpCom, values: list[int]) -> None:
+        c = BitArray()
+        for value in values:
+            c.append(BitArray(uintle=value, length=16))
+        self.__ser.write(c.tobytes())
+
+    def _raw_byte_send_floats(self: _LeAmpCom, values: list[float]) -> None:
         c = BitArray()
         for value in values:
             c.append(BitArray(floatle=value, length=32))
