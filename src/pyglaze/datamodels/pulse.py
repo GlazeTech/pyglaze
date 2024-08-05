@@ -457,6 +457,24 @@ class Pulse:
 
         return cast(float, np.max(max_estimate) - np.min(min_estimate))
 
+    def estimate_zero_crossing(self: Pulse) -> float:
+        """Estimates the zero crossing of the pulse between the maximum and minimum value.
+
+        Returns:
+            float: Estimated zero crossing.
+        """
+        argmax = np.argmax(self.signal)
+        argmin = np.argmin(self.signal)
+        if argmax < argmin:
+            idx = np.searchsorted(-self.signal[argmax:argmin], 0) + argmax - 1
+        else:
+            idx = np.searchsorted(self.signal[argmin:argmax], 0) + argmin - 1
+
+        # Solve 0 = s1 + a * (t - t1) for t to find the zero crossing
+        t1, s1 = self.time[idx], self.signal[idx]
+        a = (self.signal[idx + 1] - self.signal[idx]) / self.dt
+        return t1 - s1 / a
+
     def to_native_dict(self: Pulse) -> dict[str, list[float] | None]:
         """Converts the Pulse object to a native dictionary.
 
