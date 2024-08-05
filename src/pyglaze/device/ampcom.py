@@ -239,8 +239,8 @@ class _LeAmpCom:
         )
 
     @cached_property
-    def scanning_list(self: _LeAmpCom) -> list[int]:
-        scanning_list: list[int] = []
+    def scanning_list(self: _LeAmpCom) -> list[float]:
+        scanning_list: list[float] = []
         for interval, n_points in zip(
             self._intervals,
             _points_per_interval(self.scanning_points, self._intervals),
@@ -315,10 +315,10 @@ class _LeAmpCom:
     def _encode_and_send(self: _LeAmpCom, command: str) -> None:
         self.__ser.write(command.encode(self.ENCODING))
 
-    def _raw_byte_send(self: _LeAmpCom, values: list[int]) -> None:
+    def _raw_byte_send(self: _LeAmpCom, values: list[float]) -> None:
         c = BitArray()
         for value in values:
-            c.append(BitArray(uintle=value, length=16))
+            c.append(BitArray(floatle=value, length=32))
         self.__ser.write(c.tobytes())
 
     def _await_scan_finished(self: _LeAmpCom) -> None:
