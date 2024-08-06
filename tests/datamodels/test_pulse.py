@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from pyglaze.datamodels import Pulse
+from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
 
 @pytest.mark.parametrize(
@@ -366,3 +367,17 @@ def test_estimate_peak_to_peak_raises(gaussian_deriv_pulse: Pulse) -> None:
         gaussian_deriv_pulse.estimate_peak_to_peak(
             delay_tolerance=gaussian_deriv_pulse.dt
         )
+
+
+def test_estimate_zero_crossing() -> None:
+    dt = 0.1e-12
+    times = np.arange(50) * dt
+    t0 = 2.05e-12
+    pulse = Pulse(
+        time=times,
+        signal=gaussian_derivative_pulse(time=times, t0=t0, sigma=0.3e-12),
+    )
+
+    zero_crossing = pulse.estimate_zero_crossing()
+    assert isinstance(zero_crossing, float)
+    assert zero_crossing == pytest.approx(t0, 1e-4 * 1e-12)
