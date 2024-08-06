@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from pyglaze.device import ForceDeviceConfiguration, Interval
-from pyglaze.device.ampcom import _ForceAmpCom
+from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
+from pyglaze.device.ampcom import _ForceAmpCom, _LeAmpCom
 
 
 @pytest.mark.parametrize("p", [(-1.1, 0.4), (-1.0, 0.6), (-1.1, 0.6)])
@@ -39,6 +39,12 @@ def test_ampcom_scanlist_length(force_device_config: ForceDeviceConfiguration) -
     amp = _ForceAmpCom(force_device_config)
 
     assert len(amp.scanning_list) == amp.N_POINTS
+
+
+def test_ampcom_scanlist_values(le_device_config: LeDeviceConfiguration) -> None:
+    amp = _LeAmpCom(le_device_config)
+    assert np.max(amp.scanning_list) <= 1.0
+    assert np.min(amp.scanning_list) >= 0.0
 
 
 def test_evenly_distanced_times(force_device_config: ForceDeviceConfiguration) -> None:

@@ -216,7 +216,6 @@ class _LeAmpCom:
     __ser: serial.Serial | LeMockDevice = field(init=False)
 
     ENCODING: ClassVar[str] = "utf-8"
-    DAC_BITWIDTH: ClassVar[int] = 4096  # 12-bit DAC
 
     OK_RESPONSE: ClassVar[str] = "ACK"
     START_COMMAND: ClassVar[str] = "G"
@@ -235,22 +234,24 @@ class _LeAmpCom:
             delayunit=load_delayunit(self.config.delayunit),
             intervals=self.config.scan_intervals,
             points_per_interval=_points_per_interval(
-                self.scanning_points, self._squished_intervals
+                self.scanning_points, self._intervals
             ),
         )
 
     @cached_property
-    def scanning_list(self: _LeAmpCom) -> list[int]:
-        scanning_list: list[int] = []
+    def scanning_list(self: _LeAmpCom) -> list[float]:
+        scanning_list: list[float] = []
         for interval, n_points in zip(
-            self._squished_intervals,
-            _points_per_interval(self.scanning_points, self._squished_intervals),
+            self._intervals,
+            _points_per_interval(self.scanning_points, self._intervals),
         ):
-            denormalized = self._denormalize_interval(interval)
             scanning_list.extend(
                 np.linspace(
-                    denormalized[0], denormalized[1], n_points, endpoint=False
-                ).astype(int),
+                    interval.lower,
+                    interval.upper,
+                    n_points,
+                    endpoint=len(self._intervals) == 1,
+                ),
             )
         return scanning_list
 
@@ -271,14 +272,14 @@ class _LeAmpCom:
 
     def write_list_length_and_integration_periods_and_use_ema(self: _LeAmpCom) -> str:
         self._encode_send_response(self.SEND_SETTINGS_COMMAND)
-        self._raw_byte_send(
+        self._raw_byte_send_ints(
             [self.scanning_points, self.config.integration_periods, self.config.use_ema]
         )
         return self._get_response()
 
     def write_list(self: _LeAmpCom) -> str:
         self._encode_send_response(self.SEND_LIST_COMMAND)
-        self._raw_byte_send(self.scanning_list)
+        self._raw_byte_send_floats(self.scanning_list)
         return self._get_response()
 
     def start_scan(self: _LeAmpCom) -> tuple[str, np.ndarray]:
@@ -296,14 +297,9 @@ class _LeAmpCom:
         return self.START_COMMAND, output_array
 
     @cached_property
-    def _squished_intervals(self: _LeAmpCom) -> list[Interval]:
+    def _intervals(self: _LeAmpCom) -> list[Interval]:
         """Intervals squished into effective DAC range."""
-        return _squish_intervals(
-            intervals=self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)],
-            lower_bound=self.config.fs_dac_lower_bound,
-            upper_bound=self.config.fs_dac_upper_bound,
-            bitwidth=self.DAC_BITWIDTH,
-        )
+        return self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)]
 
     def _convert_to_r_angle(
         self: _LeAmpCom, Xs: list, Ys: list
@@ -312,11 +308,6 @@ class _LeAmpCom:
         angle = np.arctan2(np.array(Ys), np.array(Xs))
         return r, np.rad2deg(angle)
 
-    def _denormalize_interval(self: _LeAmpCom, interval: Interval) -> list[int]:
-        lower = int(interval.lower * self.DAC_BITWIDTH)
-        upper = int(interval.upper * self.DAC_BITWIDTH)
-        return [lower, upper]
-
     def _encode_send_response(self: _LeAmpCom, command: str) -> str:
         self._encode_and_send(command)
         return self._get_response()
@@ -324,10 +315,16 @@ class _LeAmpCom:
     def _encode_and_send(self: _LeAmpCom, command: str) -> None:
         self.__ser.write(command.encode(self.ENCODING))
 
-    def _raw_byte_send(self: _LeAmpCom, values: list[int]) -> None:
+    def _raw_byte_send_ints(self: _LeAmpCom, values: list[int]) -> None:
         c = BitArray()
         for value in values:
             c.append(BitArray(uintle=value, length=16))
+        self.__ser.write(c.tobytes())
+
+    def _raw_byte_send_floats(self: _LeAmpCom, values: list[float]) -> None:
+        c = BitArray()
+        for value in values:
+            c.append(BitArray(floatle=value, length=32))
         self.__ser.write(c.tobytes())
 
     def _await_scan_finished(self: _LeAmpCom) -> None:

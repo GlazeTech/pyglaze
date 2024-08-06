@@ -187,10 +187,8 @@ class LeDeviceConfiguration(DeviceConfiguration):
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
     integration_periods: int = 10
     amp_timeout_seconds: float = 0.2
+    modulation_frequency: int = 10000  # Hz
 
-    modulation_frequency: ClassVar[int] = 10000  # Hz
-    fs_dac_lower_bound: ClassVar[int] = 300
-    fs_dac_upper_bound: ClassVar[int] = 3700
     amp_baudrate: ClassVar[int] = 1000000  # bit/s
 
     def __post_init__(self: LeDeviceConfiguration) -> None:  # noqa: D105

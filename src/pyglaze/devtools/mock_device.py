@@ -195,7 +195,7 @@ class LeMockDevice(MockDevice):
         self.n_scanning_points: int | None = None
         self.integration_periods: int | None = None
         self.use_ema: bool | None = None
-        self.scanning_list: list[int] | None = None
+        self.scanning_list: list[float] | None = None
         self._scan_start_time: float | None = None
 
     def write(self: LeMockDevice, input_bytes: bytes) -> None:
@@ -297,7 +297,7 @@ class LeMockDevice(MockDevice):
         self.state = _LeMockState.RECEIVED_SETTINGS
 
     def _handle_waiting_for_list(self: LeMockDevice, input_bytes: bytes) -> None:
-        self.scanning_list = self._decode_ints(input_bytes)
+        self.scanning_list = self._decode_floats(input_bytes)
         self.state = _LeMockState.RECEIVED_LIST
 
     def _decode_ints(self: LeMockDevice, input_bytes: bytes) -> list[int]:
@@ -305,6 +305,13 @@ class LeMockDevice(MockDevice):
         return [
             struct.unpack("<H", input_bytes[i : i + 2])[0]
             for i in range(0, len(input_bytes), 2)
+        ]
+
+    def _decode_floats(self: LeMockDevice, input_bytes: bytes) -> list[float]:
+        # Convert every four bytes to a 32-bit float (assuming little-endian format)
+        return [
+            struct.unpack("<f", input_bytes[i : i + 4])[0]
+            for i in range(0, len(input_bytes), 4)
         ]
 
     def _scan_has_finished(self: LeMockDevice) -> bool:

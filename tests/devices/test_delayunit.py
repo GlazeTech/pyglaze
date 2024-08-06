@@ -82,7 +82,7 @@ class TestDelays:
 
         reloaded = _load_delayunit_from_path(self.SAVEDIR / delay.filename)
         assert delay.unique_id == reloaded.unique_id
-        assert type(delay) == type(reloaded)
+        assert type(delay) is type(reloaded)
 
     def test_call(
         self: TestDelays, fixture_name: str, request: pytest.FixtureRequest
