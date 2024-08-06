@@ -470,10 +470,10 @@ class Pulse:
         else:
             idx = np.searchsorted(self.signal[argmin:argmax], 0) + argmin - 1
 
-        # Solve 0 = s1 + a * (t - t1) for t to find the zero crossing
+        # To find the zero crossing, solve 0 = s1 + a * (t - t1) for t: t = t1 - s1 / a
         t1, s1 = self.time[idx], self.signal[idx]
         a = (self.signal[idx + 1] - self.signal[idx]) / self.dt
-        return t1 - s1 / a
+        return cast(float, t1 - s1 / a)
 
     def to_native_dict(self: Pulse) -> dict[str, list[float] | None]:
         """Converts the Pulse object to a native dictionary.
