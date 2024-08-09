@@ -2,7 +2,6 @@ from typing import Literal  # noqa: N999
 
 import numpy as np
 import pytest
-
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
 
 
