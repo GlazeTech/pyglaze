@@ -198,11 +198,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
-        _, responses = self._ampcom.start_scan()
-
-        time = responses[:, 0]
-        radius = responses[:, 1]
-        theta = responses[:, 2]
+        _, time, radius, theta = self._ampcom.start_scan()
         self._phase_estimator.update_estimate(radius=radius, theta=theta)
 
         return UnprocessedWaveform.from_polar_coords(

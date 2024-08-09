@@ -2,41 +2,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
-from pyglaze.device.delayunit import list_delayunits
 
+from pyglaze.device import ForceDeviceConfiguration, Interval
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import DeviceConfiguration
 
 
-def test_wrong_delayunit_force() -> None:
-    with pytest.raises(
-        ValueError,
-        match=f"Unknown delayunit 'Nonexisting_unit'. Valid options are: {', '.join(list_delayunits())}.",
-    ):
-        ForceDeviceConfiguration(
-            amp_port="mock_device", sweep_length_ms=6000, delayunit="Nonexisting_unit"
-        )
-
-
-def test_wrong_delayunit_le() -> None:
-    with pytest.raises(
-        ValueError,
-        match=f"Unknown delayunit 'Nonexisting_unit'. Valid options are: {', '.join(list_delayunits())}.",
-    ):
-        LeDeviceConfiguration(amp_port="mock_device", delayunit="Nonexisting_unit")
-
-
 @pytest.mark.parametrize(
     "test_pars",
     [
-        {"sweep_length_ms": 500, "delayunit": "mock_delay"},
+        {"sweep_length_ms": 500},
         {
             "sweep_length_ms": 500,
             "scan_intervals": [Interval(0.0, 0.5), Interval(0.6, 1.0)],
-            "delayunit": "mock_delay",
         },
     ],
 )

@@ -336,7 +336,12 @@ class LeMockDevice(MockDevice):
             self.n_failures += 1
             numbers = np.array([])
         else:
-            numbers = self.rng.random(2 * len(self.scanning_list))
+            numbers = np.concatenate(
+                (
+                    np.array(self.scanning_list) * 100e-12,  # mock time values
+                    self.rng.random(2 * len(self.scanning_list)),
+                )
+            )
 
         # Each scanning point will generate an X and a Y value (lockin detection)
         return struct.pack("<" + "f" * len(numbers), *numbers)

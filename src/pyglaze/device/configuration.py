@@ -5,8 +5,6 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from .delayunit import validate_delayunit
-
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -97,7 +95,6 @@ class ForceDeviceConfiguration(DeviceConfiguration):
 
     amp_port: str
     sweep_length_ms: float
-    delayunit: str
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
     integration_periods: int = 100
     modulation_frequency: int = 10000  # Hz
@@ -113,9 +110,6 @@ class ForceDeviceConfiguration(DeviceConfiguration):
     @property
     def _sweep_length_ms(self: ForceDeviceConfiguration) -> float:
         return self.sweep_length_ms
-
-    def __post_init__(self: ForceDeviceConfiguration) -> None:  # noqa: D105
-        validate_delayunit(self.delayunit)
 
     def save(self: ForceDeviceConfiguration, path: Path) -> str:
         """Save a DeviceConfiguration to a file.
@@ -172,7 +166,6 @@ class LeDeviceConfiguration(DeviceConfiguration):
 
     Args:
         amp_port: The name of the serial port the amp is connected to.
-        delayunit: Name of the delay calculator.
         use_ema: Whether to use en exponentially moving average filter during lockin detection.
         n_points: The number of points to scan.
         scan_intervals: The intervals to scan.
@@ -181,7 +174,6 @@ class LeDeviceConfiguration(DeviceConfiguration):
     """
 
     amp_port: str
-    delayunit: str
     use_ema: bool = True
     n_points: int = 1000
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
@@ -190,9 +182,6 @@ class LeDeviceConfiguration(DeviceConfiguration):
     modulation_frequency: int = 10000  # Hz
 
     amp_baudrate: ClassVar[int] = 1000000  # bit/s
-
-    def __post_init__(self: LeDeviceConfiguration) -> None:  # noqa: D105
-        validate_delayunit(self.delayunit)
 
     @property
     def _sweep_length_ms(self: LeDeviceConfiguration) -> float:

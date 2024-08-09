@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from math import modf
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, Callable, ClassVar, overload
 
 import numpy as np
 import serial
@@ -20,7 +20,6 @@ from pyglaze.device.configuration import (
     Interval,
     LeDeviceConfiguration,
 )
-from pyglaze.device.delayunit import Delay, load_delayunit
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
 
@@ -67,7 +66,7 @@ class _ForceAmpCom:
     @cached_property
     def times(self: _ForceAmpCom) -> FloatArray:
         return _delay_from_intervals(
-            delayunit=load_delayunit(self.config.delayunit),
+            delayunit=lambda x: x,
             intervals=self.config.scan_intervals,
             points_per_interval=_points_per_interval(
                 self.scanning_points, self._squished_intervals
@@ -229,16 +228,6 @@ class _LeAmpCom:
         return self.config.n_points
 
     @cached_property
-    def times(self: _LeAmpCom) -> FloatArray:
-        return _delay_from_intervals(
-            delayunit=load_delayunit(self.config.delayunit),
-            intervals=self.config.scan_intervals,
-            points_per_interval=_points_per_interval(
-                self.scanning_points, self._intervals
-            ),
-        )
-
-    @cached_property
     def scanning_list(self: _LeAmpCom) -> list[float]:
         scanning_list: list[float] = []
         for interval, n_points in zip(
@@ -254,6 +243,14 @@ class _LeAmpCom:
                 ),
             )
         return scanning_list
+
+    @cached_property
+    def bytes_to_receive(self: _LeAmpCom) -> int:
+        """Number of bytes to receive for a single scan.
+
+        We expect to receive 3 arrays of floats (delays, X and Y), each with self.scanning_points elements.
+        """
+        return self.scanning_points * 12
 
     def __post_init__(self: _LeAmpCom) -> None:
         self.__ser = _serial_factory(self.config)
@@ -282,19 +279,13 @@ class _LeAmpCom:
         self._raw_byte_send_floats(self.scanning_list)
         return self._get_response()
 
-    def start_scan(self: _LeAmpCom) -> tuple[str, np.ndarray]:
+    def start_scan(self: _LeAmpCom) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
         self._encode_send_response(self.START_COMMAND)
         self._await_scan_finished()
-        Xs, Ys = self._read_scan()
+        times, Xs, Ys = self._read_scan()
 
         radii, angles = self._convert_to_r_angle(Xs, Ys)
-
-        output_array = np.zeros((self.scanning_points, 3))
-        output_array[:, 0] = self.times
-        output_array[:, 1] = radii
-        output_array[:, 2] = angles
-
-        return self.START_COMMAND, output_array
+        return self.START_COMMAND, np.array(times), np.array(radii), np.array(angles)
 
     @cached_property
     def _intervals(self: _LeAmpCom) -> list[Interval]:
@@ -342,25 +333,30 @@ class _LeAmpCom:
     @_BackoffRetry(
         backoff_base=1e-2, max_tries=5, logger=logging.getLogger(LOGGER_NAME)
     )
-    def _read_scan(self: _LeAmpCom) -> tuple[list[float], list[float]]:
+    def _read_scan(self: _LeAmpCom) -> tuple[list[float], list[float], list[float]]:
         self._encode_and_send(self.FETCH_COMMAND)
+        scan_bytes = self.__ser.read(self.bytes_to_receive)
 
-        bytes_to_receive = self.scanning_points * 4 + self.scanning_points * 4
-        scan_bytes = self.__ser.read(bytes_to_receive)
-        if len(scan_bytes) != bytes_to_receive:
-            msg = f"received {len(scan_bytes)} bytes, expected {bytes_to_receive}"
+        if len(scan_bytes) != self.bytes_to_receive:
+            msg = f"received {len(scan_bytes)} bytes, expected {self.bytes_to_receive}"
             raise serialutil.SerialException(msg)
 
-        Xs = [
-            BitArray(bytes=scan_bytes[d : d + 4]).floatle
-            for d in range(0, self.scanning_points * 4, 4)
-        ]
-        Ys = [
-            BitArray(bytes=scan_bytes[d : d + 4]).floatle
-            for d in range(self.scanning_points * 4, self.scanning_points * 8, 4)
-        ]
+        times = self._bytes_to_floats(scan_bytes, 0, self.scanning_points * 4)
+        Xs = self._bytes_to_floats(
+            scan_bytes, self.scanning_points * 4, self.scanning_points * 8
+        )
+        Ys = self._bytes_to_floats(
+            scan_bytes, self.scanning_points * 8, self.scanning_points * 12
+        )
+        return times, Xs, Ys
 
-        return Xs, Ys
+    def _bytes_to_floats(
+        self: _LeAmpCom, scan_bytes: bytes, from_idx: int, to_idx: int
+    ) -> list[float]:
+        return [
+            BitArray(bytes=scan_bytes[d : d + 4]).floatle
+            for d in range(from_idx, to_idx, 4)
+        ]
 
     def _get_status(self: _LeAmpCom) -> _LeStatus:
         msg = self._encode_send_response(self.STATUS_COMMAND)
@@ -431,7 +427,9 @@ def _squish_intervals(
 
 
 def _delay_from_intervals(
-    delayunit: Delay, intervals: list[Interval], points_per_interval: list[int]
+    delayunit: Callable[[FloatArray], FloatArray],
+    intervals: list[Interval],
+    points_per_interval: list[int],
 ) -> FloatArray:
     """Convert a list of intervals to a list of delay times."""
     times: list[float] = []
