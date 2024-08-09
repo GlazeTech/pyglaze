@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
 from pyglaze.device.ampcom import _ForceAmpCom, _LeAmpCom
 

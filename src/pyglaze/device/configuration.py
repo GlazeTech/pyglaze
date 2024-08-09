@@ -81,7 +81,6 @@ class ForceDeviceConfiguration(DeviceConfiguration):
     Args:
         amp_port: The name of the serial port the amp is connected to.
         sweep_length_ms: The length of the sweep in milliseconds.
-        delayunit: Name of the delay calculator.
         scan_intervals: The intervals to scan.
         integration_periods: The number of integration periods to use.
         modulation_frequency: The frequency of the modulation in Hz.

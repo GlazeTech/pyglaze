@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
 
 import pytest
-from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.scanning._asyncscanner import _AsyncScanner
 from serial.serialutil import SerialException
 
+from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.scanning._asyncscanner import _AsyncScanner
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
