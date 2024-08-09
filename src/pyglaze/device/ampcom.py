@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from math import modf
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, Callable, ClassVar, overload
 
 import numpy as np
 import serial
@@ -20,7 +20,6 @@ from pyglaze.device.configuration import (
     Interval,
     LeDeviceConfiguration,
 )
-from pyglaze.device.delayunit import Delay, load_delayunit
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
 
@@ -67,7 +66,7 @@ class _ForceAmpCom:
     @cached_property
     def times(self: _ForceAmpCom) -> FloatArray:
         return _delay_from_intervals(
-            delayunit=load_delayunit(self.config.delayunit),
+            delayunit=lambda x: x,
             intervals=self.config.scan_intervals,
             points_per_interval=_points_per_interval(
                 self.scanning_points, self._squished_intervals
@@ -428,7 +427,9 @@ def _squish_intervals(
 
 
 def _delay_from_intervals(
-    delayunit: Delay, intervals: list[Interval], points_per_interval: list[int]
+    delayunit: Callable[[FloatArray], FloatArray],
+    intervals: list[Interval],
+    points_per_interval: list[int],
 ) -> FloatArray:
     """Convert a list of intervals to a list of delay times."""
     times: list[float] = []

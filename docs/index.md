@@ -27,7 +27,6 @@ from pyglaze.scanning import GlazeClient
 
 device_config = LeDeviceConfiguration(
     amp_port="mock_device",
-    delayunit="mock_delay",
     integration_periods=10,
     scan_intervals=[
         Interval(0.5, 1.0),
@@ -70,7 +69,6 @@ from pyglaze.scanning import Scanner
 
 device_config = LeDeviceConfiguration(
     amp_port="mock_device",
-    delayunit="mock_delay",
     integration_periods=10,
     n_points=100,
     scan_intervals=[
@@ -83,7 +81,6 @@ device_config = LeDeviceConfiguration(
 scanner = Scanner(config=device_config)
 device_config = LeDeviceConfiguration(
     amp_port="mock_device",
-    delayunit="mock_delay",
     integration_periods=10,
     scan_intervals=[
         Interval(0.5, 1.0),

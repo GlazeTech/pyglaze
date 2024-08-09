@@ -18,7 +18,7 @@ Depending on which device is used, a matching device configuration must be used.
 from pyglaze.device import ForceDeviceConfiguration
 
 config = ForceDeviceConfiguration(
-    amp_port="mock_device", sweep_length_ms=6000, delayunit="mock_delay"
+    amp_port="mock_device", sweep_length_ms=6000
 )
 ```
 === "LeDeviceConfiguration"
@@ -26,7 +26,7 @@ config = ForceDeviceConfiguration(
 from pyglaze.device import LeDeviceConfiguration
 
 config = LeDeviceConfiguration(
-    amp_port="mock_device", delayunit="mock_delay", use_ema=True
+    amp_port="mock_device", use_ema=True
 )
 ```
 
