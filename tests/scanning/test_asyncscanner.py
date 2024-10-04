@@ -1,14 +1,10 @@
-from typing import TYPE_CHECKING
-
 import pytest
-from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.scanning._asyncscanner import _AsyncScanner
 from serial.serialutil import SerialException
 
+from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.device.configuration import DeviceConfiguration
+from pyglaze.scanning._asyncscanner import _AsyncScanner
 from tests.conftest import DEVICE_CONFIGS
-
-if TYPE_CHECKING:
-    from pyglaze.device.configuration import DeviceConfiguration
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
@@ -54,3 +50,34 @@ def test_scanner_wrong_port(config_name: str, request: pytest.FixtureRequest) ->
     with pytest.raises(SerialException):
         scanner.start_scan(device_config)
     assert scanner.is_scanning is False
+
+
+def test_recover_from_startup_error(le_device_config: DeviceConfiguration) -> None:
+    scanner = _AsyncScanner()
+    le_device_config.amp_port = "mock_device_empty_responses"
+
+    with pytest.raises(SerialException, match="Empty response received"):
+        scanner.start_scan(le_device_config)
+    assert scanner.is_scanning is False
+
+    le_device_config.amp_port = "mock_device"
+    scanner.start_scan(le_device_config)
+    assert scanner.is_scanning
+    scanner.stop_scan()
+
+
+def test_recover_from_failed_scan(le_device_config: DeviceConfiguration) -> None:
+    scanner = _AsyncScanner()
+    le_device_config.amp_port = "mock_device_scan_should_fail"
+    scanner.start_scan(le_device_config)
+    with pytest.raises(SerialException):
+        scanner.get_scans(1)
+    assert scanner.is_scanning is False
+
+    # Verify that the child process is closed - is_alive raises an error if called on a closed process
+    with pytest.raises(ValueError, match="process object is closed"):
+        scanner._child_process.is_alive()
+    le_device_config.amp_port = "mock_device"
+    scanner.start_scan(le_device_config)
+    assert scanner.is_scanning
+    scanner.stop_scan()

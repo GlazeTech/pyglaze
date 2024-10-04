@@ -26,6 +26,8 @@ class MockDevice(ABC):
         self: MockDevice,
         fail_after: float = np.inf,
         n_fails: float = np.inf,
+        *,
+        empty_responses: bool = False,
     ) -> None:
         pass
 
@@ -183,7 +185,11 @@ class LeMockDevice(MockDevice):
     DAC_BITWIDTH = 2**12
 
     def __init__(
-        self: LeMockDevice, fail_after: float = np.inf, n_fails: float = np.inf
+        self: LeMockDevice,
+        fail_after: float = np.inf,
+        n_fails: float = np.inf,
+        *,
+        empty_responses: bool = False,
     ) -> None:
         self.fail_after = fail_after
         self.fails_wanted = n_fails
@@ -197,6 +203,7 @@ class LeMockDevice(MockDevice):
         self.use_ema: bool | None = None
         self.scanning_list: list[float] | None = None
         self._scan_start_time: float | None = None
+        self.empty_responses = empty_responses
 
     def write(self: LeMockDevice, input_bytes: bytes) -> None:
         """Mock-write to the serial connection."""
@@ -217,12 +224,16 @@ class LeMockDevice(MockDevice):
 
     def read(self: LeMockDevice, size: int) -> bytes:
         """Mock-read from the serial connection."""
+        if self.empty_responses:
+            return self._create_scan_bytes(n_bytes=0)
         if self.state == _LeMockState.IDLE:
             return self._create_scan_bytes(n_bytes=size)
         raise NotImplementedError
 
     def read_until(self: LeMockDevice, _: bytes = b"\r") -> bytes:  # noqa: PLR0911
         """Mock-read_until from the serial connection."""
+        if self.empty_responses:
+            return "".encode(self.ENCODING)
         if self.state == _LeMockState.WAITING_FOR_SETTINGS:
             return "ACK: Ready to receive settings.".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_SETTINGS:
@@ -353,6 +364,7 @@ def list_mock_devices() -> list[str]:
         "mock_device",
         "mock_device_scan_should_fail",
         "mock_device_fail_first_scan",
+        "mock_device_empty_responses",
     ]
 
 
@@ -364,6 +376,8 @@ def _mock_device_factory(config: DeviceConfiguration) -> MockDevice:
         return mock_class()
     if config.amp_port == "mock_device_fail_first_scan":
         return mock_class(fail_after=0, n_fails=1)
+    if config.amp_port == "mock_device_empty_responses":
+        return mock_class(empty_responses=True)
 
     msg = f"Unknown mock device requested: {config.amp_port}. Valid options are: {list_mock_devices()}"
     raise ValueError(msg)

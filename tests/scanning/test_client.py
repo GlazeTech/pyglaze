@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
 
 import pytest
-from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.scanning import GlazeClient
 from serial import serialutil
 
+from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.scanning import GlazeClient
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:

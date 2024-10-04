@@ -258,3 +258,6 @@ api/glaze/devtools/mockup_config.json
 
 # Editors
 .vscode
+
+# Local testing file
+testing.py

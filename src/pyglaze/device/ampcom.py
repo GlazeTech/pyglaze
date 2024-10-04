@@ -32,6 +32,13 @@ if TYPE_CHECKING:
     from pyglaze.helpers.types import FloatArray
 
 
+class DeviceComError(Exception):
+    """Raised when an error occurs in the communication with the device."""
+
+    def __init__(self: DeviceComError, message: str) -> None:
+        super().__init__(message)
+
+
 @dataclass
 class _ForceAmpCom:
     config: ForceDeviceConfiguration
@@ -272,12 +279,12 @@ class _LeAmpCom:
         self._raw_byte_send_ints(
             [self.scanning_points, self.config.integration_periods, self.config.use_ema]
         )
-        return self._get_response()
+        return self._get_response(self.SEND_SETTINGS_COMMAND)
 
     def write_list(self: _LeAmpCom) -> str:
         self._encode_send_response(self.SEND_LIST_COMMAND)
         self._raw_byte_send_floats(self.scanning_list)
-        return self._get_response()
+        return self._get_response(self.SEND_LIST_COMMAND)
 
     def start_scan(self: _LeAmpCom) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
         self._encode_send_response(self.START_COMMAND)
@@ -301,7 +308,7 @@ class _LeAmpCom:
 
     def _encode_send_response(self: _LeAmpCom, command: str) -> str:
         self._encode_and_send(command)
-        return self._get_response()
+        return self._get_response(command)
 
     def _encode_and_send(self: _LeAmpCom, command: str) -> None:
         self.__ser.write(command.encode(self.ENCODING))
@@ -326,9 +333,19 @@ class _LeAmpCom:
             time.sleep(self.config._sweep_length_ms * 1e-3 * 0.01)  # noqa: SLF001, access to private attribute for backwards compatibility
             status = self._get_status()
 
-    @_BackoffRetry(backoff_base=0.05, logger=logging.getLogger(LOGGER_NAME))
-    def _get_response(self: _LeAmpCom) -> str:
-        return self.__ser.read_until().decode(self.ENCODING).strip()
+    @_BackoffRetry(
+        backoff_base=1e-2, max_tries=3, logger=logging.getLogger(LOGGER_NAME)
+    )
+    def _get_response(self: _LeAmpCom, command: str) -> str:
+        response = self.__ser.read_until().decode(self.ENCODING).strip()
+
+        if len(response) == 0:
+            msg = f"Command: '{command}'. Empty response received"
+            raise serialutil.SerialException(msg)
+        if response[: len(self.OK_RESPONSE)] != self.OK_RESPONSE:
+            msg = f"Command: '{command}'. Expected response '{self.OK_RESPONSE}', received: '{response}'"
+            raise DeviceComError(msg)
+        return response
 
     @_BackoffRetry(
         backoff_base=1e-2, max_tries=5, logger=logging.getLogger(LOGGER_NAME)

@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pyglaze.device import ForceDeviceConfiguration, Interval
 
+from pyglaze.device import ForceDeviceConfiguration, Interval
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
