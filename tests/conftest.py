@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
 from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
@@ -7,7 +8,7 @@ from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 DEVICE_CONFIGS = ["force_device_config", "le_device_config"]
 
 
-@pytest.fixture()
+@pytest.fixture
 def force_device_config() -> ForceDeviceConfiguration:
     return ForceDeviceConfiguration(
         amp_port="mock_device",
@@ -24,7 +25,7 @@ def force_device_config() -> ForceDeviceConfiguration:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def le_device_config() -> LeDeviceConfiguration:
     return LeDeviceConfiguration(
         amp_port="mock_device",
@@ -43,7 +44,7 @@ def scan_data() -> Pulse:
     return Pulse(t, sig)
 
 
-@pytest.fixture()
+@pytest.fixture
 def unprocessed_waveform_nonuniform() -> UnprocessedWaveform:
     generator = np.random.default_rng(42)
     t = np.linspace(0, 50, 51) + generator.uniform(low=-0.5, high=0.5, size=51)
@@ -51,7 +52,7 @@ def unprocessed_waveform_nonuniform() -> UnprocessedWaveform:
     return UnprocessedWaveform(t, sig)
 
 
-@pytest.fixture()
+@pytest.fixture
 def triangular_waveform_up_down() -> UnprocessedWaveform:
     times = np.concatenate(
         (
@@ -63,7 +64,7 @@ def triangular_waveform_up_down() -> UnprocessedWaveform:
     return UnprocessedWaveform(time=2 * times, signal=np.sin(2 * times))
 
 
-@pytest.fixture()
+@pytest.fixture
 def triangular_waveform_down_up() -> UnprocessedWaveform:
     times = np.concatenate(
         (
@@ -75,7 +76,7 @@ def triangular_waveform_down_up() -> UnprocessedWaveform:
     return UnprocessedWaveform(time=2 * times, signal=np.sin(2 * times))
 
 
-@pytest.fixture()
+@pytest.fixture
 def gaussian_deriv_pulse() -> Pulse:
     dt = 0.1e-12
     times = np.arange(1000) * dt
@@ -85,6 +86,6 @@ def gaussian_deriv_pulse() -> Pulse:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def gaussian_deriv_pulse_w_errors(gaussian_deriv_pulse: Pulse) -> Pulse:
     return gaussian_deriv_pulse.add_white_noise(noise_std=1e-2, seed=42)

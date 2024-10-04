@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+from serial import SerialException
+
 from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
 from pyglaze.device.ampcom import _ForceAmpCom, _LeAmpCom
 
@@ -51,3 +53,12 @@ def test_evenly_distanced_times(force_device_config: ForceDeviceConfiguration) -
     amp = _ForceAmpCom(force_device_config)
     time_spacings = np.diff(amp.times)
     np.testing.assert_allclose(time_spacings[0], time_spacings)
+
+
+def test_raise_error_on_empty_responses(
+    le_device_config: LeDeviceConfiguration,
+) -> None:
+    le_device_config.amp_port = "mock_device_empty_responses"
+    amp = _LeAmpCom(le_device_config)
+    with pytest.raises(SerialException, match="Empty response received"):
+        amp.start_scan()

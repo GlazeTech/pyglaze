@@ -95,13 +95,15 @@ class _AsyncScanner:
     def _get_scan(self: _AsyncScanner) -> _TimestampedWaveform:
         try:
             return self._shared_mem.get(timeout=self._SCAN_TIMEOUT)
-        except Empty as err:
+        except Exception as err:
+            scanner_err: Exception | None = None
             if self._scanner_conn.poll(timeout=self.startup_timeout):
                 msg: _ScannerHealth = self._scanner_conn.recv()
-                if not msg.is_alive:
-                    self.is_scanning = False
                 if msg.error:
-                    raise msg.error from err
+                    scanner_err = msg.error
+            self.stop_scan()
+            if scanner_err:
+                raise scanner_err from err
             raise
 
     @staticmethod
@@ -121,7 +123,7 @@ class _AsyncScanner:
         while not stop_signal.is_set():
             try:
                 waveform = _TimestampedWaveform(datetime.now(), scanner.scan())  # noqa: DTZ005
-            except (serialutil.SerialException, TimeoutError) as e:
+            except Exception as e:  # noqa: BLE001
                 parent_conn.send(
                     _ScannerHealth(is_alive=False, is_healthy=False, error=e)
                 )
