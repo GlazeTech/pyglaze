@@ -101,7 +101,6 @@ class _AsyncScanner:
                 msg: _ScannerHealth = self._scanner_conn.recv()
                 if msg.error:
                     scanner_err = msg.error
-                    raise msg.error from err
             self.stop_scan()
             if scanner_err:
                 raise scanner_err from err
