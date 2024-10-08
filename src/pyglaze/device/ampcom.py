@@ -105,9 +105,7 @@ class _ForceAmpCom:
 
     def __del__(self: _ForceAmpCom) -> None:
         """Closes connection when class instance goes out of scope."""
-        with contextlib.suppress(AttributeError):
-            # If the serial device does not exist, self.__ser is never created - hence catch
-            self.__ser.close()
+        self.disconnect()
 
     def write_all(self: _ForceAmpCom) -> list[str]:
         responses = []
@@ -190,6 +188,12 @@ class _ForceAmpCom:
             output_array[iteration, 2] = angle
         return output_array
 
+    def disconnect(self: _ForceAmpCom) -> None:
+        """Closes connection."""
+        with contextlib.suppress(AttributeError):
+            # If the serial device does not exist, self.__ser is never created - hence catch
+            self.__ser.close()
+
     def _encode_send_response(self: _ForceAmpCom, command: str) -> str:
         self._encode_and_send(command)
         return self._get_response()
@@ -264,9 +268,7 @@ class _LeAmpCom:
 
     def __del__(self: _LeAmpCom) -> None:
         """Closes connection when class instance goes out of scope."""
-        with contextlib.suppress(AttributeError):
-            # If the serial device does not exist, self.__ser is never created - hence catch
-            self.__ser.close()
+        self.disconnect()
 
     def write_all(self: _LeAmpCom) -> list[str]:
         responses: list[str] = []
@@ -293,6 +295,12 @@ class _LeAmpCom:
 
         radii, angles = self._convert_to_r_angle(Xs, Ys)
         return self.START_COMMAND, np.array(times), np.array(radii), np.array(angles)
+
+    def disconnect(self: _LeAmpCom) -> None:
+        """Closes connection when class instance goes out of scope."""
+        with contextlib.suppress(AttributeError):
+            # If the serial device does not exist, self.__ser is never created - hence catch
+            self.__ser.close()
 
     @cached_property
     def _intervals(self: _LeAmpCom) -> list[Interval]:
