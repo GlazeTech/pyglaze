@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
+from serial import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import _ForceAmpCom, _LeAmpCom
@@ -12,6 +13,7 @@ from pyglaze.device.configuration import (
     ForceDeviceConfiguration,
     LeDeviceConfiguration,
 )
+from pyglaze.scanning._exceptions import ScanError
 
 if TYPE_CHECKING:
     from pyglaze.helpers.types import FloatArray
@@ -40,6 +42,10 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
 
     @abstractmethod
     def update_config(self: _ScannerImplementation, new_config: TConfig) -> None:
+        pass
+
+    @abstractmethod
+    def disconnect(self: _ScannerImplementation) -> None:
         pass
 
 
@@ -76,6 +82,10 @@ class Scanner:
         """
         self._scanner_impl.update_config(new_config)
 
+    def disconnect(self: Scanner) -> None:
+        """Close serial connection."""
+        self._scanner_impl.disconnect()
+
 
 class ForceScanner(_ScannerImplementation[ForceDeviceConfiguration]):
     """Perform synchronous terahertz scanning using a given DeviceConfiguration.
@@ -87,7 +97,7 @@ class ForceScanner(_ScannerImplementation[ForceDeviceConfiguration]):
 
     def __init__(self: ForceScanner, config: ForceDeviceConfiguration) -> None:
         self._config: ForceDeviceConfiguration
-        self._ampcom: _ForceAmpCom
+        self._ampcom: _ForceAmpCom | None = None
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator()
 
@@ -133,6 +143,9 @@ class ForceScanner(_ScannerImplementation[ForceDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
+        if self._ampcom is None:
+            msg = "Scanner not configured"
+            raise ScanError(msg)
         _, responses = self._ampcom.start_scan()
 
         time = responses[:, 0]
@@ -152,6 +165,14 @@ class ForceScanner(_ScannerImplementation[ForceDeviceConfiguration]):
         """
         self.config = new_config
 
+    def disconnect(self: ForceScanner) -> None:
+        """Close serial connection."""
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise SerialException(msg)
+        self._ampcom.disconnect()
+        self._ampcom = None
+
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
     """Perform synchronous terahertz scanning using a given DeviceConfiguration.
@@ -162,7 +183,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def __init__(self: LeScanner, config: LeDeviceConfiguration) -> None:
         self._config: LeDeviceConfiguration
-        self._ampcom: _LeAmpCom
+        self._ampcom: _LeAmpCom | None = None
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator()
 
@@ -198,6 +219,9 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
+        if self._ampcom is None:
+            msg = "Scanner not configured"
+            raise ScanError(msg)
         _, time, radius, theta = self._ampcom.start_scan()
         self._phase_estimator.update_estimate(radius=radius, theta=theta)
 
@@ -212,6 +236,14 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
             new_config: A DeviceConfiguration to use for the scan.
         """
         self.config = new_config
+
+    def disconnect(self: LeScanner) -> None:
+        """Close serial connection."""
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        self._ampcom.disconnect()
+        self._ampcom = None
 
 
 def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:
