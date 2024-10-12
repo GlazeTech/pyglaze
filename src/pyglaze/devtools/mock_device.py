@@ -372,6 +372,7 @@ def list_mock_devices() -> list[str]:
         "mock_device_scan_should_fail",
         "mock_device_fail_first_scan",
         "mock_device_empty_responses",
+        "mock_device_instant",
     ]
 
 
