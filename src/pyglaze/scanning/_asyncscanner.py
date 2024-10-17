@@ -127,6 +127,7 @@ class _AsyncScanner:
                 parent_conn.send(
                     _ScannerHealth(is_alive=False, is_healthy=False, error=e)
                 )
+                scanner.disconnect()
                 break
 
             try:

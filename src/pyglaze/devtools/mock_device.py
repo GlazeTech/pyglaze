@@ -28,6 +28,7 @@ class MockDevice(ABC):
         n_fails: float = np.inf,
         *,
         empty_responses: bool = False,
+        instant_response: bool = False,
     ) -> None:
         pass
 
@@ -42,6 +43,8 @@ class ForceMockDevice(MockDevice):
         self: ForceMockDevice,
         fail_after: float = np.inf,
         n_fails: float = np.inf,
+        *,
+        instant_response: bool = False,
     ) -> None:
         self.fail_after = fail_after
         self.fails_wanted = n_fails
@@ -50,6 +53,7 @@ class ForceMockDevice(MockDevice):
         self.rng = np.random.default_rng()
         self.valid_input = True
         self.experiment_running = False
+        self.instant_response = instant_response
 
         self._periods = None
         self._frequency = None
@@ -131,7 +135,8 @@ class ForceMockDevice(MockDevice):
         for _ in range(self.in_waiting):
             return_string += self.__create_random_datapoint
         return_string += "!D,DONE\\r"
-        sleep(self.sweep_length * 1e-3)
+        if not self.instant_response:
+            sleep(self.sweep_length * 1e-3)
         self.n_scans += 1
         if self.n_scans > self.fail_after and self.n_failures < self.fails_wanted:
             self.n_failures += 1
@@ -190,6 +195,7 @@ class LeMockDevice(MockDevice):
         n_fails: float = np.inf,
         *,
         empty_responses: bool = False,
+        instant_response: bool = False,
     ) -> None:
         self.fail_after = fail_after
         self.fails_wanted = n_fails
@@ -204,6 +210,7 @@ class LeMockDevice(MockDevice):
         self.scanning_list: list[float] | None = None
         self._scan_start_time: float | None = None
         self.empty_responses = empty_responses
+        self.instant_response = instant_response
 
     def write(self: LeMockDevice, input_bytes: bytes) -> None:
         """Mock-write to the serial connection."""
@@ -365,6 +372,7 @@ def list_mock_devices() -> list[str]:
         "mock_device_scan_should_fail",
         "mock_device_fail_first_scan",
         "mock_device_empty_responses",
+        "mock_device_instant",
     ]
 
 
@@ -374,6 +382,8 @@ def _mock_device_factory(config: DeviceConfiguration) -> MockDevice:
         return mock_class(fail_after=0)
     if config.amp_port == "mock_device":
         return mock_class()
+    if config.amp_port == "mock_device_instant":
+        return mock_class(instant_response=True)
     if config.amp_port == "mock_device_fail_first_scan":
         return mock_class(fail_after=0, n_fails=1)
     if config.amp_port == "mock_device_empty_responses":
