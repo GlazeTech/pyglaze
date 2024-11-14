@@ -188,6 +188,17 @@ class Pulse:
             None if self.signal_err is None else self.signal_err[from_idx:to_idx],
         )
 
+    def fft_at_f(self: Pulse, f: float) -> complex:
+        """Returns the Fourier Transform at a specific frequency.
+
+        Args:
+            f: Frequency in Hz
+
+        Returns:
+            complex: Fourier Transform at the given frequency
+        """
+        return self.fft[np.searchsorted(self.frequency, f)]
+
     def timeshift(self: Pulse, scale: float, offset: float = 0) -> Pulse:
         """Rescales and offsets the time axis as.
 
@@ -241,6 +252,17 @@ class Pulse:
             (self.time[0] + np.arange(n_zeros, 0, -1) * -self.dt, self.time)
         )
         return Pulse(time=zeropadded_time, signal=zeropadded_signal)
+
+    def subtract_mean(self: Pulse, fraction: float = 0.99) -> Pulse:
+        """Subtracts the mean of the pulse.
+
+        Args:
+            fraction: Fraction of the mean to subtract. Defaults to 0.99.
+
+        Returns:
+            Pulse with the mean subtracted
+        """
+        return Pulse(self.time, self.signal - fraction * np.mean(self.signal))
 
     def tukey(
         self: Pulse,
