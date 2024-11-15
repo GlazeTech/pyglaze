@@ -497,6 +497,20 @@ class Pulse:
         a = (self.signal[idx + 1] - self.signal[idx]) / self.dt
         return cast(float, t1 - s1 / a)
 
+    def propagate(self: Pulse, time: float) -> Pulse:
+        """Propagates the pulse in time by a given amount.
+
+        Args:
+            time: Time in seconds to propagate the pulse by
+
+        Returns:
+            Pulse: Propagated pulse
+        """
+        return Pulse.from_fft(
+            time=self.time,
+            fft=self.fft * np.exp(-1j * 2 * np.pi * self.frequency * time),
+        )
+
     def to_native_dict(self: Pulse) -> dict[str, list[float] | None]:
         """Converts the Pulse object to a native dictionary.
 
