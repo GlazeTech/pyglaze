@@ -142,11 +142,11 @@ class Pulse:
         wrt_max: bool = True,
         translate_to_zero: bool = True,
     ) -> list[Pulse]:
-        """Aligns a list of scan with respect to their individual maxima or minima.
+        """Aligns a list of pulses with respect to the zerocrossings of their main pulse.
 
         Args:
             scans: List of scans
-            wrt_max: Whether to align with respect to maximum. Defaults to True.
+            wrt_max: Whether to perform rough alignment with respect to their maximum (true) or minimum(false). Defaults to True.
             translate_to_zero: Whether to translate all scans to t[0] = 0. Defaults to True.
 
         Returns:
@@ -164,9 +164,14 @@ class Pulse:
             for scan in roughly_aligned:
                 scan.time = scan.time - scan.time[0]
 
-        ref = roughly_aligned[len(roughly_aligned) // 2]
-        extremum = extrema[len(roughly_aligned) // 2]
-        return _match_templates(extremum, ref, roughly_aligned)
+        mean_zerocrossing = np.mean(
+            [p.estimate_zero_crossing() for p in roughly_aligned]
+        )
+
+        return [
+            p.propagate(mean_zerocrossing - p.estimate_zero_crossing())
+            for p in roughly_aligned
+        ]
 
     @classmethod
     def _from_slice(cls: type[Pulse], scan: Pulse, indices: slice) -> Pulse:
@@ -548,48 +553,3 @@ class Pulse:
         bandwidth = freqs[cutoff_idx]
         dynamic_range_dB = 20 * np.log10(self.maximum_spectral_density / noisefloor)
         return bandwidth, dynamic_range_dB, avg_noise_power
-
-
-def _match_templates(
-    extremum: int, ref: Pulse, roughly_aligned: list[Pulse]
-) -> list[Pulse]:
-    # corresponds to a template of length 8 - chosen as a compromise between speed and accuracy
-    window_size = 4
-    ref_slice = slice(extremum - window_size, extremum + window_size)
-
-    def correlate(x1: FloatArray, x2: FloatArray) -> float:
-        return float(np.sum(x1 * x2 / (np.linalg.norm(x1) * np.linalg.norm(x2))))
-
-    cut_candidates = [-2, -1, 0, 1, 2]
-    cuts = np.empty(len(roughly_aligned), dtype=int)
-    for i_scan, scan in enumerate(roughly_aligned):
-        slices = [
-            slice(extremum - window_size + i, extremum + window_size + i)
-            for i in cut_candidates
-        ]
-        cuts[i_scan] = cut_candidates[
-            np.argmax(
-                [correlate(scan.signal[s], ref.signal[ref_slice]) for s in slices]
-            )
-        ]
-
-    max_cut = np.max(np.abs(cuts))
-    new_length = len(ref) - max_cut
-    aligned = []
-    for scan, cut in zip(roughly_aligned, cuts):
-        if cut >= 0:
-            aligned.append(
-                Pulse(
-                    time=ref.time[:new_length],
-                    signal=scan.signal[cut : cut + new_length],
-                )
-            )
-        else:
-            aligned.append(
-                Pulse(
-                    time=ref.time[:new_length],
-                    signal=scan.signal[cut - new_length : cut],
-                )
-            )
-
-    return aligned
