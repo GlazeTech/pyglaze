@@ -164,8 +164,8 @@ class Pulse:
             for scan in roughly_aligned:
                 scan.time = scan.time - scan.time[0]
 
-        mean_zerocrossing = np.mean(
-            [p.estimate_zero_crossing() for p in roughly_aligned]
+        mean_zerocrossing = cast(
+            float, np.mean([p.estimate_zero_crossing() for p in roughly_aligned])
         )
 
         return [
@@ -202,7 +202,7 @@ class Pulse:
         Returns:
             complex: Fourier Transform at the given frequency
         """
-        return self.fft[np.searchsorted(self.frequency, f)]
+        return cast(complex, self.fft[np.searchsorted(self.frequency, f)])
 
     def timeshift(self: Pulse, scale: float, offset: float = 0) -> Pulse:
         """Rescales and offsets the time axis as.
