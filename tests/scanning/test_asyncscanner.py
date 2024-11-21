@@ -20,17 +20,18 @@ def test_start_stop(config_name: str, request: pytest.FixtureRequest) -> None:
     assert scanner.is_scanning is False
 
 
-@pytest.mark.parametrize("averaged_over", [1, 2])
+@pytest.mark.parametrize("n_scans", [1, 2])
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_get_next(
-    averaged_over: int, config_name: str, request: pytest.FixtureRequest
+    n_scans: int, config_name: str, request: pytest.FixtureRequest
 ) -> None:
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
     scanner.start_scan(device_config)
-    scan = scanner.get_next(averaged_over_n=averaged_over)
+    for _ in range(n_scans):
+        scan = scanner.get_next()
+        assert isinstance(scan, UnprocessedWaveform)
     scanner.stop_scan()
-    assert isinstance(scan, UnprocessedWaveform)
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
