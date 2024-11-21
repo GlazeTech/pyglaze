@@ -382,3 +382,11 @@ def test_estimate_zero_crossing() -> None:
     zero_crossing = pulse.estimate_zero_crossing()
     assert isinstance(zero_crossing, float)
     assert zero_crossing == pytest.approx(t0, 1e-4 * 1e-12)
+
+
+def test_propagate(gaussian_deriv_pulse: Pulse) -> None:
+    zerocrossing = gaussian_deriv_pulse.estimate_zero_crossing()
+    propagated = gaussian_deriv_pulse.propagate(5e-12)
+    assert propagated.estimate_zero_crossing() == pytest.approx(
+        zerocrossing + 5e-12, abs=1e-15
+    )
