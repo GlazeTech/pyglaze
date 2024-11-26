@@ -258,6 +258,17 @@ class Pulse:
         )
         return Pulse(time=zeropadded_time, signal=zeropadded_signal)
 
+    def signal_at_t(self: Pulse, t: float) -> float:
+        """Returns the signal at a specific time using Whittaker Shannon interpolation.
+
+        Args:
+            t: Time in seconds
+
+        Returns:
+            Signal at the given time
+        """
+        return ws_interpolate(self.time, self.signal, np.array([t]))[0]
+
     def subtract_mean(self: Pulse, fraction: float = 0.99) -> Pulse:
         """Subtracts the mean of the pulse.
 
