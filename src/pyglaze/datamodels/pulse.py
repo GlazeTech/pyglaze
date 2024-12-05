@@ -91,6 +91,11 @@ class Pulse:
         """Time delay at the minimum value of the pulse."""
         return float(self.time[np.argmin(self.signal)])
 
+    @property
+    def energy(self: Pulse) -> float:
+        """Energy of the pulse."""
+        return cast(float, np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201 - trapz removed in numpy 2.0
+
     @classmethod
     def from_dict(
         cls: type[Pulse], d: dict[str, FloatArray | list[float] | None]
