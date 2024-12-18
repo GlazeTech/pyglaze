@@ -20,12 +20,10 @@ class Pulse:
     Args:
         time: The time values recorded by the lock-in amp during the scan.
         signal: The signal values recorded by the lock-in amp during the scan.
-        signal_err: Potential errors on signal
     """
 
     time: FloatArray
     signal: FloatArray
-    signal_err: FloatArray | None = None
 
     def __len__(self: Pulse) -> int:  # noqa: D105
         return len(self.time)
@@ -38,7 +36,6 @@ class Pulse:
         return bool(
             np.array_equal(self.time, obj.time)
             and np.array_equal(self.signal, obj.signal)
-            and np.array_equal(self.signal_err, obj.signal_err)  # type: ignore[arg-type]
         )
 
     @cached_property
@@ -103,12 +100,9 @@ class Pulse:
         """Create a Pulse object from a dictionary.
 
         Args:
-            d: A dictionary containing the keys 'time', 'signal' and potentially 'signal_err'.
+            d: A dictionary containing the keys 'time', 'signal'.
         """
-        err = np.array(d["signal_err"]) if d.get("signal_err") is not None else None
-        return Pulse(
-            time=np.array(d["time"]), signal=np.array(d["signal"]), signal_err=err
-        )
+        return Pulse(time=np.array(d["time"]), signal=np.array(d["signal"]))
 
     @classmethod
     def from_fft(cls: type[Pulse], time: FloatArray, fft: ComplexArray) -> Pulse:
@@ -134,10 +128,7 @@ class Pulse:
             return scans[0]
         signals = np.array([scan.signal for scan in scans])
         mean_signal = np.mean(signals, axis=0)
-
-        root_n_scans = np.sqrt(len(scans))
-        std_signal = np.std(signals, axis=0, ddof=1) / root_n_scans
-        return Pulse(scans[0].time, mean_signal, signal_err=std_signal)
+        return Pulse(scans[0].time, mean_signal)
 
     @classmethod
     def align(
@@ -180,8 +171,7 @@ class Pulse:
 
     @classmethod
     def _from_slice(cls: type[Pulse], scan: Pulse, indices: slice) -> Pulse:
-        err = scan.signal_err[indices] if scan.signal_err is not None else None
-        return cls(scan.time[indices], scan.signal[indices], err)
+        return cls(scan.time[indices], scan.signal[indices])
 
     def cut(self: Pulse, from_time: float, to_time: float) -> Pulse:
         """Create a Pulse object by cutting out a specific section of the scan.
@@ -192,11 +182,7 @@ class Pulse:
         """
         from_idx = int(np.searchsorted(self.time, from_time))
         to_idx = int(np.searchsorted(self.time, to_time, side="right"))
-        return Pulse(
-            self.time[from_idx:to_idx],
-            self.signal[from_idx:to_idx],
-            None if self.signal_err is None else self.signal_err[from_idx:to_idx],
-        )
+        return Pulse(self.time[from_idx:to_idx], self.signal[from_idx:to_idx])
 
     def fft_at_f(self: Pulse, f: float) -> complex:
         """Returns the Fourier Transform at a specific frequency.
@@ -224,7 +210,6 @@ class Pulse:
         return Pulse(
             time=scale * (self.time + offset),
             signal=self.signal,
-            signal_err=self.signal_err,
         )
 
     def add_white_noise(
@@ -245,7 +230,6 @@ class Pulse:
             + np.random.default_rng(seed).normal(
                 loc=0, scale=noise_std, size=len(self)
             ),
-            signal_err=np.ones(len(self)) * noise_std,
         )
 
     def zeropadded(self: Pulse, n_zeros: int) -> Pulse:
@@ -541,7 +525,6 @@ class Pulse:
         return {
             "time": list(self.time),
             "signal": list(self.signal),
-            "signal_err": None if self.signal_err is None else list(self.signal_err),
         }
 
     def _get_min_or_max_idx(self: Pulse, *, wrt_max: bool) -> int:
