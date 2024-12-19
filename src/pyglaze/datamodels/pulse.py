@@ -5,7 +5,9 @@ from functools import cached_property
 from typing import Literal, cast
 
 import numpy as np
+from scipy import optimize as opt
 from scipy import signal
+from scipy.stats import linregress
 
 from pyglaze.helpers.types import ComplexArray, FloatArray
 from pyglaze.interpolation import ws_interpolate
@@ -530,25 +532,98 @@ class Pulse:
     def _get_min_or_max_idx(self: Pulse, *, wrt_max: bool) -> int:
         return int(np.argmax(self.signal)) if wrt_max else int(np.argmin(self.signal))
 
+    # def _estimate_pulse_properties(
+    #     self: Pulse, omega_power: int
+    # ) -> tuple[float, float, float]:
+    #     argmax = np.argmax(np.abs(self.fft))
+    #     freqs = self.frequency[argmax:]
+    #     abs_spectrum = np.abs(self.fft[argmax:])
+
+    #     noisefloor_idx_estimate = np.argmin(abs_spectrum * freqs**omega_power)
+    #     avg_noise_power = np.mean(abs_spectrum[noisefloor_idx_estimate:] ** 2)
+    #     noisefloor = np.sqrt(avg_noise_power)
+
+    #     # Search for the first index, where the spectrum is above the noise floor
+    #     # by flipping the spectrum to get a pseudo-increasing array, then convert back
+    #     # to an index in the original array
+    #     cutoff_idx = noisefloor_idx_estimate - np.searchsorted(
+    #         np.flip(abs_spectrum[: noisefloor_idx_estimate + 1]),
+    #         noisefloor,
+    #         side="right",
+    #     )
+    #     bandwidth = freqs[cutoff_idx]
+    #     dynamic_range_dB = 20 * np.log10(self.maximum_spectral_density / noisefloor)
+    #     return bandwidth, dynamic_range_dB, avg_noise_power
+
     def _estimate_pulse_properties(
         self: Pulse, omega_power: int
     ) -> tuple[float, float, float]:
-        argmax = np.argmax(np.abs(self.fft))
-        freqs = self.frequency[argmax:]
-        abs_spectrum = np.abs(self.fft[argmax:])
-
-        noisefloor_idx_estimate = np.argmin(abs_spectrum * freqs**omega_power)
+        mean_substracted = self.subtract_mean()
+        argmax = np.argmax(np.abs(mean_substracted.fft))
+        freqs = mean_substracted.frequency[argmax:]
+        abs_spectrum = np.abs(mean_substracted.fft[argmax:])
+        noisefloor_idx_estimate = _estimate_noisefloor(freqs, abs_spectrum, omega_power)
         avg_noise_power = np.mean(abs_spectrum[noisefloor_idx_estimate:] ** 2)
         noisefloor = np.sqrt(avg_noise_power)
-
-        # Search for the first index, where the spectrum is above the noise floor
-        # by flipping the spectrum to get a pseudo-increasing array, then convert back
-        # to an index in the original array
-        cutoff_idx = noisefloor_idx_estimate - np.searchsorted(
-            np.flip(abs_spectrum[: noisefloor_idx_estimate + 1]),
-            noisefloor,
-            side="right",
-        )
-        bandwidth = freqs[cutoff_idx]
+        bandwidth = freqs[noisefloor_idx_estimate]
         dynamic_range_dB = 20 * np.log10(self.maximum_spectral_density / noisefloor)
         return bandwidth, dynamic_range_dB, avg_noise_power
+
+
+def _estimate_noisefloor(x: FloatArray, y: FloatArray, segments: int) -> float:
+    """Estimate the noise floor of a spectrum.
+
+    Args:
+        x: Frequency values
+        y: Spectrum values
+        bandwidth: Bandwidth of the pulse
+
+    Returns:
+        float: Estimated noise floor
+    """
+    # find the corresponding index of the bandwidth
+    target = np.log(y)
+
+    def L1(x: FloatArray, y: FloatArray) -> FloatArray:
+        return np.sum(np.abs(y - x))
+
+    def model(BW: float) -> FloatArray:
+        idx = np.searchsorted(x, BW[0])
+        x_before = x[:idx]
+        x_after = x[idx:]
+        target_before = target[:idx]
+        target_after = target[idx:]
+        y_fit = _fit_linear_segments(x_before, target_before, segments)
+        noise = np.ones(len(x_after)) * y_fit[-1]
+        return L1(y_fit, target_before) + L1(noise, target_after)
+
+    BW_estimate = opt.minimize(
+        fun=model, x0=[x[len(x) // 2]], bounds=[(x[0], x[-1])], method="Nelder-Mead"
+    ).x[0]
+    return x.searchsorted(BW_estimate)
+
+
+def _fit_linear_segments(x: FloatArray, y: FloatArray, n_segments: int) -> FloatArray:
+    """Fit a pulse with a piecewise linear function.
+
+    Args:
+        x: Time values
+        y: Signal values
+        n_segments: Number of segments to fit
+
+    Returns:
+        FloatArray: Fitted signal
+    """
+    segment_indices = np.linspace(0, len(x), n_segments + 1, dtype=int)
+    y_fit = np.zeros_like(y)
+
+    for i in range(n_segments):
+        # Get the indices for this segment
+        start, end = segment_indices[i], segment_indices[i + 1]
+        x_segment = x[start:end]
+        y_segment = y[start:end]
+
+        # Fit a linear function to this segment
+        slope, intercept, _, _, _ = linregress(x_segment, y_segment)
+        y_fit[start:end] = slope * x_segment + intercept
+    return y_fit
