@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Literal, cast
+from typing import Callable, Literal, cast
 
 import numpy as np
 from scipy import optimize as opt
@@ -443,7 +443,11 @@ class Pulse:
         return signal_power / self.estimate_avg_noise_power(omega_power=omega_power)
 
     def estimate_peak_to_peak(
-        self: Pulse, delay_tolerance: float | None = None
+        self: Pulse,
+        delay_tolerance: float | None = None,
+        strategy: Callable[
+            [FloatArray, FloatArray, FloatArray], FloatArray
+        ] = ws_interpolate,
     ) -> float:
         """Estimates the peak-to-peak value of the pulse.
 
@@ -451,6 +455,7 @@ class Pulse:
 
         Args:
             delay_tolerance: Tolerance for peak detection. Defaults to None.
+            strategy: Interpolation strategy. Defaults to Whittaker-Shannon interpolation
 
         Returns:
             float: Estimated peak-to-peak value.
@@ -462,7 +467,7 @@ class Pulse:
             msg = "Tolerance must be smaller than the time spacing of the pulse."
             raise ValueError(msg)
 
-        max_estimate = ws_interpolate(
+        max_estimate = strategy(
             times=self.time,
             pulse=self.signal,
             interp_times=np.linspace(
@@ -473,7 +478,7 @@ class Pulse:
             ),
         )
 
-        min_estimate = ws_interpolate(
+        min_estimate = strategy(
             times=self.time,
             pulse=self.signal,
             interp_times=np.linspace(
@@ -566,7 +571,9 @@ class Pulse:
         avg_noise_power = np.mean(abs_spectrum[noisefloor_idx_estimate:] ** 2)
         noisefloor = np.sqrt(avg_noise_power)
         bandwidth = freqs[noisefloor_idx_estimate]
-        dynamic_range_dB = 20 * np.log10(self.maximum_spectral_density / noisefloor)
+        dynamic_range_dB = 20 * np.log10(
+            mean_substracted.maximum_spectral_density / noisefloor
+        )
         return bandwidth, dynamic_range_dB, avg_noise_power
 
 
