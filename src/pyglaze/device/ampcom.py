@@ -29,7 +29,7 @@ if TYPE_CHECKING:
         LeMockDevice,
         MockDevice,
     )
-    from pyglaze.helpers.types import FloatArray
+    from pyglaze.helpers._types import FloatArray
 
 
 class DeviceComError(Exception):

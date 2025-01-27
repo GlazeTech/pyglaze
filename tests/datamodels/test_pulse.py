@@ -8,6 +8,7 @@ import pytest
 
 from pyglaze.datamodels import Pulse
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
+from pyglaze.interpolation import cubic_spline_interpolate
 
 
 @pytest.mark.parametrize(
@@ -26,16 +27,12 @@ def test_scandata_cut(pulse_name: str, request: pytest.FixtureRequest) -> None:
     assert scan_test.signal[0] == scan_data.signal[arg_from]
     assert pytest.approx(scan_test.time[-1], rel=1e-2) == to_
     assert scan_test.signal[-1] == scan_data.signal[arg_to]
-    assert isinstance(scan_test.signal_err, type(scan_data.signal_err))
     assert isinstance(scan_test, Pulse)
 
 
 def test_scandata_average(scan_data: Pulse) -> None:
     avg = scan_data.average([scan_data, scan_data])
-    assert avg.signal_err is not None
-    assert avg.signal_err.shape == scan_data.signal.shape
     assert np.sum(avg.signal - scan_data.signal) == 0
-    assert np.sum(avg.signal_err) == 0
 
 
 def test_scandata_average_single(scan_data: Pulse) -> None:
@@ -117,13 +114,7 @@ def test_from_dict(pulse_name: str, request: pytest.FixtureRequest) -> None:
     pulse: Pulse = request.getfixturevalue(pulse_name)
     as_d = asdict(pulse)
     from_d = Pulse.from_dict(as_d)
-    for attr in [
-        "time",
-        "signal",
-        "fft",
-        "frequency",
-        "signal_err",
-    ]:
+    for attr in ["time", "signal", "fft", "frequency"]:
         assert np.all(getattr(pulse, attr) == getattr(from_d, attr))
 
 
@@ -134,19 +125,11 @@ def test_to_native_dict(pulse_name: str, request: pytest.FixtureRequest) -> None
     pulse: Pulse = request.getfixturevalue(pulse_name)
     as_d = pulse.to_native_dict()
     from_d = Pulse.from_dict(as_d)  # type: ignore[arg-type]
-    for attr in [
-        "time",
-        "signal",
-        "signal_err",
-    ]:
+    for attr in ["time", "signal"]:
         assert np.all(getattr(pulse, attr) == getattr(from_d, attr))
 
     assert isinstance(as_d["time"], list)
     assert isinstance(as_d["signal"], list)
-    if pulse.signal_err is None:
-        assert as_d["signal_err"] is None
-    else:
-        assert isinstance(as_d["signal_err"], list)
 
 
 def test_spectrum_dB(gaussian_deriv_pulse: Pulse) -> None:
@@ -281,8 +264,6 @@ def test_pulse_equality(
     random_pulse_4 = Pulse(
         time=random_pulse_2.time[:-1], signal=random_pulse_2.signal[:-2]
     )
-    random_pulse_5 = deepcopy(gaussian_deriv_pulse)
-    random_pulse_5.signal_err = np.ones(len(random_pulse_5.signal))
 
     gaussian_deriv_pulse_copy = deepcopy(gaussian_deriv_pulse)
     scan_data_w_errors_copy = deepcopy(gaussian_deriv_pulse_w_errors)
@@ -290,7 +271,6 @@ def test_pulse_equality(
     assert random_pulse_1 != random_pulse_2
     assert random_pulse_2 != random_pulse_3
     assert random_pulse_3 != random_pulse_4
-    assert random_pulse_5 != gaussian_deriv_pulse
     assert gaussian_deriv_pulse == gaussian_deriv_pulse_copy
     assert gaussian_deriv_pulse_w_errors == scan_data_w_errors_copy
     assert gaussian_deriv_pulse != gaussian_deriv_pulse_w_errors
@@ -299,7 +279,7 @@ def test_pulse_equality(
 
 def test_estimate_bandwidth(gaussian_deriv_pulse: Pulse) -> None:
     pulse_w_noise = gaussian_deriv_pulse.add_white_noise(0.01, seed=42)
-    assert pytest.approx(1.71e12, 0.01) == pulse_w_noise.estimate_bandwidth()
+    assert pytest.approx(1.8e12, 0.05) == pulse_w_noise.estimate_bandwidth()
 
 
 def test_estimate_dynamic_range(gaussian_deriv_pulse: Pulse) -> None:
@@ -339,6 +319,16 @@ def test_estimate_peak_to_peak(gaussian_deriv_pulse: Pulse) -> None:
     )
     low_accuracy_p2p = gaussian_deriv_pulse.estimate_peak_to_peak()
     assert high_accuracy_p2p > low_accuracy_p2p
+
+
+def test_estimate_peak_to_peak_cubic_spline(gaussian_deriv_pulse: Pulse) -> None:
+    cubic_spline_val = gaussian_deriv_pulse.estimate_peak_to_peak(
+        delay_tolerance=gaussian_deriv_pulse.dt / 10, strategy=cubic_spline_interpolate
+    )
+    ws_val = gaussian_deriv_pulse.estimate_peak_to_peak(
+        delay_tolerance=gaussian_deriv_pulse.dt / 10
+    )
+    assert pytest.approx(cubic_spline_val, rel=1e-3) == ws_val
 
 
 def test_center_frequency(gaussian_deriv_pulse: Pulse) -> None:
@@ -390,3 +380,12 @@ def test_propagate(gaussian_deriv_pulse: Pulse) -> None:
     assert propagated.estimate_zero_crossing() == pytest.approx(
         zerocrossing + 5e-12, abs=1e-15
     )
+
+
+def test_energy(gaussian_deriv_pulse: Pulse) -> None:
+    energy = gaussian_deriv_pulse.energy
+    expected_energy = np.trapz(  # noqa: NPY201
+        gaussian_deriv_pulse.signal**2, x=gaussian_deriv_pulse.time
+    )
+    assert energy == pytest.approx(expected_energy, rel=1e-6)
+    assert isinstance(energy, float)

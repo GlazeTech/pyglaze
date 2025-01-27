@@ -3,7 +3,7 @@ from typing import cast
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from pyglaze.helpers.types import FloatArray
+from pyglaze.helpers._types import FloatArray
 
 
 def ws_interpolate(
@@ -40,8 +40,5 @@ def cubic_spline_interpolate(
     Returns:
         FloatArray: Interpolated values
     """
-    # Create the cubic spline interpolator
     spline = CubicSpline(times, pulse, bc_type="natural")
-
-    # Perform interpolation
     return cast(FloatArray, spline(interp_times))

@@ -11,7 +11,7 @@ from .pulse import Pulse
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pyglaze.helpers.types import FloatArray
+    from pyglaze.helpers._types import FloatArray
 
 __all__ = ["UnprocessedWaveform"]
 

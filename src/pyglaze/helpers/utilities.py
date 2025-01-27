@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable, cast
 import serial
 import serial.tools.list_ports
 
-from pyglaze.helpers.types import P, T
+from pyglaze.helpers._types import P, T
 
 if TYPE_CHECKING:
     import logging
@@ -64,11 +64,11 @@ class _BackoffRetry:
                     raise
                 except Exception as e:  # noqa: BLE001
                     self._log(
-                        f"{func.__name__} failed {tries+1} time(s) with: '{e}'. Trying again"
+                        f"{func.__name__} failed {tries + 1} time(s) with: '{e}'. Trying again"
                     )
                 backoff = min(self.backoff_base * 2**tries, self.max_backoff)
                 time.sleep(backoff)
-            self._log(f"{func.__name__}: Last try ({tries+2}).")
+            self._log(f"{func.__name__}: Last try ({tries + 2}).")
             return cast(T, func(*args, **kwargs))
 
         return wrapper
