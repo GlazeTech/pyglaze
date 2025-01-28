@@ -63,3 +63,17 @@ jobs:
         run: pip install -r requirements-docs.txt
       - name: Test docs build
         run: mkdocs build --strict
+
+  version-validation:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install CI/CD utils
+        run: pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
+      - name: Validate version number
+        run: check-version-number --monitored-paths src/pyglaze/ --version-files pyproject.toml
