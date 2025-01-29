@@ -8,6 +8,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GLAZE_CICD_UTILS_SECRET }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - name: Configure Git user
+        run: |
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -17,10 +27,9 @@ jobs:
         run: |
           pip install -r requirements-build.txt
           pip install -r requirements-docs.txt
-      - name: Configure Git user
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
+      - name: Assert version is new
+        run: assert-new-version --version-file pyproject.toml --tag-and-push
       - name: Build package
         run: python -m build
       - name: Publish package

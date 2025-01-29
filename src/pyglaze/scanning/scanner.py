@@ -16,7 +16,7 @@ from pyglaze.device.configuration import (
 from pyglaze.scanning._exceptions import ScanError
 
 if TYPE_CHECKING:
-    from pyglaze.helpers.types import FloatArray
+    from pyglaze.helpers._types import FloatArray
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
 

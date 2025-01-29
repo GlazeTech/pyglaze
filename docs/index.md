@@ -4,7 +4,7 @@
 
 **Source Code**: <a href="https://github.com/GlazeTech/pyglaze" target="_blank">https://github.com/GlazeTech/pyglaze</a>
 
-**Documentation Version**: 0.2.2
+**Documentation Version**: 0.3.0
 
 ---
 

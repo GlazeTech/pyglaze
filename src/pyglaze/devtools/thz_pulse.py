@@ -4,7 +4,7 @@ from typing import cast
 
 import numpy as np
 
-from pyglaze.helpers.types import FloatArray
+from pyglaze.helpers._types import FloatArray
 
 
 def gaussian_derivative_pulse(

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Literal, cast
+from typing import Callable, Literal, cast
 
 import numpy as np
+from scipy import optimize as opt
 from scipy import signal
+from scipy.stats import linregress
 
-from pyglaze.helpers.types import ComplexArray, FloatArray
+from pyglaze.helpers._types import ComplexArray, FloatArray
 from pyglaze.interpolation import ws_interpolate
 
 __all__ = ["Pulse"]
@@ -20,12 +21,10 @@ class Pulse:
     Args:
         time: The time values recorded by the lock-in amp during the scan.
         signal: The signal values recorded by the lock-in amp during the scan.
-        signal_err: Potential errors on signal
     """
 
     time: FloatArray
     signal: FloatArray
-    signal_err: FloatArray | None = None
 
     def __len__(self: Pulse) -> int:  # noqa: D105
         return len(self.time)
@@ -38,15 +37,14 @@ class Pulse:
         return bool(
             np.array_equal(self.time, obj.time)
             and np.array_equal(self.signal, obj.signal)
-            and np.array_equal(self.signal_err, obj.signal_err)  # type: ignore[arg-type]
         )
 
-    @cached_property
+    @property
     def fft(self: Pulse) -> ComplexArray:
         """Return the Fourier Transform of a signal."""
         return np.fft.rfft(self.signal, norm="forward")
 
-    @cached_property
+    @property
     def frequency(self: Pulse) -> FloatArray:
         """Return the Fourier Transform sample frequencies."""
         return np.fft.rfftfreq(len(self.signal), d=self.time[1] - self.time[0])
@@ -91,6 +89,14 @@ class Pulse:
         """Time delay at the minimum value of the pulse."""
         return float(self.time[np.argmin(self.signal)])
 
+    @property
+    def energy(self: Pulse) -> float:
+        """Energy of the pulse.
+
+        Note that the energy is not the same as the physical energy of the pulse, but rather the integral of the square of the pulse.
+        """
+        return cast(float, np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201 - trapz removed in numpy 2.0
+
     @classmethod
     def from_dict(
         cls: type[Pulse], d: dict[str, FloatArray | list[float] | None]
@@ -98,12 +104,9 @@ class Pulse:
         """Create a Pulse object from a dictionary.
 
         Args:
-            d: A dictionary containing the keys 'time', 'signal' and potentially 'signal_err'.
+            d: A dictionary containing the keys 'time', 'signal'.
         """
-        err = np.array(d["signal_err"]) if d.get("signal_err") is not None else None
-        return Pulse(
-            time=np.array(d["time"]), signal=np.array(d["signal"]), signal_err=err
-        )
+        return Pulse(time=np.array(d["time"]), signal=np.array(d["signal"]))
 
     @classmethod
     def from_fft(cls: type[Pulse], time: FloatArray, fft: ComplexArray) -> Pulse:
@@ -129,10 +132,7 @@ class Pulse:
             return scans[0]
         signals = np.array([scan.signal for scan in scans])
         mean_signal = np.mean(signals, axis=0)
-
-        root_n_scans = np.sqrt(len(scans))
-        std_signal = np.std(signals, axis=0, ddof=1) / root_n_scans
-        return Pulse(scans[0].time, mean_signal, signal_err=std_signal)
+        return Pulse(scans[0].time, mean_signal)
 
     @classmethod
     def align(
@@ -142,11 +142,11 @@ class Pulse:
         wrt_max: bool = True,
         translate_to_zero: bool = True,
     ) -> list[Pulse]:
-        """Aligns a list of scan with respect to their individual maxima or minima.
+        """Aligns a list of pulses with respect to the zerocrossings of their main pulse.
 
         Args:
             scans: List of scans
-            wrt_max: Whether to align with respect to maximum. Defaults to True.
+            wrt_max: Whether to perform rough alignment with respect to their maximum (true) or minimum(false). Defaults to True.
             translate_to_zero: Whether to translate all scans to t[0] = 0. Defaults to True.
 
         Returns:
@@ -163,15 +163,17 @@ class Pulse:
         if translate_to_zero:
             for scan in roughly_aligned:
                 scan.time = scan.time - scan.time[0]
+        zerocrossings = [p.estimate_zero_crossing() for p in roughly_aligned]
+        mean_zerocrossing = cast(float, np.mean(zerocrossings))
 
-        ref = roughly_aligned[len(roughly_aligned) // 2]
-        extremum = extrema[len(roughly_aligned) // 2]
-        return _match_templates(extremum, ref, roughly_aligned)
+        return [
+            p.propagate(mean_zerocrossing - zc)
+            for p, zc in zip(roughly_aligned, zerocrossings)
+        ]
 
     @classmethod
     def _from_slice(cls: type[Pulse], scan: Pulse, indices: slice) -> Pulse:
-        err = scan.signal_err[indices] if scan.signal_err is not None else None
-        return cls(scan.time[indices], scan.signal[indices], err)
+        return cls(scan.time[indices], scan.signal[indices])
 
     def cut(self: Pulse, from_time: float, to_time: float) -> Pulse:
         """Create a Pulse object by cutting out a specific section of the scan.
@@ -182,11 +184,18 @@ class Pulse:
         """
         from_idx = int(np.searchsorted(self.time, from_time))
         to_idx = int(np.searchsorted(self.time, to_time, side="right"))
-        return Pulse(
-            self.time[from_idx:to_idx],
-            self.signal[from_idx:to_idx],
-            None if self.signal_err is None else self.signal_err[from_idx:to_idx],
-        )
+        return Pulse(self.time[from_idx:to_idx], self.signal[from_idx:to_idx])
+
+    def fft_at_f(self: Pulse, f: float) -> complex:
+        """Returns the Fourier Transform at a specific frequency.
+
+        Args:
+            f: Frequency in Hz
+
+        Returns:
+            complex: Fourier Transform at the given frequency
+        """
+        return cast(complex, self.fft[np.searchsorted(self.frequency, f)])
 
     def timeshift(self: Pulse, scale: float, offset: float = 0) -> Pulse:
         """Rescales and offsets the time axis as.
@@ -200,11 +209,7 @@ class Pulse:
         Returns:
             Timeshifted pulse
         """
-        return Pulse(
-            time=scale * (self.time + offset),
-            signal=self.signal,
-            signal_err=self.signal_err,
-        )
+        return Pulse(time=scale * (self.time + offset), signal=self.signal)
 
     def add_white_noise(
         self: Pulse, noise_std: float, seed: int | None = None
@@ -224,7 +229,6 @@ class Pulse:
             + np.random.default_rng(seed).normal(
                 loc=0, scale=noise_std, size=len(self)
             ),
-            signal_err=np.ones(len(self)) * noise_std,
         )
 
     def zeropadded(self: Pulse, n_zeros: int) -> Pulse:
@@ -241,6 +245,28 @@ class Pulse:
             (self.time[0] + np.arange(n_zeros, 0, -1) * -self.dt, self.time)
         )
         return Pulse(time=zeropadded_time, signal=zeropadded_signal)
+
+    def signal_at_t(self: Pulse, t: float) -> float:
+        """Returns the signal at a specific time using Whittaker Shannon interpolation.
+
+        Args:
+            t: Time in seconds
+
+        Returns:
+            Signal at the given time
+        """
+        return cast(float, ws_interpolate(self.time, self.signal, np.array([t]))[0])
+
+    def subtract_mean(self: Pulse, fraction: float = 0.99) -> Pulse:
+        """Subtracts the mean of the pulse.
+
+        Args:
+            fraction: Fraction of the mean to subtract. Defaults to 0.99.
+
+        Returns:
+            Pulse with the mean subtracted
+        """
+        return Pulse(self.time, self.signal - fraction * np.mean(self.signal))
 
     def tukey(
         self: Pulse,
@@ -338,53 +364,52 @@ class Pulse:
             20 * np.log10((abs_spectrum + offset) / ref), dtype=np.float64
         )
 
-    def estimate_bandwidth(self: Pulse, omega_power: int = 3) -> float:
+    def estimate_bandwidth(self: Pulse, linear_segments: int = 1) -> float:
         """Estimates the bandwidth of the pulse.
 
-        Uses the approach described in [Algorithm for Determination of Cutoff Frequency of Noise Floor Level for Terahertz Time-Domain Signals](https://doi.org/10.1007/s10762-022-00886-y).
+        The bandwidth is estimated by modelling the log of the pulse's spectrum above the center frequency as a constant noisefloor and n linear segments of equal size. The bandwidth is then defined as the frequency at which the noisefloor is reached.
 
         Args:
-            omega_power: power to raise omega to before estimating the bandwidth. Defaults to 3
+            linear_segments: Number of linear segments to fit to the spectrum. Defaults to 1.
 
         Returns:
             float: Estimated bandwidth in Hz
         """
-        return self._estimate_pulse_properties(omega_power)[0]
+        return self._estimate_pulse_properties(linear_segments)[0]
 
-    def estimate_dynamic_range(self: Pulse, omega_power: int = 3) -> float:
+    def estimate_dynamic_range(self: Pulse, linear_segments: int = 1) -> float:
         """Estimates the dynamic range of the pulse.
 
-        Uses the approach described in [Algorithm for Determination of Cutoff Frequency of Noise Floor Level for Terahertz Time-Domain Signals](https://doi.org/10.1007/s10762-022-00886-y).
+        The dynamic range is estimated by modelling the log of the pulse's spectrum above the center frequency as a constant noisefloor and n linear segments of equal size. The dynamic range is then calculated as the maximum of the spectrum minus the noisefloor.
 
         Args:
-            omega_power: power to raise omega to before estimating the dynamic range. Defaults to 3
+            linear_segments: Number of linear segments to fit to the spectrum. Defaults to 1.
 
         Returns:
             float: Estimated dynamic range in dB
         """
-        return self._estimate_pulse_properties(omega_power)[1]
+        return self._estimate_pulse_properties(linear_segments)[1]
 
-    def estimate_avg_noise_power(self: Pulse, omega_power: int = 3) -> float:
+    def estimate_avg_noise_power(self: Pulse, linear_segments: int = 1) -> float:
         """Estimates the noise power.
 
-        Noise power is defined as the mean of the absolute square of the noise floor.
-        Uses the approach described in [Algorithm for Determination of Cutoff Frequency of Noise Floor Level for Terahertz Time-Domain Signals](https://doi.org/10.1007/s10762-022-00886-y).
+        The noise power is estimated by modelling the the log of pulse's spectrum above the center frequency as a constant noisefloor and n linear segments of equal size. Noise power is then calculated as the mean of the absolute square of the spectral bins above the frequency at which the noise floor is reached.
 
         Args:
-            omega_power: power to raise omega to before estimating the noisepower. Defaults to 3
+            linear_segments: Number of linear segments to fit to the spectrum. Defaults to 1.
 
         Returns:
             float: Estimated noise power.
         """
-        return self._estimate_pulse_properties(omega_power)[2]
+        return self._estimate_pulse_properties(linear_segments)[2]
 
-    def estimate_SNR(self: Pulse, omega_power: int = 3) -> FloatArray:
+    def estimate_SNR(self: Pulse, linear_segments: int = 1) -> FloatArray:
         """Estimates the signal-to-noise ratio.
 
-        Estimates the SNR, assuming white noise. Uses the approach described in [Algorithm for Determination of Cutoff Frequency of Noise Floor Level for Terahertz Time-Domain Signals](https://doi.org/10.1007/s10762-022-00886-y) to estimate the noise power. The signal power is then extrapolated above the bandwidth by fitting a second order polynomial to the spectrum above the noisefloor.
+        Estimates the SNR, assuming white noise. The noisefloor is estimated by modelling the log of the pulse's spectrum above the center frequency as a constant noisefloor and n linear segments of equal size. Noise power is then calculated as the mean of the absolute square of the spectral bins above the frequency at which the noise floor is reached. The signal power is then extrapolated above the bandwidth by fitting a second order polynomial to the spectrum above the noisefloor.
 
         Args:
-            omega_power: power to raise omega to before estimating the signal-to-noise ratio. Defaults to 3
+            linear_segments: Number of linear segments to fit to the spectrum. Defaults to 1.
 
         Returns:
             float: Estimated signal-to-noise ratio.
@@ -392,7 +417,7 @@ class Pulse:
         # Get spectrum between maximum and noisefloor
         _from = np.argmax(self.spectrum_dB())
         _to = np.searchsorted(
-            self.frequency, self.estimate_bandwidth(omega_power=omega_power)
+            self.frequency, self.estimate_bandwidth(linear_segments=linear_segments)
         )
         x = self.frequency[_from:_to]
         y = self.spectrum_dB()[_from:_to]
@@ -411,10 +436,16 @@ class Pulse:
             ),
         )
         signal_power = 10 ** (y_values / 10) * self.maximum_spectral_density**2
-        return signal_power / self.estimate_avg_noise_power(omega_power=omega_power)
+        return signal_power / self.estimate_avg_noise_power(
+            linear_segments=linear_segments
+        )
 
     def estimate_peak_to_peak(
-        self: Pulse, delay_tolerance: float | None = None
+        self: Pulse,
+        delay_tolerance: float | None = None,
+        strategy: Callable[
+            [FloatArray, FloatArray, FloatArray], FloatArray
+        ] = ws_interpolate,
     ) -> float:
         """Estimates the peak-to-peak value of the pulse.
 
@@ -422,6 +453,7 @@ class Pulse:
 
         Args:
             delay_tolerance: Tolerance for peak detection. Defaults to None.
+            strategy: Interpolation strategy. Defaults to Whittaker-Shannon interpolation
 
         Returns:
             float: Estimated peak-to-peak value.
@@ -433,10 +465,10 @@ class Pulse:
             msg = "Tolerance must be smaller than the time spacing of the pulse."
             raise ValueError(msg)
 
-        max_estimate = ws_interpolate(
-            times=self.time,
-            pulse=self.signal,
-            interp_times=np.linspace(
+        max_estimate = strategy(
+            self.time,
+            self.signal,
+            np.linspace(
                 self.delay_at_max - self.dt,
                 self.delay_at_max + self.dt,
                 num=1 + int(self.dt / delay_tolerance),
@@ -444,10 +476,10 @@ class Pulse:
             ),
         )
 
-        min_estimate = ws_interpolate(
-            times=self.time,
-            pulse=self.signal,
-            interp_times=np.linspace(
+        min_estimate = strategy(
+            self.time,
+            self.signal,
+            np.linspace(
                 self.delay_at_min - self.dt,
                 self.delay_at_min + self.dt,
                 num=1 + int(self.dt / delay_tolerance),
@@ -475,85 +507,102 @@ class Pulse:
         a = (self.signal[idx + 1] - self.signal[idx]) / self.dt
         return cast(float, t1 - s1 / a)
 
+    def propagate(self: Pulse, time: float) -> Pulse:
+        """Propagates the pulse in time by a given amount.
+
+        Args:
+            time: Time in seconds to propagate the pulse by
+
+        Returns:
+            Pulse: Propagated pulse
+        """
+        return Pulse.from_fft(
+            time=self.time,
+            fft=self.fft * np.exp(-1j * 2 * np.pi * self.frequency * time),
+        )
+
     def to_native_dict(self: Pulse) -> dict[str, list[float] | None]:
         """Converts the Pulse object to a native dictionary.
 
         Returns:
             Native dictionary representation of the Pulse object.
         """
-        return {
-            "time": list(self.time),
-            "signal": list(self.signal),
-            "signal_err": None if self.signal_err is None else list(self.signal_err),
-        }
+        return {"time": list(self.time), "signal": list(self.signal)}
 
     def _get_min_or_max_idx(self: Pulse, *, wrt_max: bool) -> int:
         return int(np.argmax(self.signal)) if wrt_max else int(np.argmin(self.signal))
 
     def _estimate_pulse_properties(
-        self: Pulse, omega_power: int
+        self: Pulse, linear_segments: int
     ) -> tuple[float, float, float]:
-        argmax = np.argmax(np.abs(self.fft))
-        freqs = self.frequency[argmax:]
-        abs_spectrum = np.abs(self.fft[argmax:])
-
-        noisefloor_idx_estimate = np.argmin(abs_spectrum * freqs**omega_power)
-        avg_noise_power = np.mean(abs_spectrum[noisefloor_idx_estimate:] ** 2)
+        mean_substracted = self.subtract_mean()
+        argmax = np.argmax(np.abs(mean_substracted.fft))
+        freqs = mean_substracted.frequency[argmax:]
+        abs_spectrum = np.abs(mean_substracted.fft[argmax:])
+        bw_idx_estimate = _estimate_bw_idx(freqs, abs_spectrum, linear_segments)
+        avg_noise_power = np.mean(abs_spectrum[bw_idx_estimate:] ** 2)
         noisefloor = np.sqrt(avg_noise_power)
-
-        # Search for the first index, where the spectrum is above the noise floor
-        # by flipping the spectrum to get a pseudo-increasing array, then convert back
-        # to an index in the original array
-        cutoff_idx = noisefloor_idx_estimate - np.searchsorted(
-            np.flip(abs_spectrum[: noisefloor_idx_estimate + 1]),
-            noisefloor,
-            side="right",
+        bandwidth = freqs[bw_idx_estimate]
+        dynamic_range_dB = 20 * np.log10(
+            mean_substracted.maximum_spectral_density / noisefloor
         )
-        bandwidth = freqs[cutoff_idx]
-        dynamic_range_dB = 20 * np.log10(self.maximum_spectral_density / noisefloor)
         return bandwidth, dynamic_range_dB, avg_noise_power
 
 
-def _match_templates(
-    extremum: int, ref: Pulse, roughly_aligned: list[Pulse]
-) -> list[Pulse]:
-    # corresponds to a template of length 8 - chosen as a compromise between speed and accuracy
-    window_size = 4
-    ref_slice = slice(extremum - window_size, extremum + window_size)
+def _estimate_bw_idx(x: FloatArray, y: FloatArray, segments: int) -> int:
+    """Estimate the noise floor of a spectrum.
 
-    def correlate(x1: FloatArray, x2: FloatArray) -> float:
-        return float(np.sum(x1 * x2 / (np.linalg.norm(x1) * np.linalg.norm(x2))))
+    Args:
+        x: Frequency values
+        y: Spectrum values
+        segments: Number of linear segments to fit
 
-    cut_candidates = [-2, -1, 0, 1, 2]
-    cuts = np.empty(len(roughly_aligned), dtype=int)
-    for i_scan, scan in enumerate(roughly_aligned):
-        slices = [
-            slice(extremum - window_size + i, extremum + window_size + i)
-            for i in cut_candidates
-        ]
-        cuts[i_scan] = cut_candidates[
-            np.argmax(
-                [correlate(scan.signal[s], ref.signal[ref_slice]) for s in slices]
-            )
-        ]
+    Returns:
+        float: Estimated noise floor
+    """
+    target = np.log(y)
 
-    max_cut = np.max(np.abs(cuts))
-    new_length = len(ref) - max_cut
-    aligned = []
-    for scan, cut in zip(roughly_aligned, cuts):
-        if cut >= 0:
-            aligned.append(
-                Pulse(
-                    time=ref.time[:new_length],
-                    signal=scan.signal[cut : cut + new_length],
-                )
-            )
-        else:
-            aligned.append(
-                Pulse(
-                    time=ref.time[:new_length],
-                    signal=scan.signal[cut - new_length : cut],
-                )
-            )
+    def L1(x: FloatArray, y: FloatArray) -> FloatArray:
+        return np.sum(np.abs(y - x))  # type: ignore[no-any-return]
 
-    return aligned
+    def model(pars: list[float]) -> FloatArray:
+        idx = np.searchsorted(x, pars[0])
+        x_before = x[:idx]
+        x_after = x[idx:]
+        target_before = target[:idx]
+        target_after = target[idx:]
+        y_fit = _fit_linear_segments(x_before, target_before, segments)
+        noise = np.ones(len(x_after)) * y_fit[-1]
+        return L1(y_fit, target_before) + L1(noise, target_after)
+
+    BW_estimate = opt.minimize(
+        fun=model, x0=[x[len(x) // 2]], bounds=[(x[0], x[-1])], method="Nelder-Mead"
+    ).x[0]
+
+    return cast(int, x.searchsorted(BW_estimate))
+
+
+def _fit_linear_segments(x: FloatArray, y: FloatArray, n_segments: int) -> FloatArray:
+    """Fit a pulse with a piecewise linear function.
+
+    Args:
+        x: Time values
+        y: Signal values
+        n_segments: Number of segments to fit
+
+    Returns:
+        FloatArray: Fitted signal
+    """
+    segment_indices = np.linspace(0, len(x), n_segments + 1, dtype=int)
+    y_fit = np.zeros_like(y)
+
+    for i in range(n_segments):
+        # Get the indices for this segment
+        start, end = segment_indices[i], segment_indices[i + 1]
+        x_segment = x[start:end]
+        y_segment = y[start:end]
+
+        # Fit a linear function to this segment
+        slope, intercept, _, _, _ = linregress(x_segment, y_segment)
+        y_fit[start:end] = slope * x_segment + intercept
+    return y_fit

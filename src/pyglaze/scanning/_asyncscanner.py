@@ -87,10 +87,8 @@ class _AsyncScanner:
 
         return [self._get_scan().waveform for _ in range(n_pulses)]
 
-    def get_next(self: _AsyncScanner, averaged_over_n: int = 1) -> UnprocessedWaveform:
-        return UnprocessedWaveform.average(
-            [self._get_scan().waveform for _ in range(averaged_over_n)]
-        )
+    def get_next(self: _AsyncScanner) -> UnprocessedWaveform:
+        return self._get_scan().waveform
 
     def _get_scan(self: _AsyncScanner) -> _TimestampedWaveform:
         try:

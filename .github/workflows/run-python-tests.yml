@@ -63,3 +63,23 @@ jobs:
         run: pip install -r requirements-docs.txt
       - name: Test docs build
         run: mkdocs build --strict
+
+  version-validation:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GLAZE_CICD_UTILS_SECRET }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install CI/CD utils
+        run: pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
+      - name: Validate version number
+        run: check-version-number --monitored-paths src/pyglaze/ --version-files pyproject.toml
