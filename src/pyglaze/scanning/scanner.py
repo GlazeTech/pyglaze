@@ -43,6 +43,14 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
     def disconnect(self: _ScannerImplementation) -> None:
         pass
 
+    @abstractmethod
+    def get_serial_number(self: _ScannerImplementation) -> str:
+        pass
+
+    @abstractmethod
+    def get_firmware_version(self: _ScannerImplementation) -> str:
+        pass
+
 
 class Scanner:
     """A synchronous scanner for Glaze terahertz devices."""
@@ -80,6 +88,14 @@ class Scanner:
     def disconnect(self: Scanner) -> None:
         """Close serial connection."""
         self._scanner_impl.disconnect()
+
+    def get_serial_number(self: Scanner) -> str:
+        """Get the serial number of the connected device.
+
+        Returns:
+            str: The serial number of the connected device.
+        """
+        return self._scanner_impl.get_serial_number()
 
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
@@ -152,6 +168,28 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
             raise ScanError(msg)
         self._ampcom.disconnect()
         self._ampcom = None
+
+    def get_serial_number(self: LeScanner) -> str:
+        """Get the serial number of the connected device.
+
+        Returns:
+            str: The serial number of the connected device.
+        """
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        return self._ampcom.get_serial_number()
+
+    def get_firmware_version(self: LeScanner) -> str:
+        """Get the firmware version of the connected device.
+
+        Returns:
+            str: The firmware version of the connected device.
+        """
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        return self._ampcom.get_firmware_version()
 
 
 def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:

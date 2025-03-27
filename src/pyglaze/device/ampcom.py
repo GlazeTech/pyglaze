@@ -48,6 +48,8 @@ class _LeAmpCom:
     STATUS_COMMAND: ClassVar[str] = "H"
     SEND_LIST_COMMAND: ClassVar[str] = "L"
     SEND_SETTINGS_COMMAND: ClassVar[str] = "S"
+    SERIAL_NUMBER_COMMAND: ClassVar[str] = "s"
+    FIRMWARE_VERSION_COMMAND: ClassVar[str] = "v"
 
     @cached_property
     def scanning_points(self: _LeAmpCom) -> int:
@@ -116,6 +118,14 @@ class _LeAmpCom:
         with contextlib.suppress(AttributeError):
             # If the serial device does not exist, self.__ser is never created - hence catch
             self.__ser.close()
+
+    def get_serial_number(self: _LeAmpCom) -> str:
+        """Get the serial number of the connected device."""
+        return self._encode_send_response(self.SERIAL_NUMBER_COMMAND)
+
+    def get_firmware_version(self: _LeAmpCom) -> str:
+        """Get the firmware version of the connected device."""
+        return self._encode_send_response(self.FIRMWARE_VERSION_COMMAND)
 
     @cached_property
     def _intervals(self: _LeAmpCom) -> list[Interval]:

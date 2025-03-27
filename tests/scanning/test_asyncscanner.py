@@ -1,9 +1,9 @@
 import pytest
-from serial.serialutil import SerialException
-
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.scanning._asyncscanner import _AsyncScanner
+from serial.serialutil import SerialException
+
 from tests.conftest import DEVICE_CONFIGS
 
 

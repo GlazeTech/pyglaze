@@ -32,6 +32,8 @@ class _LeMockState(Enum):
     RECEIVED_SETTINGS = auto()
     RECEIVED_LIST = auto()
     RECEIVED_STATUS_REQUEST = auto()
+    RECEIVED_SERIAL_NUMBER_REQUEST = auto()
+    RECEIVED_FIRMWARE_VERSION_REQUEST = auto()
     STARTING_SCAN = auto()
     SCANNING = auto()
 
@@ -90,6 +92,10 @@ class LeMockDevice(MockDevice):
             return self._create_scan_bytes(n_bytes=0)
         if self.state == _LeMockState.IDLE:
             return self._create_scan_bytes(n_bytes=size)
+        if self.state == _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST:
+            return "0.1.0".encode(self.ENCODING)
+        if self.state == _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST:
+            return "M9999".encode(self.ENCODING)
         raise NotImplementedError
 
     def read_until(self: LeMockDevice, _: bytes = b"\r") -> bytes:  # noqa: PLR0911
@@ -146,6 +152,10 @@ class LeMockDevice(MockDevice):
             self._scan_start_time = time.time()
         elif msg == "R":
             self._scan_has_finished()
+        elif msg == "s":
+            self.state = _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST
+        elif msg == "v":
+            self.state = _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST
         else:
             msg = f"Unknown message: {msg}"
             raise NotImplementedError(msg)

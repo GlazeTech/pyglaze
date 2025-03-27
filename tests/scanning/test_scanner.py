@@ -61,3 +61,25 @@ def test_succeed_on_single_failure(
 def test_invalid_config_type() -> None:
     with pytest.raises(TypeError):
         Scanner("invalid_config")  # type: ignore[type-var]
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_lescanner_get_serial_number(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    scanner = Scanner(device_config)
+    serial_number = scanner.get_serial_number()
+    assert isinstance(serial_number, str)
+    assert serial_number != ""
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_lescanner_get_firmware_version(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    scanner = Scanner(device_config)
+    firmware_version = scanner.get_firmware_version()
+    assert isinstance(firmware_version, str)
+    assert firmware_version != ""
