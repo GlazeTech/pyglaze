@@ -75,91 +75,6 @@ class DeviceConfiguration(ABC):
 
 
 @dataclass
-class ForceDeviceConfiguration(DeviceConfiguration):
-    """Represents a configuration that can be sent to the lock-in amp for scans.
-
-    Args:
-        amp_port: The name of the serial port the amp is connected to.
-        sweep_length_ms: The length of the sweep in milliseconds.
-        scan_intervals: The intervals to scan.
-        integration_periods: The number of integration periods to use.
-        modulation_frequency: The frequency of the modulation in Hz.
-        dac_lower_bound: The lower bound of the modulation voltage in bits.
-        dac_upper_bound: The upper bound of the modulation voltage in bits.
-        min_modulation_voltage: The minimum modulation voltage in volts.
-        max_modulation_voltage: The maximum modulation voltage in volts.
-        modulation_waveform: The waveform to use for modulation.
-        amp_timeout_seconds: The timeout for the amp in seconds.
-    """
-
-    amp_port: str
-    sweep_length_ms: float
-    scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
-    integration_periods: int = 100
-    modulation_frequency: int = 10000  # Hz
-    dac_lower_bound: int = 6400
-    dac_upper_bound: int = 59300
-    min_modulation_voltage: float = -1.0  # V
-    max_modulation_voltage: float = 0.5  # V
-    modulation_waveform: str = "square"
-    amp_timeout_seconds: float = 0.05
-
-    amp_baudrate: ClassVar[int] = 1200000  # bit/s
-
-    @property
-    def _sweep_length_ms(self: ForceDeviceConfiguration) -> float:
-        return self.sweep_length_ms
-
-    def save(self: ForceDeviceConfiguration, path: Path) -> str:
-        """Save a DeviceConfiguration to a file.
-
-        Args:
-            path: The path to save the configuration to.
-
-        Returns:
-            str: Final path component of the saved file, without the extension.
-
-        """
-        with path.open("w") as f:
-            json.dump(asdict(self), f, indent=4, sort_keys=True)
-
-        return path.stem
-
-    @classmethod
-    def from_dict(
-        cls: type[ForceDeviceConfiguration], amp_config: dict
-    ) -> ForceDeviceConfiguration:
-        """Create a DeviceConfiguration from a dict.
-
-        Args:
-            amp_config: An amp configuration in dict form.
-
-        Raises:
-            ValueError: If the dictionary is empty.
-
-        Returns:
-            DeviceConfiguration: A DeviceConfiguration object.
-        """
-        return _config_w_intervals_from_dict(cls, amp_config)
-
-    @classmethod
-    def load(
-        cls: type[ForceDeviceConfiguration], file_path: Path
-    ) -> ForceDeviceConfiguration:
-        """Load a DeviceConfiguration from a file.
-
-        Args:
-            file_path: The path to the file to load.
-
-        Returns:
-            DeviceConfiguration: A DeviceConfiguration object.
-        """
-        with file_path.open() as f:
-            configuration_dict = json.load(f)
-        return cls.from_dict(configuration_dict)
-
-
-@dataclass
 class LeDeviceConfiguration(DeviceConfiguration):
     """Represents a configuration that can be sent to a Le-type lock-in amp for scans.
 
@@ -220,7 +135,13 @@ class LeDeviceConfiguration(DeviceConfiguration):
         Returns:
             DeviceConfiguration: A DeviceConfiguration object.
         """
-        return _config_w_intervals_from_dict(cls, amp_config)
+        if not amp_config:
+            msg = "'amp_config' is empty."
+            raise ValueError(msg)
+
+        config = cls(**amp_config)
+        config.scan_intervals = [Interval.from_dict(d) for d in config.scan_intervals]  # type: ignore[arg-type]
+        return config
 
     @classmethod
     def load(
@@ -237,16 +158,3 @@ class LeDeviceConfiguration(DeviceConfiguration):
         with file_path.open() as f:
             configuration_dict = json.load(f)
         return cls.from_dict(configuration_dict)
-
-
-C = TypeVar("C", LeDeviceConfiguration, ForceDeviceConfiguration)
-
-
-def _config_w_intervals_from_dict(cls: type[C], amp_config: dict) -> C:
-    if amp_config:
-        config = cls(**amp_config)
-        config.scan_intervals = [Interval.from_dict(d) for d in config.scan_intervals]  # type: ignore[arg-type]
-        return config
-
-    msg = "'amp_config' is empty."
-    raise ValueError(msg)

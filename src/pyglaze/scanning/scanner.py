@@ -4,15 +4,10 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
-from serial import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.ampcom import _ForceAmpCom, _LeAmpCom
-from pyglaze.device.configuration import (
-    DeviceConfiguration,
-    ForceDeviceConfiguration,
-    LeDeviceConfiguration,
-)
+from pyglaze.device.ampcom import _LeAmpCom
+from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
 from pyglaze.scanning._exceptions import ScanError
 
 if TYPE_CHECKING:
@@ -85,93 +80,6 @@ class Scanner:
     def disconnect(self: Scanner) -> None:
         """Close serial connection."""
         self._scanner_impl.disconnect()
-
-
-class ForceScanner(_ScannerImplementation[ForceDeviceConfiguration]):
-    """Perform synchronous terahertz scanning using a given DeviceConfiguration.
-
-    Args:
-        config: A DeviceConfiguration to use for the scan.
-
-    """
-
-    def __init__(self: ForceScanner, config: ForceDeviceConfiguration) -> None:
-        self._config: ForceDeviceConfiguration
-        self._ampcom: _ForceAmpCom | None = None
-        self.config = config
-        self._phase_estimator = _LockinPhaseEstimator()
-
-    @property
-    def config(self: ForceScanner) -> ForceDeviceConfiguration:
-        """The device configuration to use for the scan.
-
-        Returns:
-            DeviceConfiguration: a DeviceConfiguration.
-        """
-        return self._config
-
-    @config.setter
-    def config(self: ForceScanner, new_config: ForceDeviceConfiguration) -> None:
-        amp = _ForceAmpCom(new_config)
-        if getattr(self, "_config", None):
-            if (
-                self._config.integration_periods != new_config.integration_periods
-                or self._config.modulation_frequency != new_config.modulation_frequency
-            ):
-                amp.write_period_and_frequency()
-            if self._config.sweep_length_ms != new_config.sweep_length_ms:
-                amp.write_sweep_length()
-            if self._config.modulation_waveform != new_config.modulation_waveform:
-                amp.write_waveform()
-            if (
-                self._config.min_modulation_voltage != new_config.min_modulation_voltage
-                or self._config.max_modulation_voltage
-                != new_config.max_modulation_voltage
-            ):
-                amp.write_modulation_voltage()
-            if self._config.scan_intervals != new_config.scan_intervals:
-                amp.write_list()
-        else:
-            amp.write_all()
-
-        self._config = new_config
-        self._ampcom = amp
-
-    def scan(self: ForceScanner) -> UnprocessedWaveform:
-        """Perform a scan.
-
-        Returns:
-            Unprocessed scan.
-        """
-        if self._ampcom is None:
-            msg = "Scanner not configured"
-            raise ScanError(msg)
-        _, responses = self._ampcom.start_scan()
-
-        time = responses[:, 0]
-        radius = responses[:, 1]
-        theta = responses[:, 2]
-        self._phase_estimator.update_estimate(radius=radius, theta=theta)
-
-        return UnprocessedWaveform.from_polar_coords(
-            time, radius, theta, self._phase_estimator.phase_estimate
-        )
-
-    def update_config(self: ForceScanner, new_config: ForceDeviceConfiguration) -> None:
-        """Update the DeviceConfiguration used in the scan.
-
-        Args:
-            new_config: A DeviceConfiguration to use for the scan.
-        """
-        self.config = new_config
-
-    def disconnect(self: ForceScanner) -> None:
-        """Close serial connection."""
-        if self._ampcom is None:
-            msg = "Scanner not connected"
-            raise SerialException(msg)
-        self._ampcom.disconnect()
-        self._ampcom = None
 
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
@@ -247,8 +155,6 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
 
 def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:
-    if isinstance(config, ForceDeviceConfiguration):
-        return ForceScanner(config)
     if isinstance(config, LeDeviceConfiguration):
         return LeScanner(config)
 

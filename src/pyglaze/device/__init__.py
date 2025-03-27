@@ -1,7 +1,6 @@
-from .configuration import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
+from .configuration import Interval, LeDeviceConfiguration
 
 __all__ = [
-    "ForceDeviceConfiguration",
     "Interval",
     "LeDeviceConfiguration",
 ]
