@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
+from serial import SerialException
+
 from pyglaze.device import LeDeviceConfiguration
 from pyglaze.device.ampcom import _LeAmpCom
-from serial import SerialException
 
 
 def test_ampcom_scanlist_values(le_device_config: LeDeviceConfiguration) -> None:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from pyglaze.helpers._types import FloatArray
+if TYPE_CHECKING:
+    from pyglaze.helpers._types import FloatArray
 
 
 def gaussian_derivative_pulse(
@@ -32,4 +33,4 @@ def gaussian_derivative_pulse(
             scale=1.0 / signal_to_noise, size=len(signal)
         )
     )
-    return cast(FloatArray, signal / np.max(signal) + noise)
+    return cast("FloatArray", signal / np.max(signal) + noise)

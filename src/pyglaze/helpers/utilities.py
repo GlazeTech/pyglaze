@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Callable, cast
 import serial
 import serial.tools.list_ports
 
-from pyglaze.helpers._types import P, T
-
 if TYPE_CHECKING:
     import logging
+
+    from pyglaze.helpers._types import P, T
 
 APP_NAME = "Glaze"
 LOGGER_NAME = "glaze-logger"
@@ -59,7 +59,7 @@ class _BackoffRetry:
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             for tries in range(self.max_tries - 1):
                 try:
-                    return cast(T, func(*args, **kwargs))
+                    return cast("T", func(*args, **kwargs))
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as e:  # noqa: BLE001
@@ -69,7 +69,7 @@ class _BackoffRetry:
                 backoff = min(self.backoff_base * 2**tries, self.max_backoff)
                 time.sleep(backoff)
             self._log(f"{func.__name__}: Last try ({tries + 2}).")
-            return cast(T, func(*args, **kwargs))
+            return cast("T", func(*args, **kwargs))
 
         return wrapper
 

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, cast
+from typing import TYPE_CHECKING, Callable, Literal, cast
 
 import numpy as np
 from scipy import optimize as opt
 from scipy import signal
 from scipy.stats import linregress
 
-from pyglaze.helpers._types import ComplexArray, FloatArray
 from pyglaze.interpolation import ws_interpolate
+
+if TYPE_CHECKING:
+    from pyglaze.helpers._types import ComplexArray, FloatArray
 
 __all__ = ["Pulse"]
 
@@ -95,7 +97,7 @@ class Pulse:
 
         Note that the energy is not the same as the physical energy of the pulse, but rather the integral of the square of the pulse.
         """
-        return cast(float, np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201 - trapz removed in numpy 2.0
+        return cast("float", np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201 - trapz removed in numpy 2.0
 
     @classmethod
     def from_dict(
@@ -164,7 +166,7 @@ class Pulse:
             for scan in roughly_aligned:
                 scan.time = scan.time - scan.time[0]
         zerocrossings = [p.estimate_zero_crossing() for p in roughly_aligned]
-        mean_zerocrossing = cast(float, np.mean(zerocrossings))
+        mean_zerocrossing = cast("float", np.mean(zerocrossings))
 
         return [
             p.propagate(mean_zerocrossing - zc)
@@ -195,7 +197,7 @@ class Pulse:
         Returns:
             complex: Fourier Transform at the given frequency
         """
-        return cast(complex, self.fft[np.searchsorted(self.frequency, f)])
+        return cast("complex", self.fft[np.searchsorted(self.frequency, f)])
 
     def timeshift(self: Pulse, scale: float, offset: float = 0) -> Pulse:
         """Rescales and offsets the time axis as.
@@ -255,7 +257,7 @@ class Pulse:
         Returns:
             Signal at the given time
         """
-        return cast(float, ws_interpolate(self.time, self.signal, np.array([t]))[0])
+        return cast("float", ws_interpolate(self.time, self.signal, np.array([t]))[0])
 
     def subtract_mean(self: Pulse, fraction: float = 0.99) -> Pulse:
         """Subtracts the mean of the pulse.
@@ -427,7 +429,7 @@ class Pulse:
 
         # Combine signal before spectrum maximum with interpolated values
         y_values = cast(
-            FloatArray,
+            "FloatArray",
             np.concatenate(
                 [
                     self.spectrum_dB()[:_from],
@@ -487,7 +489,7 @@ class Pulse:
             ),
         )
 
-        return cast(float, np.max(max_estimate) - np.min(min_estimate))
+        return cast("float", np.max(max_estimate) - np.min(min_estimate))
 
     def estimate_zero_crossing(self: Pulse) -> float:
         """Estimates the zero crossing of the pulse between the maximum and minimum value.
@@ -505,7 +507,7 @@ class Pulse:
         # To find the zero crossing, solve 0 = s1 + a * (t - t1) for t: t = t1 - s1 / a
         t1, s1 = self.time[idx], self.signal[idx]
         a = (self.signal[idx + 1] - self.signal[idx]) / self.dt
-        return cast(float, t1 - s1 / a)
+        return cast("float", t1 - s1 / a)
 
     def propagate(self: Pulse, time: float) -> Pulse:
         """Propagates the pulse in time by a given amount.
@@ -579,7 +581,7 @@ def _estimate_bw_idx(x: FloatArray, y: FloatArray, segments: int) -> int:
         fun=model, x0=[x[len(x) // 2]], bounds=[(x[0], x[-1])], method="Nelder-Mead"
     ).x[0]
 
-    return cast(int, x.searchsorted(BW_estimate))
+    return cast("int", x.searchsorted(BW_estimate))
 
 
 def _fit_linear_segments(x: FloatArray, y: FloatArray, n_segments: int) -> FloatArray:

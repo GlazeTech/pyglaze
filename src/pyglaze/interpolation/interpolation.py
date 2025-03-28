@@ -24,7 +24,7 @@ def ws_interpolate(
     # times must be zero-centered for formula to work
     sinc = np.sinc((interp_times[:, np.newaxis] - times[0] - dt * _range) / dt)
 
-    return cast(FloatArray, np.sum(pulse * sinc, axis=1))
+    return cast("FloatArray", np.sum(pulse * sinc, axis=1))
 
 
 def cubic_spline_interpolate(
@@ -41,4 +41,4 @@ def cubic_spline_interpolate(
         FloatArray: Interpolated values
     """
     spline = CubicSpline(times, pulse, bc_type="natural")
-    return cast(FloatArray, spline(interp_times))
+    return cast("FloatArray", spline(interp_times))
