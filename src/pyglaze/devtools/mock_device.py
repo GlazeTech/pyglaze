@@ -117,7 +117,7 @@ class LeMockDevice(MockDevice):
             return "ACK: Scan started.".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST:
             self.state = _LeMockState.IDLE
-            return "0.1.0".encode(self.ENCODING)
+            return "v0.1.0".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_STATUS_REQUEST:
             if self._scan_has_finished():
                 self.state = _LeMockState.IDLE
