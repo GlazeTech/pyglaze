@@ -92,10 +92,9 @@ class LeMockDevice(MockDevice):
             return self._create_scan_bytes(n_bytes=0)
         if self.state == _LeMockState.IDLE:
             return self._create_scan_bytes(n_bytes=size)
-        if self.state == _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST:
-            return "0.1.0".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST:
-            return "M9999".encode(self.ENCODING)
+            self.state = _LeMockState.IDLE
+            return "M-9999".encode(self.ENCODING)
         raise NotImplementedError
 
     def read_until(self: LeMockDevice, _: bytes = b"\r") -> bytes:  # noqa: PLR0911
@@ -116,6 +115,9 @@ class LeMockDevice(MockDevice):
             self.state = _LeMockState.SCANNING
             self.is_scanning = True
             return "ACK: Scan started.".encode(self.ENCODING)
+        if self.state == _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST:
+            self.state = _LeMockState.IDLE
+            return "0.1.0".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_STATUS_REQUEST:
             if self._scan_has_finished():
                 self.state = _LeMockState.IDLE

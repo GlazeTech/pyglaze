@@ -80,6 +80,14 @@ class _LeAmpCom:
         """
         return self.scanning_points * 12
 
+    @property
+    def serial_number_bytes(self: _LeAmpCom) -> int:
+        """Number of bytes to receive for a serial number.
+
+        Serial number has the form "<CHARACTER>-<4_DIGITS>, hence expect 6 bytes."
+        """
+        return 6
+
     def __post_init__(self: _LeAmpCom) -> None:
         self.__ser = _serial_factory(self.config)
 
@@ -121,11 +129,13 @@ class _LeAmpCom:
 
     def get_serial_number(self: _LeAmpCom) -> str:
         """Get the serial number of the connected device."""
-        return self._encode_send_response(self.SERIAL_NUMBER_COMMAND)
+        self._encode_and_send(self.SERIAL_NUMBER_COMMAND)
+        return self.__ser.read(self.serial_number_bytes).decode(self.ENCODING)
 
     def get_firmware_version(self: _LeAmpCom) -> str:
         """Get the firmware version of the connected device."""
-        return self._encode_send_response(self.FIRMWARE_VERSION_COMMAND)
+        self._encode_and_send(self.FIRMWARE_VERSION_COMMAND)
+        return self.__ser.read_until().decode(self.ENCODING).strip()
 
     @cached_property
     def _intervals(self: _LeAmpCom) -> list[Interval]:

@@ -97,6 +97,14 @@ class Scanner:
         """
         return self._scanner_impl.get_serial_number()
 
+    def get_firmware_version(self: Scanner) -> str:
+        """Get the firmware version of the connected device.
+
+        Returns:
+            str: The firmware version of the connected device.
+        """
+        return self._scanner_impl.get_firmware_version()
+
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
     """Perform synchronous terahertz scanning using a given DeviceConfiguration.
