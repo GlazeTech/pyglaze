@@ -36,9 +36,8 @@ plugins:
       handlers:
         python:
           paths: [src]
-          selection:
+          options:
             docstring_style: google
-          rendering:
             show_source: false
       
 extra:
