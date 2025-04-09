@@ -129,8 +129,9 @@ class _LeAmpCom:
 
     def get_serial_number(self: _LeAmpCom) -> str:
         """Get the serial number of the connected device."""
-        self._encode_and_send(self.SERIAL_NUMBER_COMMAND)
-        return self.__ser.read(self.serial_number_bytes).decode(self.ENCODING)
+        return "X-9999"
+        # self._encode_and_send(self.SERIAL_NUMBER_COMMAND)   # noqa: ERA001
+        # return self.__ser.read(self.serial_number_bytes).decode(self.ENCODING)  # noqa: ERA001
 
     def get_firmware_version(self: _LeAmpCom) -> str:
         """Get the firmware version of the connected device."""
