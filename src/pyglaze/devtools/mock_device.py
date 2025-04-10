@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-import json
 import struct
 import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from pathlib import Path
-from time import sleep
 
 import numpy as np
-from serial import serialutil
 
-from pyglaze.device.configuration import (
-    DeviceConfiguration,
-    ForceDeviceConfiguration,
-    LeDeviceConfiguration,
-)
+from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
 
 
 class MockDevice(ABC):
@@ -33,143 +25,6 @@ class MockDevice(ABC):
         pass
 
 
-class ForceMockDevice(MockDevice):
-    """Mock device for devices using a FORCE lockin for testing purposes."""
-
-    CONFIG_PATH = Path(__file__).parents[1] / "devtools" / "mockup_config.json"
-    ENCODING: str = "utf-8"
-
-    def __init__(
-        self: ForceMockDevice,
-        fail_after: float = np.inf,
-        n_fails: float = np.inf,
-        *,
-        instant_response: bool = False,
-    ) -> None:
-        self.fail_after = fail_after
-        self.fails_wanted = n_fails
-        self.n_failures = 0
-        self.n_scans = 0
-        self.rng = np.random.default_rng()
-        self.valid_input = True
-        self.experiment_running = False
-        self.instant_response = instant_response
-
-        self._periods = None
-        self._frequency = None
-        self._sweep_length = None
-        if not self.CONFIG_PATH.exists():
-            conf = {"periods": None, "frequency": None, "sweep_length_ms": None}
-            self.__save(conf)
-
-    @property
-    def periods(self: ForceMockDevice) -> int:
-        """Number of integration periods."""
-        return int(self.__get_val("periods"))
-
-    @periods.setter
-    def periods(self: ForceMockDevice, value: int) -> None:
-        self.__set_val("periods", value)
-
-    @property
-    def frequency(self: ForceMockDevice) -> int:
-        """Modulation frequency in Hz."""
-        return int(self.__get_val("frequency"))
-
-    @frequency.setter
-    def frequency(self: ForceMockDevice, value: int) -> None:
-        self.__set_val("frequency", value)
-
-    @property
-    def sweep_length(self: ForceMockDevice) -> int:
-        """Total sweep length for one pulse."""
-        return int(self.__get_val("sweep_length"))
-
-    @sweep_length.setter
-    def sweep_length(self: ForceMockDevice, value: int) -> None:
-        self.__set_val("sweep_length", value)
-
-    def close(self: ForceMockDevice) -> None:
-        """Mock-close the serial connection."""
-
-    def write(self: ForceMockDevice, input_string: bytes) -> None:
-        """Mock-write to the serial connection."""
-        decoded_input_string = input_string.decode("utf-8")
-        split_input_string = decoded_input_string.split(",")
-        cmd = split_input_string[0]
-        if cmd == "!set timing":
-            self.periods = int(split_input_string[1])
-            self.frequency = int(split_input_string[2])
-        elif cmd == "!set sweep length":
-            self.sweep_length = int(split_input_string[1])
-        elif cmd == "!s":
-            time_pr_point = self.periods / self.frequency
-            self.in_waiting = int(self.sweep_length * 1e-3 / time_pr_point)
-            self.experiment_running = True
-        elif cmd in ["!lut", "!set wave", "!set generator"]:
-            pass
-        elif cmd != "!dat":
-            self.valid_input = False
-
-    def readline(self: ForceMockDevice) -> bytes:
-        """Mock-readline from the serial connection."""
-        if self.valid_input:
-            return self.__run_experiment() if self.experiment_running else b"!A,OK\r"
-
-        return b"A,FAULT\r"
-
-    def read_until(self: ForceMockDevice, expected: bytes = b"\r") -> bytes:  # noqa: ARG002
-        """Mock-read_until from the serial connection."""
-        random_datapoint = self.__create_random_datapoint
-        return random_datapoint.encode(self.ENCODING)
-
-    def __run_experiment(self: ForceMockDevice) -> bytes:
-        return_string = "!A,OK\\r"
-        return_string += (
-            f"!S,ip: {self.periods}, "
-            f"Freq: {self.frequency}, "
-            f"sl: {self.sweep_length}, "
-            f"from: 0.0000, "
-            f"to:1.0000\r"
-        )
-        for _ in range(self.in_waiting):
-            return_string += self.__create_random_datapoint
-        return_string += "!D,DONE\\r"
-        if not self.instant_response:
-            sleep(self.sweep_length * 1e-3)
-        self.n_scans += 1
-        if self.n_scans > self.fail_after and self.n_failures < self.fails_wanted:
-            self.n_failures += 1
-            msg = "MOCK_DEVICE: scan failed"
-            raise serialutil.SerialException(msg)
-
-        return return_string.encode("utf-8")
-
-    @property
-    def __create_random_datapoint(self: ForceMockDevice) -> str:
-        radius = self.rng.random() * 10
-        theta = self.rng.random() * 360
-        return f"!R,{radius},{theta}\r"
-
-    def __save(self: ForceMockDevice, conf: dict) -> None:
-        with self.CONFIG_PATH.open("w") as f:
-            json.dump(conf, f)
-
-    def __get_val(self: ForceMockDevice, key: str) -> int:
-        val: int = getattr(self, f"_{key}")
-        if not val:
-            with self.CONFIG_PATH.open() as f:
-                val = json.load(f)[key]
-        return val
-
-    def __set_val(self: ForceMockDevice, key: str, val: str | float) -> None:
-        with self.CONFIG_PATH.open() as f:
-            config = json.load(f)
-            config[key] = val
-        setattr(self, f"_{key}", val)
-        self.__save(config)
-
-
 class _LeMockState(Enum):
     IDLE = auto()
     WAITING_FOR_SETTINGS = auto()
@@ -177,6 +32,8 @@ class _LeMockState(Enum):
     RECEIVED_SETTINGS = auto()
     RECEIVED_LIST = auto()
     RECEIVED_STATUS_REQUEST = auto()
+    RECEIVED_SERIAL_NUMBER_REQUEST = auto()
+    RECEIVED_FIRMWARE_VERSION_REQUEST = auto()
     STARTING_SCAN = auto()
     SCANNING = auto()
 
@@ -235,6 +92,9 @@ class LeMockDevice(MockDevice):
             return self._create_scan_bytes(n_bytes=0)
         if self.state == _LeMockState.IDLE:
             return self._create_scan_bytes(n_bytes=size)
+        if self.state == _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST:
+            self.state = _LeMockState.IDLE
+            return "M-9999".encode(self.ENCODING)
         raise NotImplementedError
 
     def read_until(self: LeMockDevice, _: bytes = b"\r") -> bytes:  # noqa: PLR0911
@@ -255,6 +115,9 @@ class LeMockDevice(MockDevice):
             self.state = _LeMockState.SCANNING
             self.is_scanning = True
             return "ACK: Scan started.".encode(self.ENCODING)
+        if self.state == _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST:
+            self.state = _LeMockState.IDLE
+            return "v0.1.0".encode(self.ENCODING)
         if self.state == _LeMockState.RECEIVED_STATUS_REQUEST:
             if self._scan_has_finished():
                 self.state = _LeMockState.IDLE
@@ -291,6 +154,10 @@ class LeMockDevice(MockDevice):
             self._scan_start_time = time.time()
         elif msg == "R":
             self._scan_has_finished()
+        elif msg == "s":
+            self.state = _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST
+        elif msg == "v":
+            self.state = _LeMockState.RECEIVED_FIRMWARE_VERSION_REQUEST
         else:
             msg = f"Unknown message: {msg}"
             raise NotImplementedError(msg)
@@ -376,7 +243,7 @@ def list_mock_devices() -> list[str]:
     ]
 
 
-def _mock_device_factory(config: DeviceConfiguration) -> MockDevice:
+def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
     mock_class = _get_mock_class(config)
     if config.amp_port == "mock_device_scan_should_fail":
         return mock_class(fail_after=0)
@@ -393,9 +260,7 @@ def _mock_device_factory(config: DeviceConfiguration) -> MockDevice:
     raise ValueError(msg)
 
 
-def _get_mock_class(config: DeviceConfiguration) -> type[MockDevice]:
-    if isinstance(config, ForceDeviceConfiguration):
-        return ForceMockDevice
+def _get_mock_class(config: DeviceConfiguration) -> type[LeMockDevice]:
     if isinstance(config, LeDeviceConfiguration):
         return LeMockDevice
 

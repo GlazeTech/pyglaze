@@ -47,3 +47,25 @@ def test_raises_error_when_scan_fails(
         GlazeClient(device_config) as client,
     ):
         client.read(n_pulses=1)
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_serial_number(config_name: str, request: pytest.FixtureRequest) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    client = GlazeClient(device_config)
+    with client as c:
+        serial_number = c.get_serial_number()
+
+    assert isinstance(serial_number, str)
+    assert serial_number != ""
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_firmware_version(config_name: str, request: pytest.FixtureRequest) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    client = GlazeClient(device_config)
+    with client as c:
+        firmware_version = c.get_firmware_version()
+
+    assert isinstance(firmware_version, str)
+    assert firmware_version != ""

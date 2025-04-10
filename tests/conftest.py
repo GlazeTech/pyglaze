@@ -2,27 +2,10 @@ import numpy as np
 import pytest
 
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
-from pyglaze.device import ForceDeviceConfiguration, Interval, LeDeviceConfiguration
+from pyglaze.device import Interval, LeDeviceConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
-DEVICE_CONFIGS = ["force_device_config", "le_device_config"]
-
-
-@pytest.fixture
-def force_device_config() -> ForceDeviceConfiguration:
-    return ForceDeviceConfiguration(
-        amp_port="mock_device",
-        integration_periods=100,
-        modulation_frequency=10000,
-        sweep_length_ms=100,
-        dac_lower_bound=6400,
-        dac_upper_bound=59300,
-        min_modulation_voltage=-1.0,  # V,
-        max_modulation_voltage=0.5,  # V,
-        modulation_waveform="square",
-        amp_timeout_seconds=0.05,  # s,
-        scan_intervals=[Interval(0.0, 1.0)],
-    )
+DEVICE_CONFIGS = ["le_device_config"]
 
 
 @pytest.fixture

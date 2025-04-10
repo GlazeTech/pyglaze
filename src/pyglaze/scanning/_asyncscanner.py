@@ -6,7 +6,7 @@ from multiprocessing import Event, Pipe, Process, Queue, synchronize
 from queue import Empty, Full
 from typing import TYPE_CHECKING
 
-from serial import serialutil
+from serial import SerialException, serialutil
 
 from pyglaze.datamodels.waveform import UnprocessedWaveform, _TimestampedWaveform
 from pyglaze.scanning.scanner import Scanner
@@ -26,6 +26,12 @@ class _ScannerHealth:
 
 
 @dataclass
+class _ScannerMetadata:
+    serial_number: str
+    firmware_version: str
+
+
+@dataclass
 class _AsyncScanner:
     """Used by GlazeClient to starts a scanner in a new process and read scans from shared memory."""
 
@@ -34,6 +40,7 @@ class _AsyncScanner:
     logger: logging.Logger | None = None
     is_scanning: bool = False
     _child_process: Process = field(init=False)
+    _metadata: _ScannerMetadata = field(init=False)
     _shared_mem: Queue[_TimestampedWaveform] = field(init=False)
     _SCAN_TIMEOUT: float = field(init=False)
     _stop_signal: synchronize.Event = field(init=False)
@@ -72,6 +79,10 @@ class _AsyncScanner:
                 self.logger.error(str(msg.error))
             raise msg.error
 
+        # As part of startup, metadata is sent from scanner
+        metadata: _ScannerMetadata = self._scanner_conn.recv()
+        self._metadata = metadata
+
     def stop_scan(self: _AsyncScanner) -> None:
         self._stop_signal.set()
         self._child_process.join()
@@ -89,6 +100,19 @@ class _AsyncScanner:
 
     def get_next(self: _AsyncScanner) -> UnprocessedWaveform:
         return self._get_scan().waveform
+
+    def get_serial_number(self: _AsyncScanner) -> str:
+        if not self.is_scanning:
+            msg = "Scanner not connected"
+            raise SerialException(msg)
+        return self._metadata.serial_number
+
+    def get_firmware_version(self: _AsyncScanner) -> str:
+        if not self.is_scanning:
+            msg = "Scanner not connected"
+            raise SerialException(msg)
+
+        return self._metadata.firmware_version
 
     def _get_scan(self: _AsyncScanner) -> _TimestampedWaveform:
         try:
@@ -113,7 +137,12 @@ class _AsyncScanner:
     ) -> None:
         try:
             scanner = Scanner(config=config)
+            device_metadata = _ScannerMetadata(
+                serial_number=scanner.get_serial_number(),
+                firmware_version=scanner.get_firmware_version(),
+            )
             parent_conn.send(_ScannerHealth(is_alive=True, is_healthy=True, error=None))
+            parent_conn.send(device_metadata)
         except (serialutil.SerialException, TimeoutError) as e:
             parent_conn.send(_ScannerHealth(is_alive=False, is_healthy=False, error=e))
             return
