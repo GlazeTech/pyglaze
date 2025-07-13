@@ -10,7 +10,7 @@ authors = [
 requires-python = ">=3.9,<3.14"
 
 dependencies = [
-    "numpy>=2.3.0",
+    "numpy>=1.26.4",
     "pyserial>=3.5",
     "scipy>=1.7.3",
     "bitstring>=4.1.2",
