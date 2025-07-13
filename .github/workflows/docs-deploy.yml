@@ -1,0 +1,36 @@
+name: Docs deploy
+on:
+  # manual trigger
+  workflow_dispatch:
+  # or automatically when docs change or pyproject.toml is updated (e.g., version bump)
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # mike needs full history
+          fetch-depth: 0
+      - name: Configure Git user
+        run: |
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: pip install -r requirements-docs.txt
+      - name: Deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version[[:space:]]*=' pyproject.toml | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          echo "Building docs for version $version"
+          mike deploy --push --update-aliases "$version" latest

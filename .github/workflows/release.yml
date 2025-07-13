@@ -27,7 +27,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements-build.txt
-          pip install -r requirements-docs.txt
           pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
       - name: Assert version is new
         run: assert-new-version --version-file pyproject.toml --tag-and-push
@@ -37,6 +36,3 @@ jobs:
         env:
           TWINE_PASSWORD: ${{ secrets.GLAZE_PYPI_TOKEN }}
         run: twine upload dist/*
-      - name: Publish documentation
-        run: |
-          mike deploy --push --update-aliases $(bumpver show --environ | grep "CURRENT_VERSION" | cut -d'=' -f2 | tr -d ' ') latest
