@@ -115,7 +115,7 @@ class Pulse:
 
         Note that the energy is not the same as the physical energy of the pulse, but rather the integral of the square of the pulse.
         """
-        return cast("float", np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201 - trapz removed in numpy 2.0
+        return cast("float", np.trapezoid(self.signal * self.signal, x=self.time))
 
     @classmethod
     def from_dict(

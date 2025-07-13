@@ -384,7 +384,7 @@ def test_propagate(gaussian_deriv_pulse: Pulse) -> None:
 
 def test_energy(gaussian_deriv_pulse: Pulse) -> None:
     energy = gaussian_deriv_pulse.energy
-    expected_energy = np.trapz(  # noqa: NPY201
+    expected_energy = np.trapezoid(
         gaussian_deriv_pulse.signal**2, x=gaussian_deriv_pulse.time
     )
     assert energy == pytest.approx(expected_energy, rel=1e-6)
