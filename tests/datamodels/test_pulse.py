@@ -91,8 +91,8 @@ def test_tukey_raises_err(gaussian_deriv_pulse: Pulse) -> None:
 )
 def test_align(pulse_name: str, shift: float, request: pytest.FixtureRequest) -> None:
     pulse = request.getfixturevalue(pulse_name)
-    d1 = deepcopy(pulse)
-    d2 = deepcopy(pulse)
+    d1 = Pulse(time=deepcopy(pulse.time), signal=deepcopy(pulse.signal))
+    d2 = Pulse(time=deepcopy(pulse.time), signal=deepcopy(pulse.signal))
 
     # Misalign the scans
     d2 = Pulse.from_fft(

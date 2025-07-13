@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ["Pulse"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Pulse:
     """Data class for a THz pulse. The pulse is expected to be preprocessed such that times are uniformly spaced.
 
@@ -39,6 +39,24 @@ class Pulse:
         return bool(
             np.array_equal(self.time, obj.time)
             and np.array_equal(self.signal, obj.signal)
+        )
+
+    def __hash__(self: Pulse) -> int:
+        """Return a hash based on the contents of ``time`` and ``signal``.
+
+        The hash combines shape, dtype and raw bytes of both arrays, ensuring that
+        two :class:`Pulse` instances that compare equal also have identical hashes.
+
+        """
+        return hash(
+            (
+                self.time.shape,
+                self.time.dtype.str,
+                self.time.tobytes(),
+                self.signal.shape,
+                self.signal.dtype.str,
+                self.signal.tobytes(),
+            )
         )
 
     @property
@@ -163,8 +181,10 @@ class Pulse:
         ]
 
         if translate_to_zero:
-            for scan in roughly_aligned:
-                scan.time = scan.time - scan.time[0]
+            roughly_aligned = [
+                s.timeshift(scale=1.0, offset=-s.time[0]) for s in roughly_aligned
+            ]
+
         zerocrossings = [p.estimate_zero_crossing() for p in roughly_aligned]
         mean_zerocrossing = cast("float", np.mean(zerocrossings))
 
