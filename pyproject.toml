@@ -1,16 +1,16 @@
 [project]
 name = "pyglaze"
-version = "0.4.0"
+version = "0.4.1"
 description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
     {name = "GLAZE Technologies ApS"},
 ]
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.14"
 
 dependencies = [
-    "numpy>=1.26.4,<2.0.0",
+    "numpy>=1.26.4",
     "pyserial>=3.5",
     "scipy>=1.7.3",
     "bitstring>=4.1.2",
@@ -74,7 +74,7 @@ convention = "google"
 ]
 
 [tool.bumpver]
-current_version = "0.4.0"
+current_version = "0.4.1"
 version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
 commit_message = "BUMP VERSION {old_version} -> {new_version}"
 tag_message = "v{new_version}"

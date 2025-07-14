@@ -91,8 +91,8 @@ def test_tukey_raises_err(gaussian_deriv_pulse: Pulse) -> None:
 )
 def test_align(pulse_name: str, shift: float, request: pytest.FixtureRequest) -> None:
     pulse = request.getfixturevalue(pulse_name)
-    d1 = deepcopy(pulse)
-    d2 = deepcopy(pulse)
+    d1 = Pulse(time=deepcopy(pulse.time), signal=deepcopy(pulse.signal))
+    d2 = Pulse(time=deepcopy(pulse.time), signal=deepcopy(pulse.signal))
 
     # Misalign the scans
     d2 = Pulse.from_fft(
@@ -384,7 +384,7 @@ def test_propagate(gaussian_deriv_pulse: Pulse) -> None:
 
 def test_energy(gaussian_deriv_pulse: Pulse) -> None:
     energy = gaussian_deriv_pulse.energy
-    expected_energy = np.trapz(  # noqa: NPY201
+    expected_energy = np.trapezoid(  # type: ignore[attr-defined, unused-ignore]
         gaussian_deriv_pulse.signal**2, x=gaussian_deriv_pulse.time
     )
     assert energy == pytest.approx(expected_energy, rel=1e-6)
