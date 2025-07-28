@@ -150,9 +150,11 @@ class _LeAmpCom:
         angle = np.arctan2(np.array(Ys), np.array(Xs))
         return r, np.rad2deg(angle)
 
-    def _encode_send_response(self: _LeAmpCom, command: str) -> str:
+    def _encode_send_response(
+        self: _LeAmpCom, command: str, *, check_ack: bool = True
+    ) -> str:
         self._encode_and_send(command)
-        return self._get_response(command)
+        return self._get_response(command, check_ack=check_ack)
 
     def _encode_and_send(self: _LeAmpCom, command: str) -> None:
         self.__ser.write(command.encode(self.ENCODING))
@@ -180,13 +182,13 @@ class _LeAmpCom:
     @_BackoffRetry(
         backoff_base=1e-2, max_tries=3, logger=logging.getLogger(LOGGER_NAME)
     )
-    def _get_response(self: _LeAmpCom, command: str) -> str:
+    def _get_response(self: _LeAmpCom, command: str, *, check_ack: bool = True) -> str:
         response = self.__ser.read_until().decode(self.ENCODING).strip()
 
         if len(response) == 0:
             msg = f"Command: '{command}'. Empty response received"
             raise serialutil.SerialException(msg)
-        if response[: len(self.OK_RESPONSE)] != self.OK_RESPONSE:
+        if check_ack and response[: len(self.OK_RESPONSE)] != self.OK_RESPONSE:
             msg = f"Command: '{command}'. Expected response '{self.OK_RESPONSE}', received: '{response}'"
             raise DeviceComError(msg)
         return response
@@ -220,13 +222,14 @@ class _LeAmpCom:
         ]
 
     def _get_status(self: _LeAmpCom) -> _LeStatus:
-        msg = self._encode_send_response(self.STATUS_COMMAND)
-        if msg == _LeStatus.SCANNING.value:
+        response = self._encode_send_response(self.STATUS_COMMAND, check_ack=False)
+
+        if response == _LeStatus.SCANNING.value:
             return _LeStatus.SCANNING
-        if msg == _LeStatus.IDLE.value:
+        if response == _LeStatus.IDLE.value:
             return _LeStatus.IDLE
-        msg = f"Unknown status: {msg}"
-        raise ValueError(msg)
+        msg = f"Unknown status: {response}"
+        raise DeviceComError(msg)
 
 
 class _LeStatus(Enum):
