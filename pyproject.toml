@@ -1,6 +1,6 @@
 [project]
 name = "pyglaze"
-version = "0.4.1"
+version = "0.4.2"
 description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -74,7 +74,7 @@ convention = "google"
 ]
 
 [tool.bumpver]
-current_version = "0.4.1"
+current_version = "0.4.2"
 version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
 commit_message = "BUMP VERSION {old_version} -> {new_version}"
 tag_message = "v{new_version}"
