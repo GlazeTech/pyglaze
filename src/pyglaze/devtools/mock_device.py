@@ -154,6 +154,8 @@ class LeMockDevice(MockDevice):
             self._scan_start_time = time.time()
         elif msg == "R":
             self._scan_has_finished()
+        elif msg == "H":
+            self.state = _LeMockState.RECEIVED_STATUS_REQUEST
         elif msg == "s":
             self.state = _LeMockState.RECEIVED_SERIAL_NUMBER_REQUEST
         elif msg == "v":
