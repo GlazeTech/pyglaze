@@ -6,11 +6,12 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.ampcom import _LeAmpCom
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.device.protocols import get_protocol
 from pyglaze.scanning._exceptions import ScanError
 
 if TYPE_CHECKING:
+    from pyglaze.device.protocol import Protocol
     from pyglaze.helpers._types import FloatArray
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
@@ -55,9 +56,11 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
 class Scanner:
     """A synchronous scanner for Glaze terahertz devices."""
 
-    def __init__(self: Scanner, config: TConfig) -> None:
+    def __init__(
+        self: Scanner, config: TConfig, *, protocol_version: str | None = None
+    ) -> None:
         self._scanner_impl: _ScannerImplementation[DeviceConfiguration] = (
-            _scanner_factory(config)
+            _scanner_factory(config, protocol_version=protocol_version)
         )
 
     @property
@@ -113,9 +116,15 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         config: A DeviceConfiguration to use for the scan.
     """
 
-    def __init__(self: LeScanner, config: LeDeviceConfiguration) -> None:
+    def __init__(
+        self: LeScanner,
+        config: LeDeviceConfiguration,
+        *,
+        protocol_version: str | None = None,
+    ) -> None:
         self._config: LeDeviceConfiguration
-        self._ampcom: _LeAmpCom | None = None
+        self._protocol: Protocol | None = None
+        self._protocol_version = protocol_version
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator()
 
@@ -130,20 +139,21 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @config.setter
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
-        amp = _LeAmpCom(new_config)
+        protocol = get_protocol(new_config, self._protocol_version)
         if getattr(self, "_config", None):
             if (
                 self._config.integration_periods != new_config.integration_periods
                 or self._config.n_points != new_config.n_points
             ):
-                amp.write_list_length_and_integration_periods_and_use_ema()
+                protocol.write_settings()
             if self._config.scan_intervals != new_config.scan_intervals:
-                amp.write_list()
+                protocol.write_list()
         else:
-            amp.write_all()
+            protocol.write_settings()
+            protocol.write_list()
 
         self._config = new_config
-        self._ampcom = amp
+        self._protocol = protocol
 
     def scan(self: LeScanner) -> UnprocessedWaveform:
         """Perform a scan.
@@ -151,10 +161,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
-        if self._ampcom is None:
+        if self._protocol is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        _, time, radius, theta = self._ampcom.start_scan()
+        _, time, radius, theta = self._protocol.start_scan()
         self._phase_estimator.update_estimate(radius=radius, theta=theta)
 
         return UnprocessedWaveform.from_polar_coords(
@@ -171,11 +181,11 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def disconnect(self: LeScanner) -> None:
         """Close serial connection."""
-        if self._ampcom is None:
+        if self._protocol is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        self._ampcom.disconnect()
-        self._ampcom = None
+        self._protocol.disconnect()
+        self._protocol = None
 
     def get_serial_number(self: LeScanner) -> str:
         """Get the serial number of the connected device.
@@ -183,10 +193,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             str: The serial number of the connected device.
         """
-        if self._ampcom is None:
+        if self._protocol is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        return self._ampcom.get_serial_number()
+        return self._protocol.get_serial_number()
 
     def get_firmware_version(self: LeScanner) -> str:
         """Get the firmware version of the connected device.
@@ -194,15 +204,17 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             str: The firmware version of the connected device.
         """
-        if self._ampcom is None:
+        if self._protocol is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        return self._ampcom.get_firmware_version()
+        return self._protocol.get_firmware_version()
 
 
-def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:
+def _scanner_factory(
+    config: DeviceConfiguration, *, protocol_version: str | None = None
+) -> _ScannerImplementation:
     if isinstance(config, LeDeviceConfiguration):
-        return LeScanner(config)
+        return LeScanner(config, protocol_version=protocol_version)
 
     msg = f"Unsupported configuration type: {type(config).__name__}"
     raise TypeError(msg)

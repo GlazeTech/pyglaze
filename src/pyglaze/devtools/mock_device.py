@@ -4,10 +4,19 @@ import struct
 import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.device.configuration import (
+    DeviceConfiguration,
+    Interval,
+    LeDeviceConfiguration,
+)
+from pyglaze.device.protocol import Protocol
+
+if TYPE_CHECKING:
+    from pyglaze.helpers._types import FloatArray
 
 
 class MockDevice(ABC):
@@ -268,3 +277,293 @@ def _get_mock_class(config: DeviceConfiguration) -> type[LeMockDevice]:
 
     msg = f"Unsupported configuration type: {type(config).__name__}"
     raise ValueError(msg)
+
+
+class MockProtocolV1(Protocol):
+    """Mock protocol implementation for testing.
+
+    Wraps LeMockDevice to provide Protocol interface for testing purposes.
+    """
+
+    def __init__(self: MockProtocolV1, config: DeviceConfiguration) -> None:
+        """Initialize mock protocol with device configuration.
+
+        Args:
+            config: Device configuration containing connection parameters.
+        """
+        super().__init__(config)
+        self._device: LeMockDevice | None = None
+        self._scanning_list: list[float] | None = None
+
+    @property
+    def protocol_version(self: MockProtocolV1) -> str:
+        """Get the protocol version identifier.
+
+        Returns:
+            String identifying the protocol version.
+        """
+        return "v1"
+
+    def connect(self: MockProtocolV1) -> None:
+        """Establish connection to the mock device.
+
+        Creates a mock device instance based on the configuration.
+        """
+        if self._device is not None:
+            return
+
+        self._device = _mock_device_factory(self.config)
+
+    def disconnect(self: MockProtocolV1) -> None:
+        """Close connection to the mock device."""
+        if self._device is not None:
+            self._device.close()
+            self._device = None
+
+    def write_settings(self: MockProtocolV1) -> str:
+        """Write device settings to the mock device.
+
+        Returns:
+            Device response string.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        # Calculate settings values from config
+        config = self.config
+        if not isinstance(config, LeDeviceConfiguration):
+            msg = f"MockProtocolV1 only supports LeDeviceConfiguration, got {type(config).__name__}"
+            raise TypeError(msg)
+
+        # Calculate scanning points and integration periods
+        n_scanning_points = config.n_points
+        integration_periods = config.integration_periods
+        use_ema = 1 if config.use_ema else 0
+
+        # Send settings command
+        self._device.write(b"S")
+        _ = self._device.read_until(b"\r").decode("utf-8").strip()
+
+        # Send settings data (as 16-bit integers)
+        settings_bytes = struct.pack(
+            "<HHH", n_scanning_points, integration_periods, use_ema
+        )
+        self._device.write(settings_bytes)
+
+        # Read acknowledgment
+        return self._device.read_until(b"\r").decode("utf-8").strip()
+
+    def write_list(self: MockProtocolV1) -> str:
+        """Write scanning list to the mock device.
+
+        Returns:
+            Device response string.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        config = self.config
+        if not isinstance(config, LeDeviceConfiguration):
+            msg = f"MockProtocolV1 only supports LeDeviceConfiguration, got {type(config).__name__}"
+            raise TypeError(msg)
+
+        # Calculate scanning list
+        self._scanning_list = self._calculate_scanning_list(config)
+
+        # Send list command
+        self._device.write(b"L")
+        _ = self._device.read_until(b"\r").decode("utf-8").strip()
+
+        # Send list data (as 32-bit floats)
+        list_bytes = struct.pack(
+            "<" + "f" * len(self._scanning_list), *self._scanning_list
+        )
+        self._device.write(list_bytes)
+
+        # Read acknowledgment
+        return self._device.read_until(b"\r").decode("utf-8").strip()
+
+    def start_scan(
+        self: MockProtocolV1,
+    ) -> tuple[str, FloatArray, FloatArray, FloatArray]:
+        """Start a scan and return the results.
+
+        Returns:
+            Tuple containing (command, times, radii, angles) arrays.
+
+        Raises:
+            RuntimeError: If device is not connected or scan fails.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        # Start scan
+        self._device.write(b"G")
+        response = self._device.read_until(b"\r").decode("utf-8").strip()
+
+        if "ACK" not in response:
+            msg = f"Failed to start scan: {response}"
+            raise RuntimeError(msg)
+
+        # Wait for scan to complete (mock device simulates scan time)
+        while True:
+            self._device.write(b"H")
+            status = self._device.read_until(b"\r").decode("utf-8").strip()
+            if "Idle" in status:
+                break
+            time.sleep(0.1)
+
+        # Fetch data
+        times, x_values, y_values = self.fetch_data()
+
+        # Convert to radii and angles
+        radii = np.sqrt(np.array(x_values) ** 2 + np.array(y_values) ** 2)
+        angles = np.arctan2(y_values, x_values)
+
+        return "G", np.array(times), radii, angles
+
+    def get_status(self: MockProtocolV1) -> str:
+        """Get current device status.
+
+        Returns:
+            Status string from device.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        self._device.write(b"H")
+        return self._device.read_until(b"\r").decode("utf-8").strip()
+
+    def fetch_data(
+        self: MockProtocolV1,
+    ) -> tuple[list[float], list[float], list[float]]:
+        """Fetch scan data from the mock device.
+
+        Returns:
+            Tuple containing (times, X_values, Y_values) lists.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        if self._scanning_list is None:
+            msg = "No scanning list set"
+            raise RuntimeError(msg)
+
+        # Request data
+        self._device.write(b"R")
+
+        # Calculate expected bytes
+        n_points = len(self._scanning_list)
+        bytes_expected = n_points * 3 * 4  # 3 floats per point, 4 bytes per float
+
+        # Read data
+        data_bytes = self._device.read(bytes_expected)
+
+        # Unpack data
+        values = struct.unpack("<" + "f" * (n_points * 3), data_bytes)
+
+        # Split into times, X, Y
+        times = list(values[:n_points])
+        x_values = list(values[n_points : 2 * n_points])
+        y_values = list(values[2 * n_points :])
+
+        return times, x_values, y_values
+
+    def get_serial_number(self: MockProtocolV1) -> str:
+        """Get device serial number.
+
+        Returns:
+            Serial number string.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        self._device.write(b"s")
+        return self._device.read(6).decode("utf-8").strip()
+
+    def get_firmware_version(self: MockProtocolV1) -> str:
+        """Get device firmware version.
+
+        Returns:
+            Firmware version string.
+
+        Raises:
+            RuntimeError: If device is not connected.
+        """
+        if self._device is None:
+            msg = "Device not connected"
+            raise RuntimeError(msg)
+
+        self._device.write(b"v")
+        return self._device.read_until(b"\r").decode("utf-8").strip()
+
+    def supports_feature(self: MockProtocolV1, feature_name: str) -> bool:
+        """Check if this protocol version supports a specific feature.
+
+        Args:
+            feature_name: Name of the feature to check.
+
+        Returns:
+            True if feature is supported, False otherwise.
+        """
+        # Mock protocol v1 supports basic features
+        supported_features = {
+            "scan",
+            "status",
+            "settings",
+            "list",
+            "serial_number",
+            "firmware_version",
+        }
+        return feature_name in supported_features
+
+    def _calculate_scanning_list(
+        self: MockProtocolV1, config: LeDeviceConfiguration
+    ) -> list[float]:
+        """Calculate the scanning list from the configuration.
+
+        Args:
+            config: Device configuration.
+
+        Returns:
+            List of scanning values.
+        """
+        # Simplified scanning list calculation for mock device
+        # In real implementation, this would handle multiple intervals
+        intervals = config.scan_intervals or [Interval(lower=0.0, upper=1.0)]
+        scanning_list: list[float] = []
+
+        for interval in intervals:
+            # For simplicity, divide points equally among intervals
+            points_per_interval = config.n_points // len(intervals)
+            scanning_list.extend(
+                np.linspace(
+                    interval.lower,
+                    interval.upper,
+                    points_per_interval,
+                    endpoint=len(intervals) == 1,
+                ).tolist()
+            )
+
+        return scanning_list
