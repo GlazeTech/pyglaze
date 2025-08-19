@@ -242,7 +242,7 @@ def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice
         return _mock_device_factory(config)
 
     return serial.serial_for_url(
-        config.amp_port,
+        url=config.amp_port,
         baudrate=config.amp_baudrate,
         timeout=config.amp_timeout_seconds,
     )
