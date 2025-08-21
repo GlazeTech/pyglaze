@@ -18,6 +18,8 @@ from pyglaze.device.configuration import (
     DeviceConfiguration,
     Interval,
     LeDeviceConfiguration,
+    N_CHANNELS,
+    BYTES_PER_CHANNEL,
 )
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
