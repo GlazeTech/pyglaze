@@ -53,6 +53,7 @@ class DeviceConfiguration(ABC):
     amp_timeout_seconds: float
     amp_port: str
     amp_baudrate: ClassVar[int]
+    n_points: int
 
     @property
     @abstractmethod
