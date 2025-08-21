@@ -241,8 +241,8 @@ def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice
     if "mock_device" in config.amp_port:
         return _mock_device_factory(config)
 
-    return serial.Serial(
-        port=config.amp_port,
+    return serial.serial_for_url(
+        url=config.amp_port,
         baudrate=config.amp_baudrate,
         timeout=config.amp_timeout_seconds,
     )
