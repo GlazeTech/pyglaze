@@ -29,13 +29,6 @@ if TYPE_CHECKING:
     from pyglaze.helpers._types import FloatArray
 
 
-# Serial protocol constants
-SERIAL_BITS_PER_BYTE = 10  # 8 data bits + start + stop bits
-N_CHANNELS = 3  # delays, X, Y arrays transmitted
-BYTES_PER_CHANNEL = 4  # 32-bit float = 4 bytes
-TIMEOUT_SAFETY_FACTOR = 2.5  # Safety multiplier for network/processing delays
-
-
 class DeviceComError(Exception):
     """Raised when an error occurs in the communication with the device."""
 
@@ -250,12 +243,10 @@ def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice
     if "mock_device" in config.amp_port:
         return _mock_device_factory(config)
 
-    timeout = _calculate_serial_timeout(config.n_points, config.amp_baudrate)
-
     return serial.serial_for_url(
         url=config.amp_port,
         baudrate=config.amp_baudrate,
-        timeout=timeout,
+        timeout=config.amp_timeout_seconds,
     )
 
 
@@ -289,21 +280,6 @@ def _squish_intervals(
         return lower + (upper - lower) * x
 
     return [Interval(f(interval.lower), f(interval.upper)) for interval in intervals]
-
-
-def _calculate_serial_timeout(n_points: int, baudrate: int) -> float:
-    """Calculate serial timeout based on expected data transfer size.
-
-    Args:
-        n_points: Number of data points to transfer
-        baudrate: Serial communication speed in bits/second
-
-    Returns:
-        Timeout in seconds for safe data transfer
-    """
-    bytes_to_receive = n_points * N_CHANNELS * BYTES_PER_CHANNEL
-    data_transfer_seconds = (bytes_to_receive * SERIAL_BITS_PER_BYTE) / baudrate
-    return data_transfer_seconds * TIMEOUT_SAFETY_FACTOR
 
 
 def _delay_from_intervals(
