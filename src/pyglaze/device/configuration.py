@@ -106,6 +106,7 @@ class LeDeviceConfiguration(DeviceConfiguration):
     amp_baudrate: ClassVar[int] = 1000000  # bit/s
 
     def __post_init__(self: LeDeviceConfiguration) -> None:
+        """Calculate dynamic timeout if not explicitly set."""
         if self.amp_timeout_seconds is None:
             # Calculate timeout based on data transfer requirements
             bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL

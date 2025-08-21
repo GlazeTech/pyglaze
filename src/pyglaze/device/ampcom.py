@@ -15,11 +15,11 @@ from bitstring import BitArray
 from serial import serialutil
 
 from pyglaze.device.configuration import (
+    BYTES_PER_CHANNEL,
+    N_CHANNELS,
     DeviceConfiguration,
     Interval,
     LeDeviceConfiguration,
-    N_CHANNELS,
-    BYTES_PER_CHANNEL,
 )
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
