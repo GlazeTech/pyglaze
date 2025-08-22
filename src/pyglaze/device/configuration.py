@@ -113,7 +113,7 @@ class LeDeviceConfiguration(DeviceConfiguration):
             bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL
             bits_to_transfer = bytes_to_receive * SERIAL_BITS_PER_BYTE
             transfer_time = bits_to_transfer / self.amp_baudrate
-            self.amp_timeout_seconds = transfer_time * TIMEOUT_SAFETY_FACTOR
+            self.amp_timeout_seconds = (transfer_time +  TIMEOUT_BASELINE_S) * TIMEOUT_SAFETY_FACTOR
 
     @property
     def _sweep_length_ms(self: LeDeviceConfiguration) -> float:
