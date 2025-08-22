@@ -15,6 +15,8 @@ from bitstring import BitArray
 from serial import serialutil
 
 from pyglaze.device.configuration import (
+    BYTES_PER_CHANNEL,
+    N_CHANNELS,
     DeviceConfiguration,
     Interval,
     LeDeviceConfiguration,
@@ -78,7 +80,7 @@ class _LeAmpCom:
 
         We expect to receive 3 arrays of floats (delays, X and Y), each with self.scanning_points elements.
         """
-        return self.scanning_points * 12
+        return self.scanning_points * N_CHANNELS * BYTES_PER_CHANNEL
 
     @property
     def serial_number_bytes(self: _LeAmpCom) -> int:
