@@ -16,6 +16,7 @@ SERIAL_BITS_PER_BYTE = 10  # 8 data bits + start + stop bits
 N_CHANNELS = 3  # delays, X, Y arrays transmitted
 BYTES_PER_CHANNEL = 4  # 32-bit float = 4 bytes
 TIMEOUT_SAFETY_FACTOR = 2.5  # Safety multiplier for network/processing delays
+TIMEOUT_BASELINE_S = 0.05  # Fixed additive latency
 
 
 @dataclass
