@@ -178,3 +178,100 @@ class LeDeviceConfiguration(DeviceConfiguration):
         with file_path.open() as f:
             configuration_dict = json.load(f)
         return cls.from_dict(configuration_dict)
+
+
+@dataclass
+class GroDeviceConfiguration(DeviceConfiguration):
+    """Represents a configuration that can be sent to a Gro-type lock-in amp for scans.
+
+    Args:
+        amp_port: The name of the serial port the amp is connected to.
+        use_ema: Whether to use en exponentially moving average filter during lockin detection.
+        n_points: The number of points to scan.
+        scan_intervals: The intervals to scan.
+        integration_periods: The number of integration periods per datapoint to use.
+        amp_timeout_seconds: The timeout for the connection to the amp in seconds.
+    """
+
+    amp_port: str
+    use_ema: bool = True
+    n_points: int = 1000
+    scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
+    integration_periods: int = 10
+    amp_timeout_seconds: float | None = None
+    modulation_frequency: int = 10000  # Hz
+
+    amp_baudrate: ClassVar[int] = 1000000  # bit/s
+
+    def __post_init__(self: GroDeviceConfiguration) -> None:
+        """Calculate dynamic timeout if not explicitly set."""
+        if self.amp_timeout_seconds is None:
+            # Calculate timeout based on data transfer requirements
+            bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL
+            bits_to_transfer = bytes_to_receive * SERIAL_BITS_PER_BYTE
+            transfer_time = bits_to_transfer / self.amp_baudrate
+            self.amp_timeout_seconds = (
+                transfer_time + TIMEOUT_BASELINE_S
+            ) * TIMEOUT_SAFETY_FACTOR
+
+    @property
+    def _sweep_length_ms(self: GroDeviceConfiguration) -> float:
+        return self.n_points * self._time_constant_ms
+
+    @property
+    def _time_constant_ms(self: GroDeviceConfiguration) -> float:
+        return 1e3 * self.integration_periods / self.modulation_frequency
+
+    def save(self: GroDeviceConfiguration, path: Path) -> str:
+        """Save a GroDeviceConfiguration to a file.
+
+        Args:
+            path: The path to save the configuration to.
+
+        Returns:
+            str: Final path component of the saved file, without the extension.
+
+        """
+        with path.open("w") as f:
+            json.dump(asdict(self), f, indent=4, sort_keys=True)
+
+        return path.stem
+
+    @classmethod
+    def from_dict(
+        cls: type[GroDeviceConfiguration], amp_config: dict
+    ) -> GroDeviceConfiguration:
+        """Create a GroDeviceConfiguration from a dict.
+
+        Args:
+            amp_config: An amp configuration in dict form.
+
+        Raises:
+            ValueError: If the dictionary is empty.
+
+        Returns:
+            DeviceConfiguration: A DeviceConfiguration object.
+        """
+        if not amp_config:
+            msg = "'amp_config' is empty."
+            raise ValueError(msg)
+
+        config = cls(**amp_config)
+        config.scan_intervals = [Interval.from_dict(d) for d in config.scan_intervals]  # type: ignore[arg-type]
+        return config
+
+    @classmethod
+    def load(
+        cls: type[GroDeviceConfiguration], file_path: Path
+    ) -> GroDeviceConfiguration:
+        """Load a GroDeviceConfiguration from a file.
+
+        Args:
+            file_path: The path to the file to load.
+
+        Returns:
+            DeviceConfiguration: A DeviceConfiguration object.
+        """
+        with file_path.open() as f:
+            configuration_dict = json.load(f)
+        return cls.from_dict(configuration_dict)

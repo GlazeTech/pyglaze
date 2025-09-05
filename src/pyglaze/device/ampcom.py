@@ -20,6 +20,7 @@ from pyglaze.device.configuration import (
     DeviceConfiguration,
     Interval,
     LeDeviceConfiguration,
+    GroDeviceConfiguration,
 )
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
@@ -237,6 +238,209 @@ class _LeAmpCom:
 class _LeStatus(Enum):
     SCANNING = "Error: Scan is ongoing."
     IDLE = "ACK: Idle."
+
+
+class _GroStatus(Enum):
+    SCANNING = "Error: Scan is ongoing."
+    IDLE = "ACK: Idle."
+
+
+@dataclass
+class _GroAmpCom:
+    config: GroDeviceConfiguration
+
+    __ser: serial.Serial | LeMockDevice = field(init=False)
+
+    ENCODING: ClassVar[str] = "utf-8"
+
+    OK_RESPONSE: ClassVar[str] = "ACK"
+    START_COMMAND: ClassVar[str] = "G"
+    FETCH_COMMAND: ClassVar[str] = "R"
+    STATUS_COMMAND: ClassVar[str] = "H"
+    SEND_LIST_COMMAND: ClassVar[str] = "L"
+    SEND_SETTINGS_COMMAND: ClassVar[str] = "S"
+    SERIAL_NUMBER_COMMAND: ClassVar[str] = "s"
+    FIRMWARE_VERSION_COMMAND: ClassVar[str] = "v"
+
+    @cached_property
+    def scanning_points(self: _GroAmpCom) -> int:
+        return self.config.n_points
+
+    @cached_property
+    def scanning_list(self: _GroAmpCom) -> list[float]:
+        scanning_list: list[float] = []
+        for interval, n_points in zip(
+            self._intervals,
+            _points_per_interval(self.scanning_points, self._intervals),
+        ):
+            scanning_list.extend(
+                np.linspace(
+                    interval.lower,
+                    interval.upper,
+                    n_points,
+                    endpoint=len(self._intervals) == 1,
+                ),
+            )
+        return scanning_list
+
+    @cached_property
+    def bytes_to_receive(self: _GroAmpCom) -> int:
+        """Number of bytes to receive for a single scan.
+
+        We expect to receive 3 arrays of floats (delays, X and Y), each with self.scanning_points elements.
+        """
+        return self.scanning_points * N_CHANNELS * BYTES_PER_CHANNEL
+
+    @property
+    def serial_number_bytes(self: _GroAmpCom) -> int:
+        """Number of bytes to receive for a serial number.
+
+        Serial number has the form "<CHARACTER>-<4_DIGITS>, hence expect 6 bytes."
+        """
+        return 6
+
+    def __post_init__(self: _GroAmpCom) -> None:
+        self.__ser = _serial_factory(self.config)
+
+    def __del__(self: _GroAmpCom) -> None:
+        """Closes connection when class instance goes out of scope."""
+        self.disconnect()
+
+    def write_all(self: _GroAmpCom) -> list[str]:
+        responses: list[str] = []
+        responses.append(self.write_list_length_and_integration_periods_and_use_ema())
+        responses.append(self.write_list())
+        return responses
+
+    def write_list_length_and_integration_periods_and_use_ema(self: _GroAmpCom) -> str:
+        self._encode_send_response(self.SEND_SETTINGS_COMMAND)
+        self._raw_byte_send_ints(
+            [self.scanning_points, self.config.integration_periods, self.config.use_ema]
+        )
+        return self._get_response(self.SEND_SETTINGS_COMMAND)
+
+    def write_list(self: _GroAmpCom) -> str:
+        self._encode_send_response(self.SEND_LIST_COMMAND)
+        self._raw_byte_send_floats(self.scanning_list)
+        return self._get_response(self.SEND_LIST_COMMAND)
+
+    def start_scan(self: _GroAmpCom) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
+        self._encode_send_response(self.START_COMMAND)
+        self._await_scan_finished()
+        times, Xs, Ys = self._read_scan()
+
+        radii, angles = self._convert_to_r_angle(Xs, Ys)
+        return self.START_COMMAND, np.array(times), np.array(radii), np.array(angles)
+
+    def disconnect(self: _GroAmpCom) -> None:
+        """Closes connection when class instance goes out of scope."""
+        with contextlib.suppress(AttributeError):
+            # If the serial device does not exist, self.__ser is never created - hence catch
+            self.__ser.close()
+
+    def get_serial_number(self: _GroAmpCom) -> str:
+        """Get the serial number of the connected device."""
+        return "X-9999"
+        # self._encode_and_send(self.SERIAL_NUMBER_COMMAND)   # noqa: ERA001
+        # return self.__ser.read(self.serial_number_bytes).decode(self.ENCODING)  # noqa: ERA001
+
+    def get_firmware_version(self: _GroAmpCom) -> str:
+        """Get the firmware version of the connected device."""
+        self._encode_and_send(self.FIRMWARE_VERSION_COMMAND)
+        return self.__ser.read_until().decode(self.ENCODING).strip()
+
+    @cached_property
+    def _intervals(self: _GroAmpCom) -> list[Interval]:
+        """Intervals squished into effective DAC range."""
+        return self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)]
+
+    def _convert_to_r_angle(
+        self: _GroAmpCom, Xs: list, Ys: list
+    ) -> tuple[FloatArray, FloatArray]:
+        r = np.sqrt(np.array(Xs) ** 2 + np.array(Ys) ** 2)
+        angle = np.arctan2(np.array(Ys), np.array(Xs))
+        return r, np.rad2deg(angle)
+
+    def _encode_send_response(
+        self: _GroAmpCom, command: str, *, check_ack: bool = True
+    ) -> str:
+        self._encode_and_send(command)
+        return self._get_response(command, check_ack=check_ack)
+
+    def _encode_and_send(self: _GroAmpCom, command: str) -> None:
+        self.__ser.write(command.encode(self.ENCODING))
+
+    def _raw_byte_send_ints(self: _GroAmpCom, values: list[int]) -> None:
+        c = BitArray()
+        for value in values:
+            c.append(BitArray(uintle=value, length=16))
+        self.__ser.write(c.tobytes())
+
+    def _raw_byte_send_floats(self: _GroAmpCom, values: list[float]) -> None:
+        c = BitArray()
+        for value in values:
+            c.append(BitArray(floatle=value, length=32))
+        self.__ser.write(c.tobytes())
+
+    def _await_scan_finished(self: _GroAmpCom) -> None:
+        time.sleep(self.config._sweep_length_ms * 1.0e-3)  # noqa: SLF001, access to private attribute for backwards compatibility
+        status = self._get_status()
+
+        while status == _LeStatus.SCANNING:
+            time.sleep(self.config._sweep_length_ms * 1e-3 * 0.01)  # noqa: SLF001, access to private attribute for backwards compatibility
+            status = self._get_status()
+
+    @_BackoffRetry(
+        backoff_base=1e-2, max_tries=3, logger=logging.getLogger(LOGGER_NAME)
+    )
+    def _get_response(self: _GroAmpCom, command: str, *, check_ack: bool = True) -> str:
+        response = self.__ser.read_until().decode(self.ENCODING).strip()
+
+        if len(response) == 0:
+            msg = f"Command: '{command}'. Empty response received"
+            raise serialutil.SerialException(msg)
+        if check_ack and response[: len(self.OK_RESPONSE)] != self.OK_RESPONSE:
+            msg = f"Command: '{command}'. Expected response '{self.OK_RESPONSE}', received: '{response}'"
+            raise DeviceComError(msg)
+        return response
+
+    @_BackoffRetry(
+        backoff_base=1e-2, max_tries=5, logger=logging.getLogger(LOGGER_NAME)
+    )
+    def _read_scan(self: _GroAmpCom) -> tuple[list[float], list[float], list[float]]:
+        self._encode_and_send(self.FETCH_COMMAND)
+        scan_bytes = self.__ser.read(self.bytes_to_receive)
+
+        if len(scan_bytes) != self.bytes_to_receive:
+            msg = f"received {len(scan_bytes)} bytes, expected {self.bytes_to_receive}"
+            raise serialutil.SerialException(msg)
+
+        times = self._bytes_to_floats(scan_bytes, 0, self.scanning_points * 4)
+        Xs = self._bytes_to_floats(
+            scan_bytes, self.scanning_points * 4, self.scanning_points * 8
+        )
+        Ys = self._bytes_to_floats(
+            scan_bytes, self.scanning_points * 8, self.scanning_points * 12
+        )
+        return times, Xs, Ys
+
+    def _bytes_to_floats(
+        self: _GroAmpCom, scan_bytes: bytes, from_idx: int, to_idx: int
+    ) -> list[float]:
+        return [
+            BitArray(bytes=scan_bytes[d : d + 4]).floatle
+            for d in range(from_idx, to_idx, 4)
+        ]
+
+    def _get_status(self: _GroAmpCom) -> _GroStatus:
+        response = self._encode_send_response(self.STATUS_COMMAND, check_ack=False)
+
+        if response == _GroStatus.SCANNING.value:
+            return _GroStatus.SCANNING
+        if response == _GroStatus.IDLE.value:
+            return _GroStatus.IDLE
+        msg = f"Unknown status: {response}"
+        raise DeviceComError(msg)
 
 
 def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice:
