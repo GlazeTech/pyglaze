@@ -269,10 +269,11 @@ class _GroAmpCom:
     @cached_property
     def scanning_list(self: _GroAmpCom) -> list[float]:
         scanning_list: list[float] = []
-        for interval, n_points in zip(
-            self._intervals,
-            _points_per_interval(self.scanning_points, self._intervals),
-        ):
+        if self.config.interval_point_counts is not None:
+            per_interval = self.config.interval_point_counts
+        else:
+            per_interval = _points_per_interval(self.scanning_points, self._intervals)
+        for interval, n_points in zip(self._intervals, per_interval):
             scanning_list.extend(
                 np.linspace(
                     interval.lower,

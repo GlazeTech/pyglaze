@@ -62,6 +62,7 @@ class DeviceConfiguration(ABC):
     amp_port: str
     amp_baudrate: ClassVar[int]
     n_points: int
+    interval_point_counts: list[int] | None = None
 
     @property
     @abstractmethod
@@ -197,6 +198,7 @@ class GroDeviceConfiguration(DeviceConfiguration):
     use_ema: bool = True
     n_points: int = 1000
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
+    interval_point_counts: list[int] | None = None
     integration_periods: int = 10
     amp_timeout_seconds: float | None = None
     modulation_frequency: int = 10000  # Hz
@@ -205,6 +207,20 @@ class GroDeviceConfiguration(DeviceConfiguration):
 
     def __post_init__(self: GroDeviceConfiguration) -> None:
         """Calculate dynamic timeout if not explicitly set."""
+        if self.interval_point_counts is not None:
+            if len(self.interval_point_counts) != len(self.scan_intervals):
+                msg = (
+                    "interval_point_counts length "
+                    f"({len(self.interval_point_counts)}) does not match scan_intervals length ({len(self.scan_intervals)})."
+                )
+                raise ValueError(msg)
+            if any(c <= 0 for c in self.interval_point_counts):
+                msg = "interval_point_counts must contain positive integers"
+                raise ValueError(msg)
+            derived = sum(self.interval_point_counts)
+            if self.n_points != derived:
+                msg = f"n_points ({self.n_points}) does not match sum(interval_point_counts) ({derived})."
+                raise ValueError(msg)
         if self.amp_timeout_seconds is None:
             # Calculate timeout based on data transfer requirements
             bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL
