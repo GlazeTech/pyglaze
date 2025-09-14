@@ -107,6 +107,12 @@ def test_align(pulse_name: str, shift: float, request: pytest.FixtureRequest) ->
     assert np.max(argmax_variance) <= 1.0
 
 
+def test_align_single_preserves_length(gaussian_deriv_pulse: Pulse) -> None:
+    aligned = Pulse.align([gaussian_deriv_pulse])
+    assert len(aligned) == 1
+    assert len(aligned[0]) == len(gaussian_deriv_pulse)
+
+
 @pytest.mark.parametrize(
     "pulse_name", ["gaussian_deriv_pulse", "gaussian_deriv_pulse_w_errors"]
 )
