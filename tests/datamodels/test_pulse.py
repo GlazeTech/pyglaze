@@ -359,7 +359,7 @@ def test_derivative(gaussian_deriv_pulse: Pulse) -> None:
 def test_estimate_peak_to_peak_raises(gaussian_deriv_pulse: Pulse) -> None:
     with pytest.raises(
         ValueError,
-        match="Tolerance must be smaller than the time spacing of the pulse.",
+        match=r"Tolerance must be smaller than the time spacing of the pulse.",
     ):
         gaussian_deriv_pulse.estimate_peak_to_peak(
             delay_tolerance=gaussian_deriv_pulse.dt

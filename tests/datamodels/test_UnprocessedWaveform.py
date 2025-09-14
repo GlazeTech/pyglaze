@@ -38,7 +38,7 @@ def test_reconstruct_cubic_spline(
 def test_reconstruct_unknown_method(
     unprocessed_waveform_nonuniform: UnprocessedWaveform,
 ) -> None:
-    with pytest.raises(ValueError, match="Unknown reconstruction*"):
+    with pytest.raises(ValueError, match=r"Unknown reconstruction*"):
         unprocessed_waveform_nonuniform.reconstruct(method="unknown_method")  # type: ignore[arg-type]
 
 
