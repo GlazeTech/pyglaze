@@ -174,7 +174,7 @@ class Pulse:
         """
         extrema = [scan._get_min_or_max_idx(wrt_max=wrt_max) for scan in scans]  # noqa: SLF001
         n_before = min(extrema)
-        n_after = min(len(scan) - index - 1 for scan, index in zip(scans, extrema))
+        n_after = min(len(scan) - index for scan, index in zip(scans, extrema))
         roughly_aligned = [
             cls._from_slice(scan, slice(index - n_before, index + n_after))
             for index, scan in zip(extrema, scans)

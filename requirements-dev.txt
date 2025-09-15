@@ -5,3 +5,4 @@ mypy>=1.7.1
 mypy-extensions>=1.0.0
 semver>=2.13.0
 types-pyserial>=3.5.0.8
+bumpver>=2023.1129
