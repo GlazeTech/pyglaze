@@ -1,7 +1,10 @@
 # Releases new version. A release entails tagging the main branch with a correct semantic version and uploading a package to PyPi
 name: Release
 run-name: Release
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   tag-release:
@@ -29,10 +32,17 @@ jobs:
           pip install -r requirements-build.txt
           pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
       - name: Assert version is new
+        id: assert_version
+        continue-on-error: true
+        run: assert-new-version --version-file pyproject.toml
+      - name: Create tag
+        if: steps.assert_version.outcome == 'success'
         run: assert-new-version --version-file pyproject.toml --tag-and-push
       - name: Build package
+        if: steps.assert_version.outcome == 'success'
         run: python -m build
       - name: Publish package
+        if: steps.assert_version.outcome == 'success'
         env:
           TWINE_PASSWORD: ${{ secrets.GLAZE_PYPI_TOKEN }}
         run: twine upload dist/*
