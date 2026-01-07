@@ -65,6 +65,7 @@ jobs:
         run: mkdocs build --strict
 
   version-validation:
+    if: github.base_ref == 'main'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
