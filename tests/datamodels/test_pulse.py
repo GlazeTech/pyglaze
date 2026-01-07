@@ -402,11 +402,13 @@ def test_fft_multidimensional_signal() -> None:
     # Create a multi-dimensional signal (time, channels)
     dt = 0.1e-12
     times = np.arange(100) * dt
-    # Create 3 different signals
+    # Create 3 different signals with different frequencies
+    freq_1 = 1e12  # 1 THz
+    freq_2 = 2e12  # 2 THz
     signal_2d = np.column_stack([
-        np.sin(2 * np.pi * 1e12 * times),
-        np.cos(2 * np.pi * 1e12 * times),
-        np.sin(2 * np.pi * 2e12 * times),
+        np.sin(2 * np.pi * freq_1 * times),
+        np.cos(2 * np.pi * freq_1 * times),
+        np.sin(2 * np.pi * freq_2 * times),
     ])
     
     pulse_2d = Pulse(time=times, signal=signal_2d)
@@ -472,9 +474,11 @@ def test_fft_axis_behavior_comparison() -> None:
     times = np.arange(50) * dt
     
     # Create a 2D signal with distinct frequency content in each column
+    low_freq = 0.5e12  # 0.5 THz
+    high_freq = 2e12   # 2 THz
     signal_2d = np.column_stack([
-        np.sin(2 * np.pi * 0.5e12 * times),  # Lower frequency
-        np.sin(2 * np.pi * 2e12 * times),    # Higher frequency
+        np.sin(2 * np.pi * low_freq * times),   # Lower frequency
+        np.sin(2 * np.pi * high_freq * times),  # Higher frequency
     ])
     
     pulse_2d = Pulse(time=times, signal=signal_2d)
