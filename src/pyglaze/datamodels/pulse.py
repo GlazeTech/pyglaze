@@ -62,7 +62,7 @@ class Pulse:
     @property
     def fft(self: Pulse) -> ComplexArray:
         """Return the Fourier Transform of a signal."""
-        return np.fft.rfft(self.signal, norm="forward")
+        return np.fft.rfft(self.signal, norm="forward", axis=0)
 
     @property
     def frequency(self: Pulse) -> FloatArray:
