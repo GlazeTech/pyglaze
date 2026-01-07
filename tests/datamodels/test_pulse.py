@@ -405,18 +405,20 @@ def test_fft_multidimensional_signal() -> None:
     # Create 3 different signals with different frequencies
     freq_1 = 1e12  # 1 THz
     freq_2 = 2e12  # 2 THz
-    signal_2d = np.column_stack([
-        np.sin(2 * np.pi * freq_1 * times),
-        np.cos(2 * np.pi * freq_1 * times),
-        np.sin(2 * np.pi * freq_2 * times),
-    ])
-    
+    signal_2d = np.column_stack(
+        [
+            np.sin(2 * np.pi * freq_1 * times),
+            np.cos(2 * np.pi * freq_1 * times),
+            np.sin(2 * np.pi * freq_2 * times),
+        ]
+    )
+
     pulse_2d = Pulse(time=times, signal=signal_2d)
     fft_result = pulse_2d.fft
-    
+
     # FFT should be computed along axis 0
     assert fft_result.shape == (len(times) // 2 + 1, 3)
-    
+
     # Each column should be the FFT of the corresponding signal column
     for i in range(3):
         expected_fft = np.fft.rfft(signal_2d[:, i], norm="forward")
@@ -428,19 +430,21 @@ def test_from_fft_multidimensional() -> None:
     dt = 0.1e-12
     times = np.arange(100) * dt
     # Create a multi-dimensional signal
-    signal_2d = np.column_stack([
-        gaussian_derivative_pulse(time=times, t0=5e-12, sigma=0.5e-12),
-        gaussian_derivative_pulse(time=times, t0=6e-12, sigma=0.6e-12),
-        gaussian_derivative_pulse(time=times, t0=7e-12, sigma=0.7e-12),
-    ])
-    
+    signal_2d = np.column_stack(
+        [
+            gaussian_derivative_pulse(time=times, t0=5e-12, sigma=0.5e-12),
+            gaussian_derivative_pulse(time=times, t0=6e-12, sigma=0.6e-12),
+            gaussian_derivative_pulse(time=times, t0=7e-12, sigma=0.7e-12),
+        ]
+    )
+
     pulse_2d = Pulse(time=times, signal=signal_2d)
     fft_2d = pulse_2d.fft
     reconstructed = Pulse.from_fft(times, fft_2d)
-    
+
     # Check that reconstruction preserves shape
     assert reconstructed.signal.shape == signal_2d.shape
-    
+
     # Check that each channel is reconstructed correctly
     np.testing.assert_array_almost_equal(reconstructed.signal, signal_2d)
     np.testing.assert_array_almost_equal(reconstructed.time, times)
@@ -449,21 +453,23 @@ def test_from_fft_multidimensional() -> None:
 def test_fft_roundtrip_multidimensional(gaussian_deriv_pulse: Pulse) -> None:
     """Test FFT round-trip with multi-dimensional signals."""
     # Create a multi-dimensional version by stacking multiple pulses
-    signal_2d = np.column_stack([
-        gaussian_deriv_pulse.signal,
-        gaussian_deriv_pulse.signal * 1.5,
-        gaussian_deriv_pulse.signal * 0.5,
-    ])
-    
+    signal_2d = np.column_stack(
+        [
+            gaussian_deriv_pulse.signal,
+            gaussian_deriv_pulse.signal * 1.5,
+            gaussian_deriv_pulse.signal * 0.5,
+        ]
+    )
+
     pulse_2d = Pulse(time=gaussian_deriv_pulse.time, signal=signal_2d)
-    
+
     # Round-trip: signal -> FFT -> IFFT -> signal
     fft_result = pulse_2d.fft
     reconstructed = Pulse.from_fft(pulse_2d.time, fft_result)
-    
+
     # Check shape preservation
     assert reconstructed.signal.shape == signal_2d.shape
-    
+
     # Check that reconstruction is accurate for each channel
     np.testing.assert_array_almost_equal(reconstructed.signal, signal_2d)
 
@@ -472,30 +478,32 @@ def test_fft_axis_behavior_comparison() -> None:
     """Test that axis=0 parameter correctly processes multi-dimensional signals along the time axis."""
     dt = 0.1e-12
     times = np.arange(50) * dt
-    
+
     # Create a 2D signal with distinct frequency content in each column
     low_freq = 0.5e12  # 0.5 THz
-    high_freq = 2e12   # 2 THz
-    signal_2d = np.column_stack([
-        np.sin(2 * np.pi * low_freq * times),   # Lower frequency
-        np.sin(2 * np.pi * high_freq * times),  # Higher frequency
-    ])
-    
+    high_freq = 2e12  # 2 THz
+    signal_2d = np.column_stack(
+        [
+            np.sin(2 * np.pi * low_freq * times),  # Lower frequency
+            np.sin(2 * np.pi * high_freq * times),  # Higher frequency
+        ]
+    )
+
     pulse_2d = Pulse(time=times, signal=signal_2d)
     fft_result = pulse_2d.fft
-    
+
     # Verify each column has independent FFT
     fft_col0 = np.fft.rfft(signal_2d[:, 0], norm="forward")
     fft_col1 = np.fft.rfft(signal_2d[:, 1], norm="forward")
-    
+
     np.testing.assert_array_almost_equal(fft_result[:, 0], fft_col0)
     np.testing.assert_array_almost_equal(fft_result[:, 1], fft_col1)
-    
+
     # Verify that the peak frequencies are different for each column
     freq = pulse_2d.frequency
     peak_idx_0 = np.argmax(np.abs(fft_result[:, 0]))
     peak_idx_1 = np.argmax(np.abs(fft_result[:, 1]))
-    
+
     # The peak indices should be different since the signals have different frequencies
     assert peak_idx_0 != peak_idx_1
     assert freq[peak_idx_0] < freq[peak_idx_1]
