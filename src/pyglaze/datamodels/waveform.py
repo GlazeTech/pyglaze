@@ -43,7 +43,7 @@ class UnprocessedWaveform:
         Args:
             time: The time values recorded by the lock-in amp during the scan.
             radius: The radius values recorded by the lock-in amp during the scan.
-            theta: The theta values recorded by the lock-in amp during the scan (in degrees).
+            theta: The theta values recorded by the lock-in amp during the scan (in radians).
             rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will use the angle at the maximum value of R.
         """
         _rot_ang = (
@@ -52,7 +52,7 @@ class UnprocessedWaveform:
 
         # rotate such that all signal lies along X
         new_theta = theta - _rot_ang
-        signal = radius * np.cos(new_theta * np.pi / 180.0)
+        signal = radius * np.cos(new_theta)
         return cls(time, signal)
 
     @classmethod

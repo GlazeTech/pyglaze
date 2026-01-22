@@ -150,7 +150,7 @@ class _LeAmpCom:
     ) -> tuple[FloatArray, FloatArray]:
         r = np.sqrt(np.array(Xs) ** 2 + np.array(Ys) ** 2)
         angle = np.arctan2(np.array(Ys), np.array(Xs))
-        return r, np.rad2deg(angle)
+        return r, angle
 
     def _encode_send_response(
         self: _LeAmpCom, command: str, *, check_ack: bool = True
