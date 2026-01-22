@@ -54,20 +54,19 @@ class _LockinPhaseEstimator:
 
         # First estimate
         if self._radius_of_est is None or self.phase_estimate is None:
-            self._set_estimates(_wrap_to_pi(theta_at_max), r_max)
+            self._set_estimates(theta_at_max, r_max)
             return
 
         # --- critical fix: resolve the pi ambiguity using previous estimate ---
         branched_theta_at_max = _choose_pi_branch(theta_at_max, self.phase_estimate)
-        branched_wrapped_theta_at_max = _wrap_to_pi(branched_theta_at_max)
 
         # --- critical fix: circular distance ---
-        dtheta = _angular_distance(branched_wrapped_theta_at_max, self.phase_estimate)
+        dtheta = _angular_distance(branched_theta_at_max, self.phase_estimate)
 
         if r_max > self.r_threshold_for_update * self._radius_of_est or (
             r_max > self._radius_of_est and dtheta < self.theta_threshold_for_adjustment
         ):
-            self._set_estimates(branched_wrapped_theta_at_max, r_max)
+            self._set_estimates(branched_theta_at_max, r_max)
 
     def _set_estimates(
         self: _LockinPhaseEstimator, phase: float, radius: float
