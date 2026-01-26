@@ -97,3 +97,9 @@ push = false
     '**Documentation Version**: {version}'
 ]
 
+[tool.ty.rules]
+unused-ignore-comment = "error"
+
+[tool.ty.terminal]
+error-on-warning = true
+

@@ -130,7 +130,7 @@ def test_from_dict(pulse_name: str, request: pytest.FixtureRequest) -> None:
 def test_to_native_dict(pulse_name: str, request: pytest.FixtureRequest) -> None:
     pulse: Pulse = request.getfixturevalue(pulse_name)
     as_d = pulse.to_native_dict()
-    from_d = Pulse.from_dict(as_d)  # type: ignore[arg-type]
+    from_d = Pulse.from_dict(as_d)
     for attr in ["time", "signal"]:
         assert np.all(getattr(pulse, attr) == getattr(from_d, attr))
 

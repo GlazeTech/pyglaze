@@ -585,7 +585,7 @@ def _estimate_bw_idx(x: FloatArray, y: FloatArray, segments: int) -> int:
     target = np.log(y)
 
     def L1(x: FloatArray, y: FloatArray) -> FloatArray:
-        return np.sum(np.abs(y - x))  # type: ignore[no-any-return]
+        return np.sum(np.abs(y - x))
 
     def model(pars: list[float]) -> FloatArray:
         idx = np.searchsorted(x, pars[0])

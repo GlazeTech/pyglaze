@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Callable
 
 import serial
 import serial.tools.list_ports
@@ -57,19 +57,20 @@ class _BackoffRetry:
 
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            func_name = getattr(func, "__name__", "function")
             for tries in range(self.max_tries - 1):
                 try:
-                    return cast("T", func(*args, **kwargs))
+                    return func(*args, **kwargs)
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as e:  # noqa: BLE001
                     self._log(
-                        f"{func.__name__} failed {tries + 1} time(s) with: '{e}'. Trying again"
+                        f"{func_name} failed {tries + 1} time(s) with: '{e}'. Trying again"
                     )
                 backoff = min(self.backoff_base * 2**tries, self.max_backoff)
                 time.sleep(backoff)
-            self._log(f"{func.__name__}: Last try ({tries + 2}).")
-            return cast("T", func(*args, **kwargs))
+            self._log(f"{func_name}: Last try ({tries + 2}).")
+            return func(*args, **kwargs)
 
         return wrapper
 

@@ -47,8 +47,8 @@ jobs:
         run: ruff check .
       - name: Run ruff formatter
         run: ruff format . --check
-      - name: Run mypy
-        run: mypy
+      - name: Run ty type checker
+        run: ty check .
 
   docs:
     timeout-minutes: 15
