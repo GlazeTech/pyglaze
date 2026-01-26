@@ -151,11 +151,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._ampcom is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        _, time, radius, theta = self._ampcom.start_scan()
-        self._phase_estimator.update_estimate(radius=radius, theta=theta)
-
-        return UnprocessedWaveform.from_polar_coords(
-            time, radius, theta, self._phase_estimator.phase_estimate
+        _, time, Xs, Ys = self._ampcom.start_scan()
+        self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
+        return UnprocessedWaveform.from_inphase_quadrature(
+            time, Xs, Ys, self._phase_estimator.phase_estimate
         )
 
     def update_config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
