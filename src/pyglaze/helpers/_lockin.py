@@ -28,6 +28,18 @@ def _choose_pi_branch(theta: float, ref: float) -> float:
     return theta if d0 <= d1 else (theta + np.pi)
 
 
+def _rotate_inphase(X: FloatArray, Y: FloatArray, phi: float) -> FloatArray:
+    """Compute in-phase after rotation by phi."""
+    return X * np.cos(phi) + Y * np.sin(phi)
+
+
+def _polar_to_IQ(r: FloatArray, theta: FloatArray) -> tuple[FloatArray, FloatArray]:
+    """Convert polar coordinates to IQ (X,Y) coordinates."""
+    X = r * np.cos(theta)
+    Y = r * np.sin(theta)
+    return X, Y
+
+
 def _choose_branch_by_strongest_point(
     theta: float, X: FloatArray, Y: FloatArray, strength: FloatArray | None = None
 ) -> float:
@@ -57,7 +69,7 @@ def _eigenvalues_symmetric_2D(
 
 
 def _estimate_IQ_phase(
-    X: FloatArray, Y: FloatArray, w: FloatArray
+    X: FloatArray, Y: FloatArray, w: FloatArray | None = None
 ) -> tuple[float, float]:
     """Estimate the constant lock-in phase (orientation, modulo π) from many (X, Y) lock-in samples by fitting the dominant axis of the IQ cloud.
 
@@ -72,6 +84,9 @@ def _estimate_IQ_phase(
     lock-in phase.
     """
     # Weighted second moment matrix components - a weighted, scaled covariance matrix without mean subtraction
+    if w is None:
+        w = X * X + Y * Y
+
     Sxx = np.sum(w * X * X)
     Sxy = np.sum(w * X * Y)
     Syy = np.sum(w * Y * Y)

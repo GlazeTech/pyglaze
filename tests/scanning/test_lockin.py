@@ -1,10 +1,16 @@
 import numpy as np
-import pytest
 
-from pyglaze.scanning._lockin import _angular_distance, _LockinPhaseEstimator
+from pyglaze.datamodels import Pulse
+from pyglaze.helpers._lockin import (
+    _angular_distance,
+    _LockinPhaseEstimator,
+    _rotate_inphase,
+)
 
 
-def _make_iq(s: np.ndarray, phi: float, noise_std: float, rng: np.random.Generator):
+def _make_iq(
+    s: np.ndarray, phi: float, noise_std: float, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate synthetic IQ data: (X,Y) = s * (cos phi, sin phi) + isotropic noise."""
     c, ss = np.cos(phi), np.sin(phi)
     X = s * c + rng.normal(0.0, noise_std, size=s.shape)
@@ -19,12 +25,7 @@ def _project_strongest_positive(X: np.ndarray, Y: np.ndarray, phi: float) -> flo
     return float(X[k] * np.cos(phi) + Y[k] * np.sin(phi))
 
 
-def _rotate_inphase(X: np.ndarray, Y: np.ndarray, phi: float) -> np.ndarray:
-    """Compute in-phase after rotation by phi."""
-    return X * np.cos(phi) + Y * np.sin(phi)
-
-
-def test_first_update_sets_polarity_by_strongest_point():
+def test_first_update_sets_polarity_by_strongest_point() -> None:
     rng = np.random.default_rng(0)
 
     # Construct a waveform where the *largest magnitude* sample is negative.
@@ -50,7 +51,7 @@ def test_first_update_sets_polarity_by_strongest_point():
     assert proj >= 0.0
 
 
-def test_consecutive_scans_keep_same_branch_near_pi_wrap():
+def test_consecutive_scans_keep_same_branch_near_pi_wrap() -> None:
     rng = np.random.default_rng(1)
 
     # Make a waveform with strongest magnitude negative (so first estimate chooses +pi branch).
@@ -66,10 +67,7 @@ def test_consecutive_scans_keep_same_branch_near_pi_wrap():
     X1, Y1 = _make_iq(s, phi_true, noise_std=0.01, rng=rng)
     X2, Y2 = _make_iq(s, phi_true, noise_std=0.01, rng=rng)
 
-    est = _LockinPhaseEstimator(
-        r_threshold_for_update=1.0,  # make updating permissive
-        theta_threshold_for_adjustment=np.deg2rad(5.0),
-    )
+    est = _LockinPhaseEstimator()
 
     est.update_estimate(X1, Y1)
     phi1 = est.phase_estimate
@@ -90,7 +88,7 @@ def test_consecutive_scans_keep_same_branch_near_pi_wrap():
     assert _project_strongest_positive(X2, Y2, phi2) >= 0.0
 
 
-def test_recovered_inphase_has_consistent_sign_across_scans():
+def test_recovered_inphase_has_consistent_sign_across_scans() -> None:
     rng = np.random.default_rng(2)
 
     # A crude "THz-like" bipolar pulse (derivative-ish): big negative then positive.
@@ -105,10 +103,7 @@ def test_recovered_inphase_has_consistent_sign_across_scans():
     X1, Y1 = _make_iq(s, phi_true, noise_std=0.02, rng=rng)
     X2, Y2 = _make_iq(s, phi_true, noise_std=0.02, rng=rng)
 
-    est = _LockinPhaseEstimator(
-        r_threshold_for_update=1.0,
-        theta_threshold_for_adjustment=np.deg2rad(5.0),
-    )
+    est = _LockinPhaseEstimator()
 
     est.update_estimate(X1, Y1)
     phi1 = est.phase_estimate
@@ -127,3 +122,24 @@ def test_recovered_inphase_has_consistent_sign_across_scans():
 
     # And they should correlate with each other positively (no sign flip).
     assert float(np.dot(rec1, rec2)) > 0.0
+
+
+def test_consecutive_scans_keep_same_branch(gaussian_deriv_pulse: Pulse) -> None:
+    rng = np.random.default_rng(2)
+    phi = np.pi / 4
+    X1, Y1 = _make_iq(gaussian_deriv_pulse.signal, phi=phi, noise_std=0.01, rng=rng)
+
+    # Create a second scan with the same underlying signal but shifted by pi in phase.
+    X2, Y2 = _make_iq(
+        gaussian_deriv_pulse.signal, phi=phi + np.pi, noise_std=0.01, rng=rng
+    )
+    est = _LockinPhaseEstimator()
+    est.update_estimate(X1, Y1)
+    phase1 = est.phase_estimate
+    assert phase1 is not None
+    est.update_estimate(X2, Y2)
+    phase2 = est.phase_estimate
+    assert phase2 is not None
+    # The estimator should not flip by ~pi between scans.
+    # Use the estimator's own distance function (wrap-aware).
+    assert _angular_distance(phase2, phase1) < np.deg2rad(5.0)

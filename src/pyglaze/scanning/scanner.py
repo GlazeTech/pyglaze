@@ -6,9 +6,8 @@ from typing import Generic, TypeVar
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import _LeAmpCom
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
-
-from ._lockin import _LockinPhaseEstimator
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
 

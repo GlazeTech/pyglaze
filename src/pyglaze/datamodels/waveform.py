@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from pyglaze.scanning._lockin import _estimate_IQ_phase
+from pyglaze.helpers._lockin import _estimate_IQ_phase, _polar_to_IQ, _rotate_inphase
 
 from .pulse import Pulse
 
@@ -49,9 +49,7 @@ class UnprocessedWaveform:
             rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will estimate phase from data.
         """
         if rotation_angle is None:
-            rotation_angle = _estimate_IQ_phase(
-                radius * np.cos(theta), radius * np.sin(theta), radius * radius
-            )
+            rotation_angle, _ = _estimate_IQ_phase(*_polar_to_IQ(radius, theta))
 
         # rotate such that all signal lies along X
         new_theta = theta - rotation_angle
@@ -75,8 +73,9 @@ class UnprocessedWaveform:
             rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will estimate phase from data.
         """
         if rotation_angle is None:
-            rotation_angle = _estimate_IQ_phase(X, Y, X * X + Y * Y)
-        signal = X * np.cos(rotation_angle) + Y * np.sin(rotation_angle)
+            rotation_angle, _ = _estimate_IQ_phase(X, Y)
+
+        signal = _rotate_inphase(X, Y, rotation_angle)
         return cls(time, signal)
 
     @classmethod
