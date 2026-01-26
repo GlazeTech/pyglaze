@@ -115,7 +115,7 @@ class Pulse:
 
         Note that the energy is not the same as the physical energy of the pulse, but rather the integral of the square of the pulse.
         """
-        return cast("float", np.trapezoid(self.signal * self.signal, x=self.time))  # type: ignore[attr-defined, unused-ignore]
+        return cast("float", np.trapz(self.signal * self.signal, x=self.time))  # noqa: NPY201
 
     @classmethod
     def from_dict(
@@ -585,7 +585,7 @@ def _estimate_bw_idx(x: FloatArray, y: FloatArray, segments: int) -> int:
     target = np.log(y)
 
     def L1(x: FloatArray, y: FloatArray) -> FloatArray:
-        return np.sum(np.abs(y - x))  # type: ignore[no-any-return]
+        return np.sum(np.abs(y - x))
 
     def model(pars: list[float]) -> FloatArray:
         idx = np.searchsorted(x, pars[0])

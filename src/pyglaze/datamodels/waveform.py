@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 from scipy.interpolate import CubicSpline
 
+from pyglaze.helpers._lockin import _estimate_IQ_phase, _polar_to_IQ, _rotate_inphase
+
 from .pulse import Pulse
 
 if TYPE_CHECKING:
@@ -43,16 +45,37 @@ class UnprocessedWaveform:
         Args:
             time: The time values recorded by the lock-in amp during the scan.
             radius: The radius values recorded by the lock-in amp during the scan.
-            theta: The theta values recorded by the lock-in amp during the scan (in degrees).
-            rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will use the angle at the maximum value of R.
+            theta: The theta values recorded by the lock-in amp during the scan (in radians).
+            rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will estimate phase from data.
         """
-        _rot_ang = (
-            theta[np.argmax(radius)] if rotation_angle is None else rotation_angle
-        )
+        if rotation_angle is None:
+            rotation_angle, _ = _estimate_IQ_phase(*_polar_to_IQ(radius, theta))
 
         # rotate such that all signal lies along X
-        new_theta = theta - _rot_ang
-        signal = radius * np.cos(new_theta * np.pi / 180.0)
+        new_theta = theta - rotation_angle
+        signal = radius * np.cos(new_theta)
+        return cls(time, signal)
+
+    @classmethod
+    def from_inphase_quadrature(
+        cls: type[UnprocessedWaveform],
+        time: FloatArray,
+        X: FloatArray,
+        Y: FloatArray,
+        rotation_angle: float | None = None,
+    ) -> UnprocessedWaveform:
+        """Create an UnprocessedWaveform object from raw lock-in amp output.
+
+        Args:
+            time: The time values recorded by the lock-in amp during the scan.
+            X: The in-phase values recorded by the lock-in amp during the scan.
+            Y: The quadrature values recorded by the lock-in amp during the scan.
+            rotation_angle: The angle to rotate lockin signal to align along x-axis. If not given, will estimate phase from data.
+        """
+        if rotation_angle is None:
+            rotation_angle, _ = _estimate_IQ_phase(X, Y)
+
+        signal = _rotate_inphase(X, Y, rotation_angle)
         return cls(time, signal)
 
     @classmethod

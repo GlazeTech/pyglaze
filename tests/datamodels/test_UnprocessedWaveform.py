@@ -12,13 +12,12 @@ def test_from_polar_output(gaussian_deriv_pulse_w_errors: Pulse) -> None:
     sign = np.clip(np.sign(gaussian_deriv_pulse_w_errors.signal), a_min=0, a_max=1)
     argmax_sign = sign[np.argmax(radius)]
     angle = np.zeros(len(sign))
-    angle[sign == argmax_sign] = 120
-    angle[sign != argmax_sign] = 120 + 180
+    angle[sign == argmax_sign] = 120 * np.pi / 180
+    angle[sign != argmax_sign] = (120 + 180) * np.pi / 180
     from_raw = UnprocessedWaveform.from_polar_coords(
         time=gaussian_deriv_pulse_w_errors.time, radius=radius, theta=angle
     )
-    # -1, since the maximum R is negative
-    assert np.all(gaussian_deriv_pulse_w_errors.signal == -1 * from_raw.signal)
+    assert np.all(gaussian_deriv_pulse_w_errors.signal == from_raw.signal)
 
 
 def test_reconstruct_cubic_spline(

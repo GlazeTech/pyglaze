@@ -130,7 +130,7 @@ def test_from_dict(pulse_name: str, request: pytest.FixtureRequest) -> None:
 def test_to_native_dict(pulse_name: str, request: pytest.FixtureRequest) -> None:
     pulse: Pulse = request.getfixturevalue(pulse_name)
     as_d = pulse.to_native_dict()
-    from_d = Pulse.from_dict(as_d)  # type: ignore[arg-type]
+    from_d = Pulse.from_dict(as_d)
     for attr in ["time", "signal"]:
         assert np.all(getattr(pulse, attr) == getattr(from_d, attr))
 
@@ -390,7 +390,7 @@ def test_propagate(gaussian_deriv_pulse: Pulse) -> None:
 
 def test_energy(gaussian_deriv_pulse: Pulse) -> None:
     energy = gaussian_deriv_pulse.energy
-    expected_energy = np.trapezoid(  # type: ignore[attr-defined, unused-ignore]
+    expected_energy = np.trapz(  # noqa: NPY201
         gaussian_deriv_pulse.signal**2, x=gaussian_deriv_pulse.time
     )
     assert energy == pytest.approx(expected_energy, rel=1e-6)

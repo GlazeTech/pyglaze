@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
-
-import numpy as np
+from typing import Generic, TypeVar
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import _LeAmpCom
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
-
-if TYPE_CHECKING:
-    from pyglaze.helpers._types import FloatArray
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
 
@@ -154,11 +150,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._ampcom is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        _, time, radius, theta = self._ampcom.start_scan()
-        self._phase_estimator.update_estimate(radius=radius, theta=theta)
-
-        return UnprocessedWaveform.from_polar_coords(
-            time, radius, theta, self._phase_estimator.phase_estimate
+        _, time, Xs, Ys = self._ampcom.start_scan()
+        self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
+        return UnprocessedWaveform.from_inphase_quadrature(
+            time, Xs, Ys, self._phase_estimator.phase_estimate
         )
 
     def update_config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
@@ -206,38 +201,3 @@ def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:
 
     msg = f"Unsupported configuration type: {type(config).__name__}"
     raise TypeError(msg)
-
-
-class _LockinPhaseEstimator:
-    def __init__(
-        self: _LockinPhaseEstimator,
-        r_threshold_for_update: float = 2.0,
-        theta_threshold_for_adjustment: float = 1.0,
-    ) -> None:
-        self.r_threshold_for_update = r_threshold_for_update
-        self.theta_threshold_for_adjustment = theta_threshold_for_adjustment
-        self.phase_estimate: float | None = None
-        self._radius_of_est: float | None = None
-
-    def update_estimate(
-        self: _LockinPhaseEstimator, radius: FloatArray, theta: FloatArray
-    ) -> None:
-        r_argmax = np.argmax(radius)
-        r_max = radius[r_argmax]
-        theta_at_max = theta[r_argmax]
-        if self._radius_of_est is None:
-            self._set_estimates(theta_at_max, r_max)
-            return
-
-        if r_max > self.r_threshold_for_update * self._radius_of_est or (
-            r_max > self._radius_of_est
-            and abs(theta_at_max - self.phase_estimate)
-            < self.theta_threshold_for_adjustment
-        ):
-            self._set_estimates(theta_at_max, r_max)
-
-    def _set_estimates(
-        self: _LockinPhaseEstimator, phase: float, radius: float
-    ) -> None:
-        self.phase_estimate = phase
-        self._radius_of_est = radius

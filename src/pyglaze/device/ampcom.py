@@ -119,9 +119,7 @@ class _LeAmpCom:
         self._encode_send_response(self.START_COMMAND)
         self._await_scan_finished()
         times, Xs, Ys = self._read_scan()
-
-        radii, angles = self._convert_to_r_angle(Xs, Ys)
-        return self.START_COMMAND, np.array(times), np.array(radii), np.array(angles)
+        return self.START_COMMAND, np.array(times), np.array(Xs), np.array(Ys)
 
     def disconnect(self: _LeAmpCom) -> None:
         """Closes connection when class instance goes out of scope."""
@@ -144,13 +142,6 @@ class _LeAmpCom:
     def _intervals(self: _LeAmpCom) -> list[Interval]:
         """Intervals squished into effective DAC range."""
         return self.config.scan_intervals or [Interval(lower=0.0, upper=1.0)]
-
-    def _convert_to_r_angle(
-        self: _LeAmpCom, Xs: list, Ys: list
-    ) -> tuple[FloatArray, FloatArray]:
-        r = np.sqrt(np.array(Xs) ** 2 + np.array(Ys) ** 2)
-        angle = np.arctan2(np.array(Ys), np.array(Xs))
-        return r, np.rad2deg(angle)
 
     def _encode_send_response(
         self: _LeAmpCom, command: str, *, check_ack: bool = True
