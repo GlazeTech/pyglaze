@@ -18,17 +18,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
       - name: Build and install package
         run: |
-          pip install -r requirements-build.txt
-          python -m build
-          python scripts/install_wheel.py
+          uv sync --extra build
+          uv run python -m build
+          uv run python scripts/install_wheel.py
       - name: Run twine check
-        run: python scripts/check_wheel.py
+        run: uv run python scripts/check_wheel.py
       - name: Run pytest
         run: |
-          pip install -r requirements-test.txt
-          pytest
+          uv sync --extra test
+          uv run pytest
 
   code-validation:
     timeout-minutes: 15
@@ -39,16 +41,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements-dev.txt
+        run: uv sync --extra dev
       - name: Run ruff linter
-        run: ruff check .
+        run: uv run ruff check .
       - name: Run ruff formatter
-        run: ruff format . --check
+        run: uv run ruff format . --check
       - name: Run ty type checker
-        run: ty check .
+        run: uv run ty check .
 
   docs:
     timeout-minutes: 15
@@ -59,10 +61,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
       - name: Install dependencies
-        run: pip install -r requirements-docs.txt
+        run: uv sync --extra docs
       - name: Test docs build
-        run: mkdocs build --strict
+        run: uv run mkdocs build --strict
 
   version-validation:
     if: github.base_ref == 'main'
