@@ -22,7 +22,11 @@ from pyglaze.device.configuration import (
     LeDeviceConfiguration,
 )
 from pyglaze.devtools.mock_device import _mock_device_factory
-from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
+from pyglaze.helpers.utilities import (
+    LOGGER_NAME,
+    _BackoffRetry,
+    auto_detect_glaze_amp_port,
+)
 
 if TYPE_CHECKING:
     from pyglaze.devtools.mock_device import LeMockDevice
@@ -234,8 +238,19 @@ def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice
     if "mock_device" in config.amp_port:
         return _mock_device_factory(config)
 
+    amp_port = config.amp_port.strip()
+    if amp_port.lower() == "auto":
+        detected = auto_detect_glaze_amp_port(baudrate=config.amp_baudrate)
+        if detected is None:
+            msg = (
+                "Could not auto-detect Glaze device serial port. "
+                "Please specify `amp_port` explicitly."
+            )
+            raise serialutil.SerialException(msg)
+        amp_port = detected
+
     return serial.serial_for_url(
-        url=config.amp_port,
+        url=amp_port,
         baudrate=config.amp_baudrate,
         timeout=config.amp_timeout_seconds,
     )

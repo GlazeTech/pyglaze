@@ -21,3 +21,4 @@ Depending on which device is used, a matching device configuration must be used.
     ```
 
 Be sure to use the correct port and delayunit! The `mock_device` and `mock_delay` are only for testing purposes
+For real hardware, you can set `amp_port="auto"` to auto-detect the device port (or set it explicitly like `"COM3"` / `"/dev/cu.usbserial-..."`).
