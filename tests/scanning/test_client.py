@@ -69,3 +69,41 @@ def test_get_firmware_version(config_name: str, request: pytest.FixtureRequest) 
 
     assert isinstance(firmware_version, str)
     assert firmware_version != ""
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_phase_estimate_while_active(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    """Test getting phase estimate while client is active."""
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    client = GlazeClient(device_config)
+    with client as c:
+        # Get a few scans to allow phase estimator to learn
+        c.read(n_pulses=1)
+
+        # Should be able to get phase estimate
+        phase = c.get_phase_estimate()
+        assert phase is not None
+        assert -3.2 <= phase <= 3.2  # Within (-pi, pi]
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_phase_estimate_after_stop_works(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    """Test that getting phase estimate after context exit still works (returns cached value)."""
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    initial_phase = 1.5
+    client = GlazeClient(device_config, initial_phase_estimate=initial_phase)
+
+    with client as c:
+        # Get a scan to ensure cache is populated
+        c.read(n_pulses=1)
+        phase_while_active = c.get_phase_estimate()
+        assert phase_while_active is not None
+
+    # Should still be able to get cached phase estimate after stopping
+    phase_after_stop = client.get_phase_estimate()
+    assert phase_after_stop is not None
+    assert phase_after_stop == phase_while_active
