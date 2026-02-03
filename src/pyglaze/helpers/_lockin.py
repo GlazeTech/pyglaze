@@ -115,9 +115,20 @@ class _LockinPhaseEstimator:
     def __init__(
         self: _LockinPhaseEstimator,
         confidence_threshold: float = 0.8,
+        initial_phase_estimate: float | None = None,
     ) -> None:
+        """Initialize the lock-in phase estimator.
+
+        Args:
+            confidence_threshold: Minimum confidence (0-1) required to update phase estimate.
+            initial_phase_estimate: Optional initial phase in radians. If provided, sets the
+                initial phase estimate to this value (wrapped to [-π, π]).
+        """
         self.confidence_threshold = confidence_threshold
-        self.phase_estimate: float | None = None
+        if initial_phase_estimate is not None:
+            self.phase_estimate = _wrap_to_pi(float(initial_phase_estimate))
+        else:
+            self.phase_estimate: float | None = None  # Phase estimate in radians
 
     def update_estimate(
         self: _LockinPhaseEstimator, Xs: FloatArray, Ys: FloatArray

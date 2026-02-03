@@ -28,16 +28,19 @@ class GlazeClient:
 
     Args:
         config: Configuration to use for scans
+        initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+            Use this to maintain consistent polarity across scanning sessions.
     """
 
     config: DeviceConfiguration
+    initial_phase_estimate: float | None = None
     _scanner: _AsyncScanner = field(init=False)
 
     def __enter__(self: Self) -> Self:
         """Start the scanner and return the client."""
         self._scanner = _AsyncScanner()
         try:
-            self._scanner.start_scan(self.config)
+            self._scanner.start_scan(self.config, self.initial_phase_estimate)
         except (TimeoutError, serialutil.SerialException) as e:
             self.__exit__(e)
         return self
@@ -70,6 +73,24 @@ class GlazeClient:
         """Get the firmware version of the connected device."""
         try:
             return self._scanner.get_firmware_version()
+        except AttributeError as e:
+            msg = "No connection to device."
+            raise SerialException(msg) from e
+
+    def get_phase_estimate(self: GlazeClient) -> float | None:
+        """Get the current phase estimate from the lock-in phase estimator.
+
+        Can be called even after the client has been stopped, allowing phase estimates
+        to be extracted and reused for maintaining consistent polarity across sessions.
+
+        Returns:
+            float | None: The current phase estimate in radians, or None if not yet estimated.
+
+        Raises:
+            SerialException: If the scanner was never started.
+        """
+        try:
+            return self._scanner.get_phase_estimate()
         except AttributeError as e:
             msg = "No connection to device."
             raise SerialException(msg) from e

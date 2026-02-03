@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from multiprocessing import Event, Pipe, Process, Queue, synchronize
 from queue import Empty, Full
 from typing import TYPE_CHECKING
@@ -45,20 +45,38 @@ class _AsyncScanner:
     _SCAN_TIMEOUT: float = field(init=False)
     _stop_signal: synchronize.Event = field(init=False)
     _scanner_conn: Connection = field(init=False)
+    _initial_phase_estimate: float | None = field(init=False, default=None)
+    _cached_phase_estimate: float | None = field(init=False, default=None)
 
-    def start_scan(self: _AsyncScanner, config: DeviceConfiguration) -> None:
+    def start_scan(
+        self: _AsyncScanner,
+        config: DeviceConfiguration,
+        initial_phase_estimate: float | None = None,
+    ) -> None:
         """Starts continuously scanning in new process.
 
         Args:
-            config: Device configurtaion
+            config: Device configuration
+            initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+                Use this to maintain consistent polarity across scanner instances.
         """
+        self._initial_phase_estimate = initial_phase_estimate
+        self._cached_phase_estimate = (
+            initial_phase_estimate  # Initialize cache with initial value
+        )
         self._SCAN_TIMEOUT = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001, access to private attribute for backwards compatibility
         self._shared_mem = Queue(maxsize=self.queue_maxsize)
         self._stop_signal = Event()
         self._scanner_conn, child_conn = Pipe()
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[config, self._shared_mem, self._stop_signal, child_conn],
+            args=[
+                config,
+                self._shared_mem,
+                self._stop_signal,
+                child_conn,
+                initial_phase_estimate,
+            ],
         )
         self._child_process.start()
 
@@ -90,7 +108,7 @@ class _AsyncScanner:
         self.is_scanning = False
 
     def get_scans(self: _AsyncScanner, n_pulses: int) -> list[UnprocessedWaveform]:
-        call_time = datetime.now()  # noqa: DTZ005
+        call_time = datetime.now(tz=timezone.utc)
         stamped_pulse = self._get_scan()
 
         while stamped_pulse.timestamp < call_time:
@@ -114,9 +132,23 @@ class _AsyncScanner:
 
         return self._metadata.firmware_version
 
+    def get_phase_estimate(self: _AsyncScanner) -> float | None:
+        """Get the current phase estimate from the scanner.
+
+        Returns the cached phase estimate from the most recently received waveform.
+        This method returns instantly without blocking and can be called even after
+        the scanner has stopped, allowing phase estimates to be extracted and reused.
+
+        Returns:
+            float | None: The current phase estimate in radians, or None if not yet estimated.
+        """
+        return self._cached_phase_estimate
+
     def _get_scan(self: _AsyncScanner) -> _TimestampedWaveform:
         try:
-            return self._shared_mem.get(timeout=self._SCAN_TIMEOUT)
+            waveform = self._shared_mem.get(timeout=self._SCAN_TIMEOUT)
+            # Cache the phase estimate from this waveform
+            self._cached_phase_estimate = waveform.phase_estimate
         except Exception as err:
             scanner_err: Exception | None = None
             if self._scanner_conn.poll(timeout=self.startup_timeout):
@@ -127,6 +159,8 @@ class _AsyncScanner:
             if scanner_err:
                 raise scanner_err from err
             raise
+        else:
+            return waveform
 
     @staticmethod
     def _run_scanner(
@@ -134,9 +168,12 @@ class _AsyncScanner:
         shared_mem: Queue[_TimestampedWaveform],
         stop_signal: synchronize.Event,
         parent_conn: Connection,
+        initial_phase_estimate: float | None = None,
     ) -> None:
         try:
-            scanner = Scanner(config=config)
+            scanner = Scanner(
+                config=config, initial_phase_estimate=initial_phase_estimate
+            )
             device_metadata = _ScannerMetadata(
                 serial_number=scanner.get_serial_number(),
                 firmware_version=scanner.get_firmware_version(),
@@ -149,7 +186,13 @@ class _AsyncScanner:
 
         while not stop_signal.is_set():
             try:
-                waveform = _TimestampedWaveform(datetime.now(), scanner.scan())  # noqa: DTZ005
+                scanned_waveform = scanner.scan()
+                phase = scanner.get_phase_estimate()
+                waveform = _TimestampedWaveform(
+                    datetime.now(tz=timezone.utc),
+                    scanned_waveform,
+                    phase,
+                )
             except Exception as e:  # noqa: BLE001
                 parent_conn.send(
                     _ScannerHealth(is_alive=False, is_healthy=False, error=e)

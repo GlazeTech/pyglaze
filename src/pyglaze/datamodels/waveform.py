@@ -182,7 +182,9 @@ class _TimestampedWaveform:
     Args:
         timestamp: The timestamp of the pulse given by the Toptica server.
         waveform: The terahertz pulse received from the Toptica server.
+        phase_estimate: The phase estimate from the lock-in phase estimator at the time of this scan.
     """
 
     timestamp: datetime
     waveform: UnprocessedWaveform
+    phase_estimate: float | None = None

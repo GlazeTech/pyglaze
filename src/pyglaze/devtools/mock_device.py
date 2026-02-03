@@ -226,7 +226,7 @@ class LeMockDevice(MockDevice):
             numbers = np.concatenate(
                 (
                     np.array(self.scanning_list) * 100e-12,  # mock time values
-                    self.rng.random(2 * len(self.scanning_list)),
+                    self.rng.random(2 * len(self.scanning_list)) + 1,
                 )
             )
 
