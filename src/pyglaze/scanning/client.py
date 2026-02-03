@@ -28,16 +28,19 @@ class GlazeClient:
 
     Args:
         config: Configuration to use for scans
+        initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+            Use this to maintain consistent polarity across scanning sessions.
     """
 
     config: DeviceConfiguration
+    initial_phase_estimate: float | None = None
     _scanner: _AsyncScanner = field(init=False)
 
     def __enter__(self: Self) -> Self:
         """Start the scanner and return the client."""
         self._scanner = _AsyncScanner()
         try:
-            self._scanner.start_scan(self.config)
+            self._scanner.start_scan(self.config, self.initial_phase_estimate)
         except (TimeoutError, serialutil.SerialException) as e:
             self.__exit__(e)
         return self

@@ -47,13 +47,27 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
     def get_firmware_version(self: _ScannerImplementation) -> str:
         pass
 
+    @abstractmethod
+    def get_phase_estimate(self: _ScannerImplementation) -> float | None:
+        pass
+
 
 class Scanner:
-    """A synchronous scanner for Glaze terahertz devices."""
+    """A synchronous scanner for Glaze terahertz devices.
 
-    def __init__(self: Scanner, config: TConfig) -> None:
+    Args:
+        config: Device configuration for the scanner.
+        initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+            Use this to maintain consistent polarity across scanner instances.
+    """
+
+    def __init__(
+        self: Scanner,
+        config: TConfig,
+        initial_phase_estimate: float | None = None,
+    ) -> None:
         self._scanner_impl: _ScannerImplementation[DeviceConfiguration] = (
-            _scanner_factory(config)
+            _scanner_factory(config, initial_phase_estimate)
         )
 
     @property
@@ -101,19 +115,35 @@ class Scanner:
         """
         return self._scanner_impl.get_firmware_version()
 
+    def get_phase_estimate(self: Scanner) -> float | None:
+        """Get the current phase estimate from the lock-in phase estimator.
+
+        Returns:
+            float | None: The current phase estimate in radians, or None if not yet estimated.
+        """
+        return self._scanner_impl.get_phase_estimate()
+
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
     """Perform synchronous terahertz scanning using a given DeviceConfiguration.
 
     Args:
         config: A DeviceConfiguration to use for the scan.
+        initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+            Use this to maintain consistent polarity across scanner instances.
     """
 
-    def __init__(self: LeScanner, config: LeDeviceConfiguration) -> None:
+    def __init__(
+        self: LeScanner,
+        config: LeDeviceConfiguration,
+        initial_phase_estimate: float | None = None,
+    ) -> None:
         self._config: LeDeviceConfiguration
         self._ampcom: _LeAmpCom | None = None
         self.config = config
-        self._phase_estimator = _LockinPhaseEstimator()
+        self._phase_estimator = _LockinPhaseEstimator(
+            initial_phase_estimate=initial_phase_estimate
+        )
 
     @property
     def config(self: LeScanner) -> LeDeviceConfiguration:
@@ -194,10 +224,20 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
             raise ScanError(msg)
         return self._ampcom.get_firmware_version()
 
+    def get_phase_estimate(self: LeScanner) -> float | None:
+        """Get the current phase estimate from the lock-in phase estimator.
 
-def _scanner_factory(config: DeviceConfiguration) -> _ScannerImplementation:
+        Returns:
+            float | None: The current phase estimate in radians, or None if not yet estimated.
+        """
+        return self._phase_estimator.phase_estimate
+
+
+def _scanner_factory(
+    config: DeviceConfiguration, initial_phase_estimate: float | None = None
+) -> _ScannerImplementation:
     if isinstance(config, LeDeviceConfiguration):
-        return LeScanner(config)
+        return LeScanner(config, initial_phase_estimate)
 
     msg = f"Unsupported configuration type: {type(config).__name__}"
     raise TypeError(msg)

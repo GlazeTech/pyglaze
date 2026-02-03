@@ -143,3 +143,51 @@ def test_consecutive_scans_keep_same_branch(gaussian_deriv_pulse: Pulse) -> None
     # The estimator should not flip by ~pi between scans.
     # Use the estimator's own distance function (wrap-aware).
     assert _angular_distance(phase2, phase1) < np.deg2rad(5.0)
+
+
+def test_initial_phase_estimate_prevents_polarity_flip() -> None:
+    """Test that providing an initial phase estimate maintains polarity across scanner instances."""
+    rng = np.random.default_rng(3)
+
+    # Create a waveform
+    n = 600
+    s = np.zeros(n)
+    s[250] = -1.0
+    s[300] = +0.7
+
+    # First scanner learns the phase
+    phi_true = 0.3
+    X1, Y1 = _make_iq(s, phi_true, noise_std=0.01, rng=rng)
+
+    est1 = _LockinPhaseEstimator()
+    est1.update_estimate(X1, Y1)
+    learned_phase = est1.phase_estimate
+    assert learned_phase is not None
+
+    # Second scanner with same initial phase should produce consistent results
+    X2, Y2 = _make_iq(s, phi_true, noise_std=0.01, rng=rng)
+
+    est2 = _LockinPhaseEstimator(initial_phase_estimate=learned_phase)
+    est2.update_estimate(X2, Y2)
+    phase2 = est2.phase_estimate
+    assert phase2 is not None
+
+    # Phases should be very close (no flip)
+    assert _angular_distance(phase2, learned_phase) < np.deg2rad(10.0)
+
+    # Both should produce positive projection for strongest point
+    assert _project_strongest_positive(X1, Y1, learned_phase) >= 0.0
+    assert _project_strongest_positive(X2, Y2, phase2) >= 0.0
+
+
+def test_initial_phase_estimate_wraps_to_pi() -> None:
+    """Test that initial phase estimates outside (-pi, pi] are wrapped correctly."""
+    # Test a value > pi
+    est1 = _LockinPhaseEstimator(initial_phase_estimate=4.0)
+    assert est1.phase_estimate is not None
+    assert -np.pi < est1.phase_estimate <= np.pi
+
+    # Test a value < -pi
+    est2 = _LockinPhaseEstimator(initial_phase_estimate=-5.0)
+    assert est2.phase_estimate is not None
+    assert -np.pi < est2.phase_estimate <= np.pi

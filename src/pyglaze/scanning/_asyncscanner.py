@@ -45,20 +45,34 @@ class _AsyncScanner:
     _SCAN_TIMEOUT: float = field(init=False)
     _stop_signal: synchronize.Event = field(init=False)
     _scanner_conn: Connection = field(init=False)
+    _initial_phase_estimate: float | None = field(init=False, default=None)
 
-    def start_scan(self: _AsyncScanner, config: DeviceConfiguration) -> None:
+    def start_scan(
+        self: _AsyncScanner,
+        config: DeviceConfiguration,
+        initial_phase_estimate: float | None = None,
+    ) -> None:
         """Starts continuously scanning in new process.
 
         Args:
-            config: Device configurtaion
+            config: Device configuration
+            initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+                Use this to maintain consistent polarity across scanner instances.
         """
+        self._initial_phase_estimate = initial_phase_estimate
         self._SCAN_TIMEOUT = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001, access to private attribute for backwards compatibility
         self._shared_mem = Queue(maxsize=self.queue_maxsize)
         self._stop_signal = Event()
         self._scanner_conn, child_conn = Pipe()
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[config, self._shared_mem, self._stop_signal, child_conn],
+            args=[
+                config,
+                self._shared_mem,
+                self._stop_signal,
+                child_conn,
+                initial_phase_estimate,
+            ],
         )
         self._child_process.start()
 
@@ -134,9 +148,12 @@ class _AsyncScanner:
         shared_mem: Queue[_TimestampedWaveform],
         stop_signal: synchronize.Event,
         parent_conn: Connection,
+        initial_phase_estimate: float | None = None,
     ) -> None:
         try:
-            scanner = Scanner(config=config)
+            scanner = Scanner(
+                config=config, initial_phase_estimate=initial_phase_estimate
+            )
             device_metadata = _ScannerMetadata(
                 serial_number=scanner.get_serial_number(),
                 firmware_version=scanner.get_firmware_version(),
