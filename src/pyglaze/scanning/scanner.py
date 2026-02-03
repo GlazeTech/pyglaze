@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+import serial
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import _LeAmpCom
@@ -9,7 +11,17 @@ from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfigurat
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 
+if TYPE_CHECKING:
+    from pyglaze.device.mimlink_ampcom import _MimLinkAmpCom
+
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
+
+try:
+    import mimlink  # noqa: F401
+
+    _HAS_MIMLINK = True
+except ImportError:
+    _HAS_MIMLINK = False
 
 
 class _ScannerImplementation(ABC, Generic[TConfig]):
@@ -233,10 +245,123 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         return self._phase_estimator.phase_estimate
 
 
+class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
+    """Perform synchronous terahertz scanning via MimLink binary protocol.
+
+    Args:
+        config: A LeDeviceConfiguration to use for the scan.
+        initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
+    """
+
+    def __init__(
+        self: MimLinkScanner,
+        config: LeDeviceConfiguration,
+        initial_phase_estimate: float | None = None,
+    ) -> None:
+        self._config: LeDeviceConfiguration
+        self._ampcom: _MimLinkAmpCom | None = None
+        self.config = config
+        self._phase_estimator = _LockinPhaseEstimator(
+            initial_phase_estimate=initial_phase_estimate
+        )
+
+    @property
+    def config(self: MimLinkScanner) -> LeDeviceConfiguration:
+        return self._config
+
+    @config.setter
+    def config(self: MimLinkScanner, new_config: LeDeviceConfiguration) -> None:
+        from pyglaze.device.mimlink_ampcom import _MimLinkAmpCom
+
+        amp = _MimLinkAmpCom(new_config)
+        if getattr(self, "_config", None):
+            if (
+                self._config.integration_periods != new_config.integration_periods
+                or self._config.n_points != new_config.n_points
+            ):
+                amp.write_settings()
+            if self._config.scan_intervals != new_config.scan_intervals:
+                amp.write_list()
+        else:
+            amp.write_all()
+
+        self._config = new_config
+        self._ampcom = amp
+
+    def scan(self: MimLinkScanner) -> UnprocessedWaveform:
+        if self._ampcom is None:
+            msg = "Scanner not configured"
+            raise ScanError(msg)
+        _, time, Xs, Ys = self._ampcom.start_scan()
+        self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
+        return UnprocessedWaveform.from_inphase_quadrature(
+            time, Xs, Ys, self._phase_estimator.phase_estimate
+        )
+
+    def update_config(
+        self: MimLinkScanner, new_config: LeDeviceConfiguration
+    ) -> None:
+        self.config = new_config
+
+    def disconnect(self: MimLinkScanner) -> None:
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        self._ampcom.disconnect()
+        self._ampcom = None
+
+    def get_serial_number(self: MimLinkScanner) -> str:
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        return self._ampcom.get_serial_number()
+
+    def get_firmware_version(self: MimLinkScanner) -> str:
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        return self._ampcom.get_firmware_version()
+
+    def get_phase_estimate(self: MimLinkScanner) -> float | None:
+        return self._phase_estimator.phase_estimate
+
+
+def _detect_protocol(config: LeDeviceConfiguration) -> str:
+    """Detect whether a device speaks legacy ASCII or MimLink binary protocol.
+
+    Sends a single 'H' (legacy status command). Legacy devices respond with
+    ASCII text ending in newline. MimLink devices silently discard the stray
+    byte (COBS framing rejects it), so we time out.
+    """
+    detection_timeout = 0.5
+    try:
+        ser = serial.serial_for_url(
+            config.amp_port,
+            baudrate=config.amp_baudrate,
+            timeout=detection_timeout,
+        )
+        ser.reset_input_buffer()
+        ser.write(b"H")
+        response = ser.read_until()
+        ser.close()
+        text = response.decode("utf-8", errors="replace").strip()
+        if "ACK" in text or "Error" in text:
+            return "legacy"
+        return "mimlink"
+    except Exception:  # noqa: BLE001
+        return "legacy"
+
+
 def _scanner_factory(
     config: DeviceConfiguration, initial_phase_estimate: float | None = None
 ) -> _ScannerImplementation:
     if isinstance(config, LeDeviceConfiguration):
+        if "mock_device" in config.amp_port:
+            return LeScanner(config, initial_phase_estimate)
+        if _HAS_MIMLINK:
+            protocol = _detect_protocol(config)
+            if protocol == "mimlink":
+                return MimLinkScanner(config, initial_phase_estimate)
         return LeScanner(config, initial_phase_estimate)
 
     msg = f"Unsupported configuration type: {type(config).__name__}"
