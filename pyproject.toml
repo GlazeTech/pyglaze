@@ -14,7 +14,8 @@ dependencies = [
     "pyserial>=3.5",
     "scipy>=1.7.3",
     "bitstring>=4.1.2",
-    "typing_extensions>=4.12.2"
+    "typing_extensions>=4.12.2",
+    "mimlink>=0.1.0",
 ]
 
 [project.optional-dependencies]

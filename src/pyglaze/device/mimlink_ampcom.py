@@ -14,6 +14,8 @@ from mimlink import MessageType, ProtocolEndpoint
 from mimlink.types import (
     ListCompleteResponse,
     ListStartResponse,
+    ResultPoint,
+    ResultPointRetransmit,
     ResultsChunk,
     ResultsChunkRetransmit,
     ScanResponse,
@@ -38,6 +40,11 @@ class _MimLinkAmpCom:
         init=False, default_factory=list, repr=False
     )
     _results_complete: bool = field(init=False, default=False, repr=False)
+    _result_points: list[ResultPoint] = field(
+        init=False, default_factory=list, repr=False
+    )
+    _points_complete: bool = field(init=False, default=False, repr=False)
+    last_transfer_mode: int = field(init=False, default=0, repr=False)
 
     def __post_init__(self: _MimLinkAmpCom) -> None:
         self._ser = serial.serial_for_url(
@@ -73,6 +80,20 @@ class _MimLinkAmpCom:
                     x=payload.x,
                     y=payload.y,
                     is_last=payload.is_last,
+                ))
+            self._response = payload
+        elif env_type == MessageType.RESULT_POINT:
+            self._result_points.append(payload)
+            if payload.is_last:
+                self._points_complete = True
+        elif env_type == MessageType.RESULT_POINT_RETRANSMIT:
+            if payload.available:
+                self._result_points.append(ResultPoint(
+                    point_index=payload.point_index,
+                    time=payload.time,
+                    x=payload.x,
+                    y=payload.y,
+                    is_last=False,
                 ))
             self._response = payload
         else:
@@ -175,6 +196,8 @@ class _MimLinkAmpCom:
     ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
         self._result_chunks.clear()
         self._results_complete = False
+        self._result_points.clear()
+        self._points_complete = False
 
         self._endpoint.send_start_scan()
         resp = self._wait_for_response()
@@ -182,6 +205,19 @@ class _MimLinkAmpCom:
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
 
+        self.last_transfer_mode = resp.transfer_mode
+
+        if resp.transfer_mode == 1:  # PER_POINT
+            return self._collect_per_point()
+
+        return self._collect_bulk()
+
+    _MAX_RETRANSMIT_ATTEMPTS: int = 3
+    _RESULTS_CHUNK_SIZE: int = 20
+
+    def _collect_bulk(
+        self: _MimLinkAmpCom,
+    ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
         self._await_scan_complete()
 
         self._endpoint.send_get_results()
@@ -200,8 +236,41 @@ class _MimLinkAmpCom:
 
         return "G", times, Xs, Ys
 
-    _MAX_RETRANSMIT_ATTEMPTS: int = 3
-    _RESULTS_CHUNK_SIZE: int = 20
+    def _collect_per_point(
+        self: _MimLinkAmpCom,
+    ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
+        try:
+            self._pump_until(lambda: self._points_complete, timeout=10.0)
+        except DeviceComError:
+            if not self._result_points:
+                raise
+
+        self._retransmit_missing_points()
+
+        self._result_points.sort(key=lambda p: p.point_index)
+        times = np.array([p.time for p in self._result_points])
+        Xs = np.array([p.x for p in self._result_points])
+        Ys = np.array([p.y for p in self._result_points])
+
+        return "G", times, Xs, Ys
+
+    def _retransmit_missing_points(self: _MimLinkAmpCom) -> None:
+        """NAK and re-request any points missing from per-point streaming."""
+        expected = set(range(self.scanning_points))
+        received = {p.point_index for p in self._result_points}
+        missing = expected - received
+        if not missing:
+            return
+
+        for idx in sorted(missing):
+            for _attempt in range(self._MAX_RETRANSMIT_ATTEMPTS):
+                self._endpoint.send_result_point_nak(idx)
+                resp = self._wait_for_response(timeout=5.0)
+                if isinstance(resp, ResultPointRetransmit) and resp.available:
+                    break
+            else:
+                msg = f"Point {idx} unavailable after {self._MAX_RETRANSMIT_ATTEMPTS} attempts"
+                raise DeviceComError(msg)
 
     def _retransmit_missing_chunks(self: _MimLinkAmpCom) -> None:
         """NAK and re-request any chunks missing from the bulk transfer."""
