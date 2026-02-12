@@ -5,13 +5,16 @@ import math
 import time
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any
+from typing import Callable, Protocol, cast
 
 import numpy as np
 import serial
 
-from mimlink import MessageType, ProtocolEndpoint
-from mimlink.types import (
+from pyglaze.device.ampcom import DeviceComError, _points_per_interval
+from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+from pyglaze.devtools.mock_device import _mock_device_factory
+from pyglaze.mimlink import MessageType, ProtocolEndpoint
+from pyglaze.mimlink.types import (
     ListCompleteResponse,
     ListStartResponse,
     ResultPoint,
@@ -25,17 +28,27 @@ from mimlink.types import (
     VersionResponse,
 )
 
-from pyglaze.device.ampcom import DeviceComError, _points_per_interval
-from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+
+class _SerialLike(Protocol):
+    @property
+    def in_waiting(self) -> int: ...
+
+    def read(self, size: int) -> bytes: ...
+
+    def write(self, data: bytes) -> int | None: ...
+
+    def reset_input_buffer(self) -> None: ...
+
+    def close(self) -> None: ...
 
 
 @dataclass
 class _MimLinkAmpCom:
     config: LeDeviceConfiguration
 
-    _ser: serial.Serial = field(init=False, repr=False)
+    _ser: _SerialLike = field(init=False, repr=False)
     _endpoint: ProtocolEndpoint = field(init=False, repr=False)
-    _response: Any = field(init=False, default=None, repr=False)
+    _response: object | None = field(init=False, default=None, repr=False)
     _result_chunks: list[ResultsChunk] = field(
         init=False, default_factory=list, repr=False
     )
@@ -47,11 +60,17 @@ class _MimLinkAmpCom:
     last_transfer_mode: int = field(init=False, default=0, repr=False)
 
     def __post_init__(self: _MimLinkAmpCom) -> None:
-        self._ser = serial.serial_for_url(
-            url=self.config.amp_port,
-            baudrate=self.config.amp_baudrate,
-            timeout=self.config.amp_timeout_seconds,
-        )
+        if "mock_" in self.config.amp_port:
+            self._ser = cast("_SerialLike", _mock_device_factory(self.config))
+        else:
+            self._ser = cast(
+                "_SerialLike",
+                serial.serial_for_url(
+                    url=self.config.amp_port,
+                    baudrate=self.config.amp_baudrate,
+                    timeout=self.config.amp_timeout_seconds,
+                ),
+            )
         self._ser.reset_input_buffer()
         self._endpoint = ProtocolEndpoint(
             on_envelope=self._on_envelope,
@@ -66,42 +85,50 @@ class _MimLinkAmpCom:
         return 0
 
     def _on_envelope(
-        self: _MimLinkAmpCom, env_type: int, seq: int, payload: Any
+        self: _MimLinkAmpCom, env_type: int, _seq: int, payload: object
     ) -> None:
         if env_type == MessageType.RESULTS_CHUNK:
-            self._result_chunks.append(payload)
-            if payload.is_last:
+            chunk = cast("ResultsChunk", payload)
+            self._result_chunks.append(chunk)
+            if chunk.is_last:
                 self._results_complete = True
         elif env_type == MessageType.RESULTS_CHUNK_RETRANSMIT:
-            if payload.available:
-                self._result_chunks.append(ResultsChunk(
-                    chunk_index=payload.chunk_index,
-                    times=payload.times,
-                    x=payload.x,
-                    y=payload.y,
-                    is_last=payload.is_last,
-                ))
-            self._response = payload
+            retransmit = cast("ResultsChunkRetransmit", payload)
+            if retransmit.available:
+                self._result_chunks.append(
+                    ResultsChunk(
+                        chunk_index=retransmit.chunk_index,
+                        times=retransmit.times,
+                        x=retransmit.x,
+                        y=retransmit.y,
+                        is_last=retransmit.is_last,
+                    )
+                )
+            self._response = retransmit
         elif env_type == MessageType.RESULT_POINT:
-            self._result_points.append(payload)
-            if payload.is_last:
+            point = cast("ResultPoint", payload)
+            self._result_points.append(point)
+            if point.is_last:
                 self._points_complete = True
         elif env_type == MessageType.RESULT_POINT_RETRANSMIT:
-            if payload.available:
-                self._result_points.append(ResultPoint(
-                    point_index=payload.point_index,
-                    time=payload.time,
-                    x=payload.x,
-                    y=payload.y,
-                    is_last=False,
-                ))
-            self._response = payload
+            retransmit = cast("ResultPointRetransmit", payload)
+            if retransmit.available:
+                self._result_points.append(
+                    ResultPoint(
+                        point_index=retransmit.point_index,
+                        time=retransmit.time,
+                        x=retransmit.x,
+                        y=retransmit.y,
+                        is_last=False,
+                    )
+                )
+            self._response = retransmit
         else:
             self._response = payload
 
     def _pump_until(
         self: _MimLinkAmpCom,
-        predicate: Any,
+        predicate: Callable[[], bool],
         timeout: float | None = None,
     ) -> None:
         """Read serial bytes and feed to endpoint until predicate() is True."""
@@ -124,7 +151,7 @@ class _MimLinkAmpCom:
 
     def _wait_for_response(
         self: _MimLinkAmpCom, timeout: float | None = None
-    ) -> Any:
+    ) -> object:
         self._response = None
         self._pump_until(lambda: self._response is not None, timeout)
         return self._response
@@ -281,7 +308,7 @@ class _MimLinkAmpCom:
             return
 
         for idx in sorted(missing):
-            for attempt in range(self._MAX_RETRANSMIT_ATTEMPTS):
+            for _attempt in range(self._MAX_RETRANSMIT_ATTEMPTS):
                 self._endpoint.send_results_chunk_nak(idx)
                 resp = self._wait_for_response(timeout=5.0)
                 if isinstance(resp, ResultsChunkRetransmit) and resp.available:

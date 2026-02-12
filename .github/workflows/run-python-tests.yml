@@ -43,8 +43,23 @@ jobs:
           python-version: "3.9"
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Verify nanopb plugin availability
+        run: |
+          uv run python -c "import shutil, sys; path = shutil.which('protoc-gen-nanopb'); print(path or 'missing protoc-gen-nanopb'); sys.exit(0 if path else 1)"
+      - name: Run buf lint
+        run: buf lint
+      - name: Regenerate vendored protobuf artifacts
+        run: uv run ./scripts/generate_mimlink_proto.sh
+      - name: Check generated protobuf drift
+        run: |
+          if ! git diff --exit-code -- src/pyglaze/mimlink/proto/envelope_pb2.py src/pyglaze/mimlink/proto/nanopb; then
+            echo "Generated MimLink artifacts are stale. Run ./scripts/generate_mimlink_proto.sh and commit the results."
+            exit 1
+          fi
       - name: Run ruff linter
         run: uv run ruff check .
       - name: Run ruff formatter

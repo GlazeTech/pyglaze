@@ -20,6 +20,18 @@ def le_device_config() -> LeDeviceConfiguration:
     )
 
 
+@pytest.fixture
+def mimlink_device_config() -> LeDeviceConfiguration:
+    return LeDeviceConfiguration(
+        amp_port="mock_mimlink_device",
+        use_ema=True,
+        n_points=100,
+        scan_intervals=[Interval(0.0, 1.0)],
+        integration_periods=1,
+        amp_timeout_seconds=7,
+    )
+
+
 @pytest.fixture(scope="session")
 def scan_data() -> Pulse:
     t = np.linspace(0, 50, 51)

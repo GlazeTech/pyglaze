@@ -1753,6 +1753,18 @@ wheels = [
 ]
 
 [[package]]
+name = "nanopb"
+version = "0.4.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/84/09151cd854d3fc496206c1a58980a14577f30cd0f9f329afe1ac66db650a/nanopb-0.4.9.1.tar.gz", hash = "sha256:96244de4e41b986ac5778196e66708195bad503e95dece5dc3a2e739527d7e26", size = 57891, upload-time = "2024-12-01T10:45:57.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/46/6f8f5681fbe546945b9aca566866d3738c8328d4f6e6086191043be451f0/nanopb-0.4.9.1-py2.py3-none-any.whl", hash = "sha256:9bd159eb50e7568b49dc3051839f346f9a2408454cddfc4cf100ab95470a73d4", size = 58947, upload-time = "2024-12-01T10:45:44.642Z" },
+]
+
+[[package]]
 name = "nh3"
 version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2051,6 +2063,23 @@ wheels = [
 ]
 
 [[package]]
+name = "protobuf"
+version = "6.33.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/25/7c72c307aafc96fa87062aa6291d9f7c94836e43214d43722e86037aac02/protobuf-6.33.5.tar.gz", hash = "sha256:6ddcac2a081f8b7b9642c09406bc6a4290128fce5f471cddd165960bb9119e5c", size = 444465, upload-time = "2026-01-29T21:51:33.494Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/79/af92d0a8369732b027e6d6084251dd8e782c685c72da161bd4a2e00fbabb/protobuf-6.33.5-cp310-abi3-win32.whl", hash = "sha256:d71b040839446bac0f4d162e758bea99c8251161dae9d0983a3b88dee345153b", size = 425769, upload-time = "2026-01-29T21:51:21.751Z" },
+    { url = "https://files.pythonhosted.org/packages/55/75/bb9bc917d10e9ee13dee8607eb9ab963b7cf8be607c46e7862c748aa2af7/protobuf-6.33.5-cp310-abi3-win_amd64.whl", hash = "sha256:3093804752167bcab3998bec9f1048baae6e29505adaf1afd14a37bddede533c", size = 437118, upload-time = "2026-01-29T21:51:24.022Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/6b/e48dfc1191bc5b52950246275bf4089773e91cb5ba3592621723cdddca62/protobuf-6.33.5-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:a5cb85982d95d906df1e2210e58f8e4f1e3cdc088e52c921a041f9c9a0386de5", size = 427766, upload-time = "2026-01-29T21:51:25.413Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/b1/c79468184310de09d75095ed1314b839eb2f72df71097db9d1404a1b2717/protobuf-6.33.5-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:9b71e0281f36f179d00cbcb119cb19dec4d14a81393e5ea220f64b286173e190", size = 324638, upload-time = "2026-01-29T21:51:26.423Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/f5/65d838092fd01c44d16037953fd4c2cc851e783de9b8f02b27ec4ffd906f/protobuf-6.33.5-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:8afa18e1d6d20af15b417e728e9f60f3aa108ee76f23c3b2c07a2c3b546d3afd", size = 339411, upload-time = "2026-01-29T21:51:27.446Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/53/a9443aa3ca9ba8724fdfa02dd1887c1bcd8e89556b715cfbacca6b63dbec/protobuf-6.33.5-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:cbf16ba3350fb7b889fca858fb215967792dc125b35c7976ca4818bee3521cf0", size = 323465, upload-time = "2026-01-29T21:51:28.925Z" },
+    { url = "https://files.pythonhosted.org/packages/08/60/84d5f6dcda9165e4d6a56ac8433c9f40a8906bf2966150b8a0cfde097d78/protobuf-6.33.5-cp39-cp39-win32.whl", hash = "sha256:a3157e62729aafb8df6da2c03aa5c0937c7266c626ce11a278b6eb7963c4e37c", size = 425892, upload-time = "2026-01-29T21:51:30.382Z" },
+    { url = "https://files.pythonhosted.org/packages/68/19/33d7dc2dc84439587fa1e21e1c0026c01ad2af0a62f58fd54002a7546307/protobuf-6.33.5-cp39-cp39-win_amd64.whl", hash = "sha256:8f04fa32763dcdb4973d537d6b54e615cc61108c7cb38fe59310c3192d29510a", size = 437137, upload-time = "2026-01-29T21:51:31.456Z" },
+    { url = "https://files.pythonhosted.org/packages/57/bf/2086963c69bdac3d7cff1cc7ff79b8ce5ea0bec6797a017e1be338a46248/protobuf-6.33.5-py3-none-any.whl", hash = "sha256:69915a973dd0f60f31a08b8318b73eab2bd6a392c79184b3612226b0a3f8ec02", size = 170687, upload-time = "2026-01-29T21:51:32.557Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "2.23"
 source = { registry = "https://pypi.org/simple" }
@@ -2077,11 +2106,12 @@ wheels = [
 
 [[package]]
 name = "pyglaze"
-version = "0.4.7"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "bitstring" },
     { name = "numpy" },
+    { name = "protobuf" },
     { name = "pyserial" },
     { name = "scipy", version = "1.13.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
@@ -2097,6 +2127,7 @@ build = [
 ]
 dev = [
     { name = "bumpver" },
+    { name = "nanopb" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pytest-cov" },
@@ -2134,7 +2165,9 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.2.3" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=8.2.5" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.18.1" },
+    { name = "nanopb", marker = "extra == 'dev'", specifier = ">=0.4.9" },
     { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
+    { name = "protobuf", specifier = ">=6.33.0" },
     { name = "pygments", marker = "extra == 'docs'", specifier = ">=2.12.0" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.1" },

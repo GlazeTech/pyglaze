@@ -15,7 +15,7 @@ dependencies = [
     "scipy>=1.7.3",
     "bitstring>=4.1.2",
     "typing_extensions>=4.12.2",
-    "mimlink>=0.1.0",
+    "protobuf>=6.33.0",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +40,7 @@ docs = [
 dev = [
     "ruff>=0.14.10",
     "ty>=0.0.13",
+    "nanopb>=0.4.9",
     "pytest>=7.0.1",
     "pytest-cov>=4.0.0",
     "semver>=2.13.0",
@@ -74,6 +75,7 @@ exclude_also = [
 
 [tool.ruff]
 target-version = "py39"
+extend-exclude = ["src/pyglaze/mimlink/proto/envelope_pb2.py"]
 lint.select = ["ALL"]
 lint.ignore = [
     "D100",   # allow undocumented public modules
@@ -101,6 +103,30 @@ convention = "google"
     "S101", # allow asserts
     "SLF001", # allow accessing private methods
     "T201", # allow prints in tests
+    "ARG005", # allow unused callback args in tests
+    "FBT003", # allow positional booleans in protocol matrix tests
+    "B009", # getattr usage for generated module interop
+]
+"src/pyglaze/mimlink/protocol.py" = [
+    "D102", # large API surface mirrors external protocol endpoint
+    "D105", # magic methods intentionally lightweight
+    "ANN401", # protobuf-generated envelope objects are dynamically typed
+    "B009", # getattr avoids static analyzer issues with generated code
+    "FBT001", # positional booleans are part of compatibility API
+    "C901", # dispatch logic intentionally centralized
+    "PLR0911", # one return per message type mapping
+    "PLR0912", # branch count reflects protocol surface
+    "PLR0913", # function signatures mirror wire schema
+    "PLR0915", # statement count is acceptable for protocol mapper
+]
+"src/pyglaze/mimlink/types.py" = [
+    "D101", # dataclass field names are self-documenting
+]
+"src/pyglaze/devtools/mock_device.py" = [
+    "C901", # protocol handler branching reflects message dispatch
+    "PLR0911", # early returns keep command handlers readable
+    "PLR0912", # branch count is expected for protocol simulation
+    "PLR0913", # constructor accepts explicit scenario knobs
 ]
 
 [tool.bumpver]
@@ -132,4 +158,3 @@ unused-ignore-comment = "error"
 
 [tool.ty.terminal]
 error-on-warning = true
-

@@ -1,27 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import Generic, TypeVar
 
 import serial
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import _LeAmpCom
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.device.mimlink_ampcom import _MimLinkAmpCom
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 
-if TYPE_CHECKING:
-    from pyglaze.device.mimlink_ampcom import _MimLinkAmpCom
-
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
-
-try:
-    import mimlink  # noqa: F401
-
-    _HAS_MIMLINK = True
-except ImportError:
-    _HAS_MIMLINK = False
 
 
 class _ScannerImplementation(ABC, Generic[TConfig]):
@@ -267,12 +258,11 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @property
     def config(self: MimLinkScanner) -> LeDeviceConfiguration:
+        """The MimLink device configuration used for scanning."""
         return self._config
 
     @config.setter
     def config(self: MimLinkScanner, new_config: LeDeviceConfiguration) -> None:
-        from pyglaze.device.mimlink_ampcom import _MimLinkAmpCom
-
         amp = _MimLinkAmpCom(new_config)
         if getattr(self, "_config", None):
             if (
@@ -289,6 +279,7 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
         self._ampcom = amp
 
     def scan(self: MimLinkScanner) -> UnprocessedWaveform:
+        """Perform a scan and return the unprocessed waveform."""
         if self._ampcom is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
@@ -298,12 +289,12 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
             time, Xs, Ys, self._phase_estimator.phase_estimate
         )
 
-    def update_config(
-        self: MimLinkScanner, new_config: LeDeviceConfiguration
-    ) -> None:
+    def update_config(self: MimLinkScanner, new_config: LeDeviceConfiguration) -> None:
+        """Update scanner configuration."""
         self.config = new_config
 
     def disconnect(self: MimLinkScanner) -> None:
+        """Close the MimLink connection."""
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
@@ -311,18 +302,21 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
         self._ampcom = None
 
     def get_serial_number(self: MimLinkScanner) -> str:
+        """Get device serial number."""
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
         return self._ampcom.get_serial_number()
 
     def get_firmware_version(self: MimLinkScanner) -> str:
+        """Get firmware version string."""
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
         return self._ampcom.get_firmware_version()
 
     def get_phase_estimate(self: MimLinkScanner) -> float | None:
+        """Return the lock-in phase estimate in radians, if available."""
         return self._phase_estimator.phase_estimate
 
 
@@ -333,6 +327,9 @@ def _detect_protocol(config: LeDeviceConfiguration) -> str:
     ASCII text ending in newline. MimLink devices silently discard the stray
     byte (COBS framing rejects it), so we time out.
     """
+    if "mock_mimlink" in config.amp_port:
+        return "mimlink"
+
     detection_timeout = 0.5
     try:
         ser = serial.serial_for_url(
@@ -345,23 +342,25 @@ def _detect_protocol(config: LeDeviceConfiguration) -> str:
         response = ser.read_until()
         ser.close()
         text = response.decode("utf-8", errors="replace").strip()
+    except Exception:  # noqa: BLE001
+        return "legacy"
+    else:
         if "ACK" in text or "Error" in text:
             return "legacy"
         return "mimlink"
-    except Exception:  # noqa: BLE001
-        return "legacy"
 
 
 def _scanner_factory(
     config: DeviceConfiguration, initial_phase_estimate: float | None = None
 ) -> _ScannerImplementation:
     if isinstance(config, LeDeviceConfiguration):
+        if "mock_mimlink" in config.amp_port:
+            return MimLinkScanner(config, initial_phase_estimate)
         if "mock_device" in config.amp_port:
             return LeScanner(config, initial_phase_estimate)
-        if _HAS_MIMLINK:
-            protocol = _detect_protocol(config)
-            if protocol == "mimlink":
-                return MimLinkScanner(config, initial_phase_estimate)
+        protocol = _detect_protocol(config)
+        if protocol == "mimlink":
+            return MimLinkScanner(config, initial_phase_estimate)
         return LeScanner(config, initial_phase_estimate)
 
     msg = f"Unsupported configuration type: {type(config).__name__}"

@@ -1,0 +1,40 @@
+# nanopb options for envelope.proto
+# See: https://jpa.kapsi.fi/nanopb/docs/concepts.html#proto-file-options
+
+# --- Chunked transfer fields ---
+# Chunk sizes chosen to fit within ~512 byte frames after encoding
+
+# ListChunk: Up to 50 floats per chunk (6000 / 50 = 120 chunks for full list)
+# 50 floats = 200 bytes raw + encoding overhead
+comm.ListChunk.values             max_count:50
+
+# ResultsChunk: Up to 20 floats per array per chunk (6000 / 20 = 300 chunks)
+# 20 x 3 = 60 floats = 240 bytes raw + encoding overhead
+comm.ResultsChunk.times           max_count:20
+comm.ResultsChunk.x               max_count:20
+comm.ResultsChunk.y               max_count:20
+
+# TransformedListChunk: Up to 50 uint32s per chunk (6000 / 50 = 120 chunks)
+# 50 uint32s = 200 bytes raw + encoding overhead
+comm.TransformedListChunk.values  max_count:50
+
+# RawCaptureChunk: Up to 50 uint32s per chunk
+# Same sizing as TransformedListChunk
+comm.RawCaptureChunk.samples      max_count:50
+
+# ResultsChunkRetransmit: Same sizing as ResultsChunk
+comm.ResultsChunkRetransmit.times max_count:20
+comm.ResultsChunkRetransmit.x     max_count:20
+comm.ResultsChunkRetransmit.y     max_count:20
+
+# --- String fields ---
+comm.StartScanResponse.error      max_size:64
+comm.GetSerialResponse.serial     max_size:32
+comm.GetVersionResponse.version   max_size:32
+
+# --- Firmware update fields ---
+comm.FwUpdateChunk.data                max_size:256
+comm.FwUpdateStartRequest.version      max_size:32
+comm.FwUpdateStartResponse.error       max_size:64
+comm.FwUpdateFinishResponse.error      max_size:64
+comm.FwBootConfirmResponse.version     max_size:32

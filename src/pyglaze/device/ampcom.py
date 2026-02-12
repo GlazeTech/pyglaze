@@ -25,7 +25,7 @@ from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers.utilities import LOGGER_NAME, _BackoffRetry
 
 if TYPE_CHECKING:
-    from pyglaze.devtools.mock_device import LeMockDevice
+    from pyglaze.devtools.mock_device import LeMockDevice, MimLinkMockDevice
     from pyglaze.helpers._types import FloatArray
 
 
@@ -40,7 +40,7 @@ class DeviceComError(Exception):
 class _LeAmpCom:
     config: LeDeviceConfiguration
 
-    __ser: serial.Serial | LeMockDevice = field(init=False)
+    __ser: serial.Serial | LeMockDevice | MimLinkMockDevice = field(init=False)
 
     ENCODING: ClassVar[str] = "utf-8"
 
@@ -230,7 +230,9 @@ class _LeStatus(Enum):
     IDLE = "ACK: Idle."
 
 
-def _serial_factory(config: DeviceConfiguration) -> serial.Serial | LeMockDevice:
+def _serial_factory(
+    config: DeviceConfiguration,
+) -> serial.Serial | LeMockDevice | MimLinkMockDevice:
     if "mock_device" in config.amp_port:
         return _mock_device_factory(config)
 
