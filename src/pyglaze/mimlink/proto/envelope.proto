@@ -1,10 +1,9 @@
 // Vendored from MimLink:
-// /Users/ehrhorn/Developer/glaze/glaze-workspace/MimLink/proto/envelope.proto
+// .../MimLink/proto/envelope.proto
 // Sync workflow:
 // 1) Replace this file from upstream.
-// 2) Update envelope.options from upstream when nanopb options change.
-// 3) Run: ./scripts/generate_mimlink_proto.sh
-// 4) Commit updated envelope_pb2.py and nanopb outputs, then run protocol tests.
+// 2) Run: ./scripts/generate_mimlink_proto.sh
+// 3) Commit updated envelope_pb2.py, then run protocol tests.
 
 syntax = "proto3";
 

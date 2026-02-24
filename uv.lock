@@ -1753,18 +1753,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nanopb"
-version = "0.4.9.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "protobuf" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/85/84/09151cd854d3fc496206c1a58980a14577f30cd0f9f329afe1ac66db650a/nanopb-0.4.9.1.tar.gz", hash = "sha256:96244de4e41b986ac5778196e66708195bad503e95dece5dc3a2e739527d7e26", size = 57891, upload-time = "2024-12-01T10:45:57.443Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/46/6f8f5681fbe546945b9aca566866d3738c8328d4f6e6086191043be451f0/nanopb-0.4.9.1-py2.py3-none-any.whl", hash = "sha256:9bd159eb50e7568b49dc3051839f346f9a2408454cddfc4cf100ab95470a73d4", size = 58947, upload-time = "2024-12-01T10:45:44.642Z" },
-]
-
-[[package]]
 name = "nh3"
 version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2127,7 +2115,6 @@ build = [
 ]
 dev = [
     { name = "bumpver" },
-    { name = "nanopb" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pytest-cov" },
@@ -2165,7 +2152,6 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.2.3" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=8.2.5" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.18.1" },
-    { name = "nanopb", marker = "extra == 'dev'", specifier = ">=0.4.9" },
     { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
     { name = "protobuf", specifier = ">=6.33.0" },
     { name = "pygments", marker = "extra == 'docs'", specifier = ">=2.12.0" },

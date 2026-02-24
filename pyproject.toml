@@ -40,7 +40,6 @@ docs = [
 dev = [
     "ruff>=0.14.10",
     "ty>=0.0.13",
-    "nanopb>=0.4.9",
     "pytest>=7.0.1",
     "pytest-cov>=4.0.0",
     "semver>=2.13.0",

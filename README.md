@@ -16,51 +16,41 @@ See [our documentation](https://glazetech.github.io/pyglaze/latest/) for usage.
 
 # Developers
 
-To install the API with development tools in editable mode, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
+Clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze), then install in editable mode with all dev dependencies using [uv](https://docs.astral.sh/uv/):
 
 ```
-python -m pip install --upgrade pip
-pip install -e . --config-settings editable_mode=strict
-pip install -r requirements-dev.txt
+uv sync --all-extras
+```
+
+This gives you linting, type checking, testing, and docs tools. Run tests with:
+
+```
+uv run pytest
 ```
 
 ## Documentation - local build
-To build and serve the documentation locally
 
-1. Checkout the repository (or a specific version)
-2. Install `mkdocs`
-3. Run `mkdocs serve` while standing in the project root.
+```
+uv run mkdocs serve
+```
 
 ## MimLink protocol schema sync
+
+> Most developers do not need this. The generated `envelope_pb2.py` is committed
+> to the repository. This section is only relevant when syncing `envelope.proto`
+> from the upstream MimLink repo.
+
 `pyglaze` vendors the MimLink protobuf schema in
-`src/pyglaze/mimlink/proto/envelope.proto`.
-
-Generation is orchestrated with `buf` and local `protoc` plugins.
-
-Generated files that must be committed:
-
-1. `src/pyglaze/mimlink/proto/envelope_pb2.py`
-2. `src/pyglaze/mimlink/proto/nanopb/envelope.pb.h`
-3. `src/pyglaze/mimlink/proto/nanopb/envelope.pb.c`
-
-Required tools:
-
-1. `buf`
-2. `protoc`
-3. `protoc-gen-nanopb` (installed by `uv sync --extra dev`)
+`src/pyglaze/mimlink/proto/envelope.proto`. Python codegen is handled by
+[buf](https://buf.build/docs/cli/installation/), which must be installed
+separately (e.g. `brew install bufbuild/buf/buf`).
 
 When syncing with upstream MimLink:
 
-1. Replace `src/pyglaze/mimlink/proto/envelope.proto`.
-2. Replace `src/pyglaze/mimlink/proto/envelope.options` if nanopb options changed.
-3. Run `./scripts/generate_mimlink_proto.sh`.
-4. Commit all generated files listed above.
-5. Run protocol tests (`pytest tests/mimlink`).
-
-Troubleshooting:
-
-1. If `protoc-gen-nanopb` is missing, run `uv sync --extra dev` and retry.
-2. CI enforces `buf lint` and generated-file drift checks, so stale generated files fail validation.
+1. Replace `src/pyglaze/mimlink/proto/envelope.proto` from upstream.
+2. Run `./scripts/generate_mimlink_proto.sh`.
+3. Commit the updated `envelope_pb2.py`.
+4. Run protocol tests: `uv run pytest tests/mimlink/`.
 
 
 # Bug reporting or feature requests
