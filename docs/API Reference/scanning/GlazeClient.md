@@ -19,7 +19,7 @@ from pyglaze.scanning import GlazeClient
 def main() -> None:
     n_pulses = 2
     device_config = LeDeviceConfiguration(
-        amp_port="mock_device", delayunit="mock_delay"
+        amp_port="mock_mimlink_device", delayunit="mock_delay"
     )
     with GlazeClient(device_config) as client:
         unprocessed_waveforms = client.read(n_pulses=n_pulses)

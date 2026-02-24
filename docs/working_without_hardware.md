@@ -8,8 +8,8 @@ To mock the asynchronous scanner, use
 from pyglaze.device import LeDeviceConfiguration
 from pyglaze.scanning import GlazeClient
 
-# Use the string "mock_device" for `amp_port`
-mock_cfg = LeDeviceConfiguration(amp_port="mock_device")
+# Use the string "mock_mimlink_device" for `amp_port`
+mock_cfg = LeDeviceConfiguration(amp_port="mock_mimlink_device")
 with GlazeClient(mock_cfg) as client:
     pulses = client.read(n_pulses=1)
 ```
@@ -19,8 +19,8 @@ To use the synchronous scanner, use
 from pyglaze.device import LeDeviceConfiguration
 from pyglaze.scanning import Scanner
 
-# Use the string "mock_device" for `amp_port`
-mock_cfg = LeDeviceConfiguration(amp_port="mock_device")
+# Use the string "mock_mimlink_device" for `amp_port`
+mock_cfg = LeDeviceConfiguration(amp_port="mock_mimlink_device")
 scanner = Scanner(config=mock_cfg)
 waveform = scanner.scan()
 ```
@@ -41,7 +41,7 @@ waveform = scanner.scan()
 
 ## 2  How it works
 
-* The sentinel string `"mock_device"` instructs Pyglaze to replace the serial driver with a software stub.
+* The sentinel string `"mock_mimlink_device"` instructs Pyglaze to replace the serial driver with a software stub.
 * All higher‑level classes (`Scanner`, `GlazeClient`, `Pulse`, `UnprocessedWaveform`, …) operate unchanged.
 
 
@@ -49,7 +49,7 @@ waveform = scanner.scan()
 
 ## 3  Common pitfalls
 
-1. **Misspelling the sentinel** – the string is case‑sensitive. Use exactly `"mock_device"`.
+1. **Misspelling the sentinel** – the string is case‑sensitive. Use exactly `"mock_mimlink_device"`.
 2. **Mistaking it for a placeholder** – it *is* the implementation, not an example to replace.
 
 ---

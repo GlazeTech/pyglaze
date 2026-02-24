@@ -1,4 +1,4 @@
 from .client import GlazeClient
-from .scanner import PingResult, Scanner
+from .scanner import DeviceProtocol, PingResult, Scanner
 
-__all__ = ["GlazeClient", "PingResult", "Scanner"]
+__all__ = ["DeviceProtocol", "GlazeClient", "PingResult", "Scanner"]

@@ -4,6 +4,7 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.device.ampcom import DeviceComError
 from pyglaze.scanning import GlazeClient
 from tests.conftest import DEVICE_CONFIGS
 
@@ -41,9 +42,9 @@ def test_raises_error_when_scan_fails(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_scan_should_fail"
+    device_config.amp_port = "mock_mimlink_scan_should_fail"
     with (
-        pytest.raises(serialutil.SerialException),
+        pytest.raises((serialutil.SerialException, DeviceComError)),
         GlazeClient(device_config) as client,
     ):
         client.read(n_pulses=1)

@@ -16,8 +16,8 @@ Depending on which device is used, a matching device configuration must be used.
     from pyglaze.device import LeDeviceConfiguration
 
     config = LeDeviceConfiguration(
-        amp_port="mock_device", use_ema=True
+        amp_port="mock_mimlink_device", use_ema=True
     )
     ```
 
-Be sure to use the correct port and delayunit! The `mock_device` and `mock_delay` are only for testing purposes
+Be sure to use the correct port and delayunit! The `mock_mimlink_device` and `mock_delay` are only for testing purposes

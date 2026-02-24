@@ -29,7 +29,7 @@ class _FakeEndpoint:
 
 def _build_config(n_points: int) -> LeDeviceConfiguration:
     return LeDeviceConfiguration(
-        amp_port="mock_device",
+        amp_port="mock_mimlink_device",
         use_ema=False,
         n_points=n_points,
         scan_intervals=[Interval(0.0, 1.0)],

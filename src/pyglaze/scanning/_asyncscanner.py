@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Event, Pipe, Process, Queue, synchronize
 from queue import Empty, Full
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from serial import SerialException, serialutil
 
 from pyglaze.datamodels.waveform import UnprocessedWaveform, _TimestampedWaveform
+from pyglaze.device.ampcom import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 
 if TYPE_CHECKING:
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.scanning.scanner import PingResult
 
 
 @dataclass
@@ -29,6 +31,18 @@ class _ScannerHealth:
 class _ScannerMetadata:
     serial_number: str
     firmware_version: str
+    capabilities: dict[str, Any]
+
+
+@dataclass
+class _Command:
+    name: str  # "ping" or "get_status"
+
+
+@dataclass
+class _CommandResponse:
+    result: object
+    error: Exception | None = None
 
 
 @dataclass
@@ -45,6 +59,7 @@ class _AsyncScanner:
     _SCAN_TIMEOUT: float = field(init=False)
     _stop_signal: synchronize.Event = field(init=False)
     _scanner_conn: Connection = field(init=False)
+    _cmd_conn: Connection = field(init=False)
     _initial_phase_estimate: float | None = field(init=False, default=None)
     _cached_phase_estimate: float | None = field(init=False, default=None)
 
@@ -68,6 +83,8 @@ class _AsyncScanner:
         self._shared_mem = Queue(maxsize=self.queue_maxsize)
         self._stop_signal = Event()
         self._scanner_conn, child_conn = Pipe()
+        cmd_parent_conn, cmd_child_conn = Pipe()
+        self._cmd_conn = cmd_parent_conn
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
             args=[
@@ -75,6 +92,7 @@ class _AsyncScanner:
                 self._shared_mem,
                 self._stop_signal,
                 child_conn,
+                cmd_child_conn,
                 initial_phase_estimate,
             ],
         )
@@ -132,6 +150,12 @@ class _AsyncScanner:
 
         return self._metadata.firmware_version
 
+    def get_capabilities(self: _AsyncScanner) -> dict[str, Any]:
+        if not self.is_scanning:
+            msg = "Scanner not connected"
+            raise SerialException(msg)
+        return self._metadata.capabilities
+
     def get_phase_estimate(self: _AsyncScanner) -> float | None:
         """Get the current phase estimate from the scanner.
 
@@ -143,6 +167,27 @@ class _AsyncScanner:
             float | None: The current phase estimate in radians, or None if not yet estimated.
         """
         return self._cached_phase_estimate
+
+    def ping(self: _AsyncScanner) -> PingResult:
+        """Send a ping command to the scanner child process."""
+        return self._send_command(_Command("ping"))
+
+    def get_status(self: _AsyncScanner) -> dict[str, Any]:
+        """Query device status via the scanner child process."""
+        return self._send_command(_Command("get_status"))
+
+    def _send_command(self: _AsyncScanner, cmd: _Command) -> Any:  # noqa: ANN401
+        if not self.is_scanning:
+            msg = "Scanner not connected"
+            raise SerialException(msg)
+        self._cmd_conn.send(cmd)
+        if not self._cmd_conn.poll(timeout=5.0):
+            msg = "Command timed out"
+            raise TimeoutError(msg)
+        resp: _CommandResponse = self._cmd_conn.recv()
+        if resp.error:
+            raise resp.error
+        return resp.result
 
     def _get_scan(self: _AsyncScanner) -> _TimestampedWaveform:
         try:
@@ -168,6 +213,7 @@ class _AsyncScanner:
         shared_mem: Queue[_TimestampedWaveform],
         stop_signal: synchronize.Event,
         parent_conn: Connection,
+        cmd_conn: Connection,
         initial_phase_estimate: float | None = None,
     ) -> None:
         try:
@@ -177,14 +223,29 @@ class _AsyncScanner:
             device_metadata = _ScannerMetadata(
                 serial_number=scanner.get_serial_number(),
                 firmware_version=scanner.get_firmware_version(),
+                capabilities=scanner.get_capabilities(),
             )
             parent_conn.send(_ScannerHealth(is_alive=True, is_healthy=True, error=None))
             parent_conn.send(device_metadata)
-        except (serialutil.SerialException, TimeoutError) as e:
+        except (serialutil.SerialException, TimeoutError, DeviceComError) as e:
             parent_conn.send(_ScannerHealth(is_alive=False, is_healthy=False, error=e))
             return
 
         while not stop_signal.is_set():
+            # Process any pending commands between scans
+            while cmd_conn.poll(0):
+                cmd: _Command = cmd_conn.recv()
+                try:
+                    if cmd.name == "ping":
+                        result = scanner.ping()
+                    elif cmd.name == "get_status":
+                        result = scanner.get_status()
+                    else:
+                        result = None
+                    cmd_conn.send(_CommandResponse(result=result))
+                except Exception as e:  # noqa: BLE001
+                    cmd_conn.send(_CommandResponse(result=None, error=e))
+
             try:
                 scanned_waveform = scanner.scan()
                 phase = scanner.get_phase_estimate()
@@ -215,5 +276,4 @@ class _AsyncScanner:
             # this call required - see https://docs.python.org/3.9/library/multiprocessing.html#programming-guidelines
             shared_mem.cancel_join_thread()
             parent_conn.close()
-            shared_mem.cancel_join_thread()
-            parent_conn.close()
+            cmd_conn.close()

@@ -15,7 +15,7 @@ This is the Pyglaze API documentation. Pyglaze is a python library used to opera
 Pyglaze provides two main interfaces for operating Glaze devices: The [`Scanner`](API%20Reference/scanning/Scanner.md) and the The [`GlazeClient`](API%20Reference/scanning/GlazeClient.md), where `Scanner`is a synchronous scanner, only scanning when requested, and `GlazeClient` is an asynchronous scanner, continuously scanning in the background.
 
 ### GlazeClient
-Using the `GlazeClient`is the preferred way to acquire scans. Before starting the scanner, a device configuration must be created. Depending on the type of device, different configurations are required, see e.g. a definition [here](API%20Reference/device/LeDeviceConfiguration.md). Be sure to replace `mock_device` and `mock_delay` with suitable values. Here, we will use a [`LeDeviceConfiguration`](API%20Reference/device/LeDeviceConfiguration.md).
+Using the `GlazeClient`is the preferred way to acquire scans. Before starting the scanner, a device configuration must be created. Depending on the type of device, different configurations are required, see e.g. a definition [here](API%20Reference/device/LeDeviceConfiguration.md). Be sure to replace `mock_mimlink_device` and `mock_delay` with suitable values. Here, we will use a [`LeDeviceConfiguration`](API%20Reference/device/LeDeviceConfiguration.md).
 
 ```py
 import json
@@ -25,7 +25,7 @@ from pyglaze.device import Interval, LeDeviceConfiguration
 from pyglaze.scanning import GlazeClient
 
 device_config = LeDeviceConfiguration(
-    amp_port="mock_device",
+    amp_port="mock_mimlink_device",
     integration_periods=10,
     scan_intervals=[
         Interval(0.5, 1.0),
@@ -67,7 +67,7 @@ from pyglaze.device import Interval, LeDeviceConfiguration
 from pyglaze.scanning import Scanner
 
 device_config = LeDeviceConfiguration(
-    amp_port="mock_device",
+    amp_port="mock_mimlink_device",
     integration_periods=10,
     n_points=100,
     scan_intervals=[
@@ -79,7 +79,7 @@ device_config = LeDeviceConfiguration(
 
 scanner = Scanner(config=device_config)
 device_config = LeDeviceConfiguration(
-    amp_port="mock_device",
+    amp_port="mock_mimlink_device",
     integration_periods=10,
     scan_intervals=[
         Interval(0.5, 1.0),

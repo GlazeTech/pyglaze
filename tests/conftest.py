@@ -11,7 +11,7 @@ DEVICE_CONFIGS = ["le_device_config"]
 @pytest.fixture
 def le_device_config() -> LeDeviceConfiguration:
     return LeDeviceConfiguration(
-        amp_port="mock_device",
+        amp_port="mock_mimlink_device",
         use_ema=True,
         n_points=100,
         scan_intervals=[Interval(0.0, 1.0)],
