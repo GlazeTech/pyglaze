@@ -15,6 +15,7 @@ from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.mimlink import MessageType, ProtocolEndpoint
 from pyglaze.mimlink.types import (
+    CapabilitiesResponse,
     ListCompleteResponse,
     ListStartResponse,
     ResultPoint,
@@ -326,6 +327,31 @@ class _MimLinkAmpCom:
             time.sleep(self.config._sweep_length_ms * 1e-3 * 0.01)  # noqa: SLF001
             self._endpoint.send_get_status()
             resp = self._wait_for_response()
+
+    def ping(self: _MimLinkAmpCom, nonce: int) -> int:
+        """Send a ping and return the echoed nonce."""
+        self._endpoint.send_ping(nonce)
+        resp = self._wait_for_response(timeout=2.0)
+        if resp != nonce:
+            msg = f"Ping nonce mismatch: sent {nonce}, got {resp}"
+            raise DeviceComError(msg)
+        return resp
+
+    def get_capabilities(self: _MimLinkAmpCom) -> CapabilitiesResponse:
+        self._endpoint.send_get_capabilities()
+        resp = self._wait_for_response()
+        if not isinstance(resp, CapabilitiesResponse):
+            msg = f"Failed to get capabilities: {resp}"
+            raise DeviceComError(msg)
+        return resp
+
+    def get_status(self: _MimLinkAmpCom) -> StatusResponse:
+        self._endpoint.send_get_status()
+        resp = self._wait_for_response()
+        if not isinstance(resp, StatusResponse):
+            msg = f"Failed to get status: {resp}"
+            raise DeviceComError(msg)
+        return resp
 
     def get_serial_number(self: _MimLinkAmpCom) -> str:
         self._endpoint.send_get_serial()

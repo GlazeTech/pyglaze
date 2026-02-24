@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import random
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 import serial
@@ -13,6 +16,15 @@ from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
+
+
+@dataclass
+class PingResult:
+    """Result of a ping operation."""
+
+    success: bool
+    round_trip_us: float
+    nonce: int
 
 
 class _ScannerImplementation(ABC, Generic[TConfig]):
@@ -125,6 +137,18 @@ class Scanner:
             float | None: The current phase estimate in radians, or None if not yet estimated.
         """
         return self._scanner_impl.get_phase_estimate()
+
+    def ping(self: Scanner) -> PingResult:
+        """Send a ping and measure round-trip time."""
+        return self._scanner_impl.ping()
+
+    def get_capabilities(self: Scanner) -> dict[str, bool]:
+        """Query device hardware capabilities."""
+        return self._scanner_impl.get_capabilities()
+
+    def get_status(self: Scanner) -> dict[str, bool]:
+        """Query device status."""
+        return self._scanner_impl.get_status()
 
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
@@ -318,6 +342,40 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
     def get_phase_estimate(self: MimLinkScanner) -> float | None:
         """Return the lock-in phase estimate in radians, if available."""
         return self._phase_estimator.phase_estimate
+
+    def ping(self: MimLinkScanner) -> PingResult:
+        """Ping via MimLink protocol."""
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        nonce = random.randint(0, 0xFFFFFFFF)
+        t0 = time.perf_counter_ns()
+        echoed = self._ampcom.ping(nonce)
+        rtt_us = (time.perf_counter_ns() - t0) / 1_000
+        return PingResult(success=True, round_trip_us=rtt_us, nonce=echoed)
+
+    def get_capabilities(self: MimLinkScanner) -> dict[str, bool]:
+        """Query device hardware capabilities."""
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        resp = self._ampcom.get_capabilities()
+        return {
+            "has_external_dac": resp.has_external_dac,
+            "has_encoder": resp.has_encoder,
+            "has_i2c1": resp.has_i2c1,
+            "has_i2c2": resp.has_i2c2,
+            "has_i2c3": resp.has_i2c3,
+            "has_power_rails": resp.has_power_rails,
+        }
+
+    def get_status(self: MimLinkScanner) -> dict[str, bool]:
+        """Query device status."""
+        if self._ampcom is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
+        resp = self._ampcom.get_status()
+        return {"scan_ongoing": resp.scan_ongoing}
 
 
 def _detect_protocol(config: LeDeviceConfiguration) -> str:
