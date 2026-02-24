@@ -205,12 +205,9 @@ message GetCapabilitiesRequest {
 }
 
 message GetCapabilitiesResponse {
-  bool has_external_dac = 1;
-  bool has_encoder = 2;
-  bool has_i2c1 = 3;
-  bool has_i2c2 = 4;
-  bool has_i2c3 = 5;
-  bool has_power_rails = 6;
+  string bsp_name = 1;           // BSP identifier, e.g. "nucleo", "production"
+  string build_type = 2;         // "Debug", "Release", "RelWithDebInfo"
+  TransferMode transfer_mode = 3; // configured result transfer mode
 }
 
 // --- Raw Capture (noise characterization) ---

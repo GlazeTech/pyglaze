@@ -354,19 +354,16 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
         rtt_us = (time.perf_counter_ns() - t0) / 1_000
         return PingResult(success=True, round_trip_us=rtt_us, nonce=echoed)
 
-    def get_capabilities(self: MimLinkScanner) -> dict[str, bool]:
-        """Query device hardware capabilities."""
+    def get_capabilities(self: MimLinkScanner) -> dict[str, object]:
+        """Query device build configuration and capabilities."""
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
         resp = self._ampcom.get_capabilities()
         return {
-            "has_external_dac": resp.has_external_dac,
-            "has_encoder": resp.has_encoder,
-            "has_i2c1": resp.has_i2c1,
-            "has_i2c2": resp.has_i2c2,
-            "has_i2c3": resp.has_i2c3,
-            "has_power_rails": resp.has_power_rails,
+            "bsp_name": resp.bsp_name,
+            "build_type": resp.build_type,
+            "transfer_mode": resp.transfer_mode,
         }
 
     def get_status(self: MimLinkScanner) -> dict[str, bool]:

@@ -7,7 +7,7 @@ import pytest
 from pyglaze.mimlink import MessageType, ProtocolEndpoint
 from pyglaze.mimlink.framing import decode_frame
 from pyglaze.mimlink.proto import envelope_pb2
-from pyglaze.mimlink.types import FwChunkStatus, FwUpdateStatus
+from pyglaze.mimlink.types import FwChunkStatus, FwUpdateStatus, TransferMode
 
 
 def _decode_type(frame: bytes) -> int:
@@ -114,7 +114,7 @@ _SEND_CASES: list[tuple[int, Callable[[ProtocolEndpoint], int]]] = [
     (
         MessageType.GET_CAPABILITIES_RESPONSE,
         lambda ep: ep.send_get_capabilities_response(
-            True, True, True, False, False, True
+            bsp_name="test", build_type="Debug", transfer_mode=TransferMode.BULK
         ),
     ),
     (MessageType.RAW_CAPTURE_REQUEST, lambda ep: ep.send_raw_capture(256)),

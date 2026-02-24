@@ -510,6 +510,14 @@ class MimLinkMockDevice(MockDevice):
             self._endpoint.send_get_version_response(version="v0.1.0")
             return
 
+        if env_type == MessageType.GET_CAPABILITIES_REQUEST:
+            self._endpoint.send_get_capabilities_response(
+                bsp_name="mock",
+                build_type="Release",
+                transfer_mode=self.transfer_mode,
+            )
+            return
+
         if env_type == MessageType.RESULT_POINT_NAK:
             point_nak = cast("ResultPointNak", payload)
             point = self._result_points.get(point_nak.point_index)

@@ -170,12 +170,9 @@ class ProtocolEndpoint:
         if env_type == MessageType.GET_CAPABILITIES_RESPONSE:
             c = payload.get_capabilities_response
             return CapabilitiesResponse(
-                has_external_dac=bool(c.has_external_dac),
-                has_encoder=bool(c.has_encoder),
-                has_i2c1=bool(c.has_i2c1),
-                has_i2c2=bool(c.has_i2c2),
-                has_i2c3=bool(c.has_i2c3),
-                has_power_rails=bool(c.has_power_rails),
+                bsp_name=str(c.bsp_name),
+                build_type=str(c.build_type),
+                transfer_mode=int(c.transfer_mode),
             )
         if env_type == MessageType.RAW_CAPTURE_REQUEST:
             return {"num_samples": payload.raw_capture_request.num_samples}
@@ -475,21 +472,15 @@ class ProtocolEndpoint:
 
     def send_get_capabilities_response(
         self,
-        has_external_dac: bool,
-        has_encoder: bool,
-        has_i2c1: bool,
-        has_i2c2: bool,
-        has_i2c3: bool,
-        has_power_rails: bool,
+        bsp_name: str,
+        build_type: str,
+        transfer_mode: int,
     ) -> int:
         env = self._build_envelope(MessageType.GET_CAPABILITIES_RESPONSE)
         resp = env.get_capabilities_response
-        resp.has_external_dac = has_external_dac
-        resp.has_encoder = has_encoder
-        resp.has_i2c1 = has_i2c1
-        resp.has_i2c2 = has_i2c2
-        resp.has_i2c3 = has_i2c3
-        resp.has_power_rails = has_power_rails
+        resp.bsp_name = bsp_name
+        resp.build_type = build_type
+        resp.transfer_mode = transfer_mode
         return self._send_envelope(env)
 
     # --- Raw Capture ---

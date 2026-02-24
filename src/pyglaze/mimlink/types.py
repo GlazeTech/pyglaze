@@ -146,12 +146,9 @@ class TransformedListChunk:
 
 @dataclass
 class CapabilitiesResponse:
-    has_external_dac: bool
-    has_encoder: bool
-    has_i2c1: bool
-    has_i2c2: bool
-    has_i2c3: bool
-    has_power_rails: bool
+    bsp_name: str
+    build_type: str
+    transfer_mode: int
 
 
 @dataclass
