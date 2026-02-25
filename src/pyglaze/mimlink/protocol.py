@@ -11,7 +11,7 @@ from pyglaze.mimlink.framing import FrameDecodeError, decode_frame, encode_frame
 from pyglaze.mimlink.proto import envelope_pb2
 from pyglaze.mimlink.rx_stream import RxFrameStream
 from pyglaze.mimlink.types import (
-    CapabilitiesResponse,
+    DeviceInfoResponse,
     FwBootConfirmResponse,
     FwUpdateChunkAck,
     FwUpdateFinishResponse,
@@ -29,11 +29,9 @@ from pyglaze.mimlink.types import (
     ResultsChunkNak,
     ResultsChunkRetransmit,
     ScanResponse,
-    SerialResponse,
     SettingsResponse,
     StatusResponse,
     TransformedListChunk,
-    VersionResponse,
 )
 
 
@@ -146,14 +144,6 @@ class ProtocolEndpoint:
                 settings_valid=bool(c.settings_valid),
                 list_valid=bool(c.list_valid),
             )
-        if env_type == MessageType.GET_SERIAL_REQUEST:
-            return None
-        if env_type == MessageType.GET_SERIAL_RESPONSE:
-            return SerialResponse(serial=payload.get_serial_response.serial)
-        if env_type == MessageType.GET_VERSION_REQUEST:
-            return None
-        if env_type == MessageType.GET_VERSION_RESPONSE:
-            return VersionResponse(version=payload.get_version_response.version)
         if env_type == MessageType.REBOOT_REQUEST:
             return None
         if env_type == MessageType.GET_TRANSFORMED_LIST_REQUEST:
@@ -165,14 +155,18 @@ class ProtocolEndpoint:
                 values=list(c.values),
                 is_last=bool(c.is_last),
             )
-        if env_type == MessageType.GET_CAPABILITIES_REQUEST:
+        if env_type == MessageType.GET_DEVICE_INFO_REQUEST:
             return None
-        if env_type == MessageType.GET_CAPABILITIES_RESPONSE:
-            c = payload.get_capabilities_response
-            return CapabilitiesResponse(
+        if env_type == MessageType.GET_DEVICE_INFO_RESPONSE:
+            c = payload.get_device_info_response
+            return DeviceInfoResponse(
+                serial_number=str(c.serial_number),
+                firmware_version=str(c.firmware_version),
                 bsp_name=str(c.bsp_name),
                 build_type=str(c.build_type),
                 transfer_mode=int(c.transfer_mode),
+                hardware_type=str(c.hardware_type),
+                hardware_revision=int(c.hardware_revision),
             )
         if env_type == MessageType.RAW_CAPTURE_REQUEST:
             return {"num_samples": payload.raw_capture_request.num_samples}
@@ -419,24 +413,30 @@ class ProtocolEndpoint:
 
     # --- Device Info ---
 
-    def send_get_serial(self) -> int:
-        env = self._build_envelope(MessageType.GET_SERIAL_REQUEST)
-        env.get_serial_request.SetInParent()
+    def send_get_device_info(self) -> int:
+        env = self._build_envelope(MessageType.GET_DEVICE_INFO_REQUEST)
+        env.get_device_info_request.SetInParent()
         return self._send_envelope(env)
 
-    def send_get_serial_response(self, serial: str) -> int:
-        env = self._build_envelope(MessageType.GET_SERIAL_RESPONSE)
-        env.get_serial_response.serial = serial
-        return self._send_envelope(env)
-
-    def send_get_version(self) -> int:
-        env = self._build_envelope(MessageType.GET_VERSION_REQUEST)
-        env.get_version_request.SetInParent()
-        return self._send_envelope(env)
-
-    def send_get_version_response(self, version: str) -> int:
-        env = self._build_envelope(MessageType.GET_VERSION_RESPONSE)
-        env.get_version_response.version = version
+    def send_get_device_info_response(
+        self,
+        serial_number: str,
+        firmware_version: str,
+        bsp_name: str,
+        build_type: str,
+        transfer_mode: int,
+        hardware_type: str,
+        hardware_revision: int,
+    ) -> int:
+        env = self._build_envelope(MessageType.GET_DEVICE_INFO_RESPONSE)
+        resp = env.get_device_info_response
+        resp.serial_number = serial_number
+        resp.firmware_version = firmware_version
+        resp.bsp_name = bsp_name
+        resp.build_type = build_type
+        resp.transfer_mode = transfer_mode
+        resp.hardware_type = hardware_type
+        resp.hardware_revision = hardware_revision
         return self._send_envelope(env)
 
     # --- Reboot ---
@@ -461,26 +461,6 @@ class ProtocolEndpoint:
         chunk.chunk_index = chunk_index
         chunk.values.extend(values)
         chunk.is_last = is_last
-        return self._send_envelope(env)
-
-    # --- Capabilities ---
-
-    def send_get_capabilities(self) -> int:
-        env = self._build_envelope(MessageType.GET_CAPABILITIES_REQUEST)
-        env.get_capabilities_request.SetInParent()
-        return self._send_envelope(env)
-
-    def send_get_capabilities_response(
-        self,
-        bsp_name: str,
-        build_type: str,
-        transfer_mode: int,
-    ) -> int:
-        env = self._build_envelope(MessageType.GET_CAPABILITIES_RESPONSE)
-        resp = env.get_capabilities_response
-        resp.bsp_name = bsp_name
-        resp.build_type = build_type
-        resp.transfer_mode = transfer_mode
         return self._send_envelope(env)
 
     # --- Raw Capture ---

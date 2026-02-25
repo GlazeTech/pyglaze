@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import numpy as np
 
-from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.mimlink import MessageType, ProtocolEndpoint
+
+if TYPE_CHECKING:
+    from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.mimlink.types import (
     ResultPoint,
     ResultPointNak,
@@ -136,7 +138,9 @@ class MimLinkMockDevice(MockDevice):
             return 0.0
         if self.list_length is None or self.integration_periods is None:
             return 0.0
-        return self.list_length * self.integration_periods / self.LI_MODULATION_FREQUENCY
+        return (
+            self.list_length * self.integration_periods / self.LI_MODULATION_FREQUENCY
+        )
 
     def _scan_has_finished(self: MimLinkMockDevice) -> bool:
         if not self.is_scanning:
@@ -156,7 +160,9 @@ class MimLinkMockDevice(MockDevice):
             return
 
         self.n_scans += 1
-        should_fail = self.n_scans > self.fail_after and self.n_failures < self.fails_wanted
+        should_fail = (
+            self.n_scans > self.fail_after and self.n_failures < self.fails_wanted
+        )
         if should_fail:
             self.n_failures += 1
             self._result_points = {}
@@ -180,7 +186,9 @@ class MimLinkMockDevice(MockDevice):
         }
 
         self._result_chunks = {}
-        for chunk_idx, start in enumerate(range(0, len(times), self.RESULTS_CHUNK_SIZE)):
+        for chunk_idx, start in enumerate(
+            range(0, len(times), self.RESULTS_CHUNK_SIZE)
+        ):
             end = min(start + self.RESULTS_CHUNK_SIZE, len(times))
             self._result_chunks[chunk_idx] = ResultsChunk(
                 chunk_index=chunk_idx,
@@ -258,7 +266,9 @@ class MimLinkMockDevice(MockDevice):
             return
 
         if env_type == MessageType.START_SCAN_REQUEST:
-            settings_valid = self.list_length is not None and self.integration_periods is not None
+            settings_valid = (
+                self.list_length is not None and self.integration_periods is not None
+            )
             list_valid = len(self.scanning_list) > 0
             started = settings_valid and list_valid
             self._endpoint.send_start_scan_response(
@@ -282,7 +292,8 @@ class MimLinkMockDevice(MockDevice):
                 list_length=len(self.scanning_list),
                 max_list_length=self.MAX_LIST_LENGTH,
                 modulation_frequency_hz=self.LI_MODULATION_FREQUENCY,
-                settings_valid=self.list_length is not None and self.integration_periods is not None,
+                settings_valid=self.list_length is not None
+                and self.integration_periods is not None,
                 list_valid=bool(self.scanning_list),
             )
             return
@@ -291,19 +302,15 @@ class MimLinkMockDevice(MockDevice):
             self._send_bulk_results()
             return
 
-        if env_type == MessageType.GET_SERIAL_REQUEST:
-            self._endpoint.send_get_serial_response(serial="M-9999")
-            return
-
-        if env_type == MessageType.GET_VERSION_REQUEST:
-            self._endpoint.send_get_version_response(version="v0.1.0")
-            return
-
-        if env_type == MessageType.GET_CAPABILITIES_REQUEST:
-            self._endpoint.send_get_capabilities_response(
+        if env_type == MessageType.GET_DEVICE_INFO_REQUEST:
+            self._endpoint.send_get_device_info_response(
+                serial_number="M-9999",
+                firmware_version="v0.1.0",
                 bsp_name="mock",
                 build_type="Release",
                 transfer_mode=self.transfer_mode,
+                hardware_type="mock",
+                hardware_revision=0,
             )
             return
 
@@ -388,7 +395,9 @@ def _mock_device_factory(config: DeviceConfiguration) -> MimLinkMockDevice:
     if config.amp_port == "mock_mimlink_drop_chunk":
         return MimLinkMockDevice(transfer_mode=TransferMode.BULK, drop_chunk_once=True)
     if config.amp_port == "mock_mimlink_drop_point":
-        return MimLinkMockDevice(transfer_mode=TransferMode.PER_POINT, drop_point_once=True)
+        return MimLinkMockDevice(
+            transfer_mode=TransferMode.PER_POINT, drop_point_once=True
+        )
     if config.amp_port == "mock_mimlink_scan_should_fail":
         return MimLinkMockDevice(fail_after=0, transfer_mode=TransferMode.BULK)
     if config.amp_port == "mock_mimlink_fail_first_scan":

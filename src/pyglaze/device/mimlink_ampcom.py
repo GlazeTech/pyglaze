@@ -15,7 +15,7 @@ from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.mimlink import MessageType, ProtocolEndpoint
 from pyglaze.mimlink.types import (
-    CapabilitiesResponse,
+    DeviceInfoResponse,
     ListCompleteResponse,
     ListStartResponse,
     ResultPoint,
@@ -23,10 +23,8 @@ from pyglaze.mimlink.types import (
     ResultsChunk,
     ResultsChunkRetransmit,
     ScanResponse,
-    SerialResponse,
     SettingsResponse,
     StatusResponse,
-    VersionResponse,
 )
 
 
@@ -337,11 +335,11 @@ class _MimLinkAmpCom:
             raise DeviceComError(msg)
         return resp
 
-    def get_capabilities(self: _MimLinkAmpCom) -> CapabilitiesResponse:
-        self._endpoint.send_get_capabilities()
+    def get_device_info(self: _MimLinkAmpCom) -> DeviceInfoResponse:
+        self._endpoint.send_get_device_info()
         resp = self._wait_for_response()
-        if not isinstance(resp, CapabilitiesResponse):
-            msg = f"Failed to get capabilities: {resp}"
+        if not isinstance(resp, DeviceInfoResponse):
+            msg = f"Failed to get device info: {resp}"
             raise DeviceComError(msg)
         return resp
 
@@ -352,22 +350,6 @@ class _MimLinkAmpCom:
             msg = f"Failed to get status: {resp}"
             raise DeviceComError(msg)
         return resp
-
-    def get_serial_number(self: _MimLinkAmpCom) -> str:
-        self._endpoint.send_get_serial()
-        resp = self._wait_for_response()
-        if not isinstance(resp, SerialResponse):
-            msg = f"Failed to get serial number: {resp}"
-            raise DeviceComError(msg)
-        return resp.serial
-
-    def get_firmware_version(self: _MimLinkAmpCom) -> str:
-        self._endpoint.send_get_version()
-        resp = self._wait_for_response()
-        if not isinstance(resp, VersionResponse):
-            msg = f"Failed to get firmware version: {resp}"
-            raise DeviceComError(msg)
-        return resp.version
 
     def disconnect(self: _MimLinkAmpCom) -> None:
         with contextlib.suppress(AttributeError):

@@ -54,25 +54,15 @@ def test_invalid_config_type() -> None:
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_lescanner_get_serial_number(
+def test_lescanner_get_device_info(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
-    serial_number = scanner.get_serial_number()
-    assert isinstance(serial_number, str)
-    assert serial_number != ""
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_lescanner_get_firmware_version(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    scanner = Scanner(device_config)
-    firmware_version = scanner.get_firmware_version()
-    assert isinstance(firmware_version, str)
-    assert firmware_version != ""
+    info = scanner.get_device_info()
+    assert isinstance(info, dict)
+    assert info["serial_number"] != ""
+    assert info["firmware_version"] != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

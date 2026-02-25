@@ -29,9 +29,7 @@ class _ScannerHealth:
 
 @dataclass
 class _ScannerMetadata:
-    serial_number: str
-    firmware_version: str
-    capabilities: dict[str, Any]
+    device_info: dict[str, Any]
 
 
 @dataclass
@@ -43,6 +41,16 @@ class _Command:
 class _CommandResponse:
     result: object
     error: Exception | None = None
+
+
+@dataclass
+class _ScannerIPC:
+    """Bundles the multiprocessing primitives for the scanner child process."""
+
+    shared_mem: Queue[_TimestampedWaveform]
+    stop_signal: synchronize.Event
+    parent_conn: Connection
+    cmd_conn: Connection
 
 
 @dataclass
@@ -85,16 +93,15 @@ class _AsyncScanner:
         self._scanner_conn, child_conn = Pipe()
         cmd_parent_conn, cmd_child_conn = Pipe()
         self._cmd_conn = cmd_parent_conn
+        ipc = _ScannerIPC(
+            shared_mem=self._shared_mem,
+            stop_signal=self._stop_signal,
+            parent_conn=child_conn,
+            cmd_conn=cmd_child_conn,
+        )
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[
-                config,
-                self._shared_mem,
-                self._stop_signal,
-                child_conn,
-                cmd_child_conn,
-                initial_phase_estimate,
-            ],
+            args=[config, ipc, initial_phase_estimate],
         )
         self._child_process.start()
 
@@ -137,24 +144,11 @@ class _AsyncScanner:
     def get_next(self: _AsyncScanner) -> UnprocessedWaveform:
         return self._get_scan().waveform
 
-    def get_serial_number(self: _AsyncScanner) -> str:
+    def get_device_info(self: _AsyncScanner) -> dict[str, Any]:
         if not self.is_scanning:
             msg = "Scanner not connected"
             raise SerialException(msg)
-        return self._metadata.serial_number
-
-    def get_firmware_version(self: _AsyncScanner) -> str:
-        if not self.is_scanning:
-            msg = "Scanner not connected"
-            raise SerialException(msg)
-
-        return self._metadata.firmware_version
-
-    def get_capabilities(self: _AsyncScanner) -> dict[str, Any]:
-        if not self.is_scanning:
-            msg = "Scanner not connected"
-            raise SerialException(msg)
-        return self._metadata.capabilities
+        return self._metadata.device_info
 
     def get_phase_estimate(self: _AsyncScanner) -> float | None:
         """Get the current phase estimate from the scanner.
@@ -210,41 +204,30 @@ class _AsyncScanner:
     @staticmethod
     def _run_scanner(
         config: DeviceConfiguration,
-        shared_mem: Queue[_TimestampedWaveform],
-        stop_signal: synchronize.Event,
-        parent_conn: Connection,
-        cmd_conn: Connection,
+        ipc: _ScannerIPC,
         initial_phase_estimate: float | None = None,
     ) -> None:
         try:
             scanner = Scanner(
                 config=config, initial_phase_estimate=initial_phase_estimate
             )
-            device_metadata = _ScannerMetadata(
-                serial_number=scanner.get_serial_number(),
-                firmware_version=scanner.get_firmware_version(),
-                capabilities=scanner.get_capabilities(),
+            metadata = _ScannerMetadata(device_info=scanner.get_device_info())
+            ipc.parent_conn.send(
+                _ScannerHealth(is_alive=True, is_healthy=True, error=None)
             )
-            parent_conn.send(_ScannerHealth(is_alive=True, is_healthy=True, error=None))
-            parent_conn.send(device_metadata)
+            ipc.parent_conn.send(metadata)
         except (serialutil.SerialException, TimeoutError, DeviceComError) as e:
-            parent_conn.send(_ScannerHealth(is_alive=False, is_healthy=False, error=e))
+            ipc.parent_conn.send(
+                _ScannerHealth(is_alive=False, is_healthy=False, error=e)
+            )
             return
 
-        while not stop_signal.is_set():
-            # Process any pending commands between scans
-            while cmd_conn.poll(0):
-                cmd: _Command = cmd_conn.recv()
-                try:
-                    if cmd.name == "ping":
-                        result = scanner.ping()
-                    elif cmd.name == "get_status":
-                        result = scanner.get_status()
-                    else:
-                        result = None
-                    cmd_conn.send(_CommandResponse(result=result))
-                except Exception as e:  # noqa: BLE001
-                    cmd_conn.send(_CommandResponse(result=None, error=e))
+        _AsyncScanner._scan_loop(scanner, ipc)
+
+    @staticmethod
+    def _scan_loop(scanner: Scanner, ipc: _ScannerIPC) -> None:
+        while not ipc.stop_signal.is_set():
+            _AsyncScanner._process_commands(scanner, ipc.cmd_conn)
 
             try:
                 scanned_waveform = scanner.scan()
@@ -255,25 +238,39 @@ class _AsyncScanner:
                     phase,
                 )
             except Exception as e:  # noqa: BLE001
-                parent_conn.send(
+                ipc.parent_conn.send(
                     _ScannerHealth(is_alive=False, is_healthy=False, error=e)
                 )
                 scanner.disconnect()
                 break
 
             try:
-                shared_mem.put_nowait(waveform)
+                ipc.shared_mem.put_nowait(waveform)
             except Full:
-                # when full, remove the oldest scan from the list before putting a new
-                shared_mem.get_nowait()
-                shared_mem.put_nowait(waveform)
+                ipc.shared_mem.get_nowait()
+                ipc.shared_mem.put_nowait(waveform)
 
         # Empty queue before shutting down
         try:
             while 1:
-                shared_mem.get_nowait()
+                ipc.shared_mem.get_nowait()
         except Empty:
             # this call required - see https://docs.python.org/3.9/library/multiprocessing.html#programming-guidelines
-            shared_mem.cancel_join_thread()
-            parent_conn.close()
-            cmd_conn.close()
+            ipc.shared_mem.cancel_join_thread()
+            ipc.parent_conn.close()
+            ipc.cmd_conn.close()
+
+    @staticmethod
+    def _process_commands(scanner: Scanner, cmd_conn: Connection) -> None:
+        while cmd_conn.poll(0):
+            cmd: _Command = cmd_conn.recv()
+            try:
+                if cmd.name == "ping":
+                    result = scanner.ping()
+                elif cmd.name == "get_status":
+                    result = scanner.get_status()
+                else:
+                    result = None
+                cmd_conn.send(_CommandResponse(result=result))
+            except Exception as e:  # noqa: BLE001
+                cmd_conn.send(_CommandResponse(result=None, error=e))

@@ -88,7 +88,6 @@ def test_mimlink_device_info(
     mimlink_device_config: LeDeviceConfiguration,
 ) -> None:
     scanner = Scanner(mimlink_device_config)
-    serial_number = scanner.get_serial_number()
-    firmware = scanner.get_firmware_version()
-    assert serial_number == "M-9999"
-    assert firmware == "v0.1.0"
+    info = scanner.get_device_info()
+    assert info["serial_number"] == "M-9999"
+    assert info["firmware_version"] == "v0.1.0"

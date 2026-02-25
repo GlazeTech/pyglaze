@@ -97,10 +97,6 @@ _SEND_CASES: list[tuple[int, Callable[[ProtocolEndpoint], int]]] = [
         MessageType.GET_STATUS_RESPONSE,
         lambda ep: ep.send_get_status_response(True, 1, 10, 500, True, True),
     ),
-    (MessageType.GET_SERIAL_REQUEST, lambda ep: ep.send_get_serial()),
-    (MessageType.GET_SERIAL_RESPONSE, lambda ep: ep.send_get_serial_response("SN123")),
-    (MessageType.GET_VERSION_REQUEST, lambda ep: ep.send_get_version()),
-    (MessageType.GET_VERSION_RESPONSE, lambda ep: ep.send_get_version_response("v1")),
     (MessageType.REBOOT_REQUEST, lambda ep: ep.send_reboot()),
     (
         MessageType.GET_TRANSFORMED_LIST_REQUEST,
@@ -110,11 +106,17 @@ _SEND_CASES: list[tuple[int, Callable[[ProtocolEndpoint], int]]] = [
         MessageType.TRANSFORMED_LIST_CHUNK,
         lambda ep: ep.send_transformed_list_chunk(0, [1, 2], True),
     ),
-    (MessageType.GET_CAPABILITIES_REQUEST, lambda ep: ep.send_get_capabilities()),
+    (MessageType.GET_DEVICE_INFO_REQUEST, lambda ep: ep.send_get_device_info()),
     (
-        MessageType.GET_CAPABILITIES_RESPONSE,
-        lambda ep: ep.send_get_capabilities_response(
-            bsp_name="test", build_type="Debug", transfer_mode=TransferMode.BULK
+        MessageType.GET_DEVICE_INFO_RESPONSE,
+        lambda ep: ep.send_get_device_info_response(
+            serial_number="SN123",
+            firmware_version="v1",
+            bsp_name="test",
+            build_type="Debug",
+            transfer_mode=TransferMode.BULK,
+            hardware_type="test",
+            hardware_revision=0,
         ),
     ),
     (MessageType.RAW_CAPTURE_REQUEST, lambda ep: ep.send_raw_capture(256)),

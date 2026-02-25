@@ -62,18 +62,10 @@ class GlazeClient:
         """
         return self._scanner.get_scans(n_pulses)
 
-    def get_serial_number(self: GlazeClient) -> str:
-        """Get the serial number of the connected device."""
+    def get_device_info(self: GlazeClient) -> dict[str, Any]:
+        """Get device information."""
         try:
-            return self._scanner.get_serial_number()
-        except AttributeError as e:
-            msg = "No connection to device."
-            raise SerialException(msg) from e
-
-    def get_firmware_version(self: GlazeClient) -> str:
-        """Get the firmware version of the connected device."""
-        try:
-            return self._scanner.get_firmware_version()
+            return self._scanner.get_device_info()
         except AttributeError as e:
             msg = "No connection to device."
             raise SerialException(msg) from e
@@ -92,17 +84,6 @@ class GlazeClient:
         """
         try:
             return self._scanner.get_phase_estimate()
-        except AttributeError as e:
-            msg = "No connection to device."
-            raise SerialException(msg) from e
-
-    def get_capabilities(self: GlazeClient) -> dict[str, Any]:
-        """Get the hardware capabilities of the connected device.
-
-        Returns cached capabilities queried at startup.
-        """
-        try:
-            return self._scanner.get_capabilities()
         except AttributeError as e:
             msg = "No connection to device."
             raise SerialException(msg) from e

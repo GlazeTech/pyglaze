@@ -28,12 +28,21 @@ class PingResult:
 class DeviceProtocol(Protocol):
     """Protocol for device interaction, ensuring parity between Scanner and GlazeClient."""
 
-    def get_serial_number(self) -> str: ...
-    def get_firmware_version(self) -> str: ...
-    def get_phase_estimate(self) -> float | None: ...
-    def ping(self) -> PingResult: ...
-    def get_capabilities(self) -> dict[str, Any]: ...
-    def get_status(self) -> dict[str, Any]: ...
+    def get_device_info(self) -> dict[str, Any]:
+        """Get device information."""
+        ...
+
+    def get_phase_estimate(self) -> float | None:
+        """Get the current phase estimate in radians."""
+        ...
+
+    def ping(self) -> PingResult:
+        """Send a ping and measure round-trip time."""
+        ...
+
+    def get_status(self) -> dict[str, Any]:
+        """Query device status."""
+        ...
 
 
 class _ScannerImplementation(ABC, Generic[TConfig]):
@@ -64,11 +73,7 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
         pass
 
     @abstractmethod
-    def get_serial_number(self: _ScannerImplementation) -> str:
-        pass
-
-    @abstractmethod
-    def get_firmware_version(self: _ScannerImplementation) -> str:
+    def get_device_info(self: _ScannerImplementation) -> dict[str, Any]:
         pass
 
     @abstractmethod
@@ -77,10 +82,6 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
 
     @abstractmethod
     def ping(self: _ScannerImplementation) -> PingResult:
-        pass
-
-    @abstractmethod
-    def get_capabilities(self: _ScannerImplementation) -> dict[str, Any]:
         pass
 
     @abstractmethod
@@ -135,21 +136,9 @@ class Scanner:
         """Close serial connection."""
         self._scanner_impl.disconnect()
 
-    def get_serial_number(self: Scanner) -> str:
-        """Get the serial number of the connected device.
-
-        Returns:
-            str: The serial number of the connected device.
-        """
-        return self._scanner_impl.get_serial_number()
-
-    def get_firmware_version(self: Scanner) -> str:
-        """Get the firmware version of the connected device.
-
-        Returns:
-            str: The firmware version of the connected device.
-        """
-        return self._scanner_impl.get_firmware_version()
+    def get_device_info(self: Scanner) -> dict[str, Any]:
+        """Get device information."""
+        return self._scanner_impl.get_device_info()
 
     def get_phase_estimate(self: Scanner) -> float | None:
         """Get the current phase estimate from the lock-in phase estimator.
@@ -162,10 +151,6 @@ class Scanner:
     def ping(self: Scanner) -> PingResult:
         """Send a ping and measure round-trip time."""
         return self._scanner_impl.ping()
-
-    def get_capabilities(self: Scanner) -> dict[str, Any]:
-        """Query device hardware capabilities."""
-        return self._scanner_impl.get_capabilities()
 
     def get_status(self: Scanner) -> dict[str, Any]:
         """Query device status."""
@@ -237,19 +222,21 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
         self._ampcom.disconnect()
         self._ampcom = None
 
-    def get_serial_number(self: MimLinkScanner) -> str:
-        """Get device serial number."""
+    def get_device_info(self: MimLinkScanner) -> dict[str, Any]:
+        """Get device information."""
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        return self._ampcom.get_serial_number()
-
-    def get_firmware_version(self: MimLinkScanner) -> str:
-        """Get firmware version string."""
-        if self._ampcom is None:
-            msg = "Scanner not connected"
-            raise ScanError(msg)
-        return self._ampcom.get_firmware_version()
+        resp = self._ampcom.get_device_info()
+        return {
+            "serial_number": resp.serial_number,
+            "firmware_version": resp.firmware_version,
+            "bsp_name": resp.bsp_name,
+            "build_type": resp.build_type,
+            "transfer_mode": resp.transfer_mode,
+            "hardware_type": resp.hardware_type,
+            "hardware_revision": resp.hardware_revision,
+        }
 
     def get_phase_estimate(self: MimLinkScanner) -> float | None:
         """Return the lock-in phase estimate in radians, if available."""
@@ -260,23 +247,11 @@ class MimLinkScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._ampcom is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        nonce = random.randint(0, 0xFFFFFFFF)
+        nonce = random.randint(0, 0xFFFFFFFF)  # noqa: S311
         t0 = time.perf_counter_ns()
         echoed = self._ampcom.ping(nonce)
         rtt_us = (time.perf_counter_ns() - t0) / 1_000
         return PingResult(success=True, round_trip_us=rtt_us, nonce=echoed)
-
-    def get_capabilities(self: MimLinkScanner) -> dict[str, object]:
-        """Query device build configuration and capabilities."""
-        if self._ampcom is None:
-            msg = "Scanner not connected"
-            raise ScanError(msg)
-        resp = self._ampcom.get_capabilities()
-        return {
-            "bsp_name": resp.bsp_name,
-            "build_type": resp.build_type,
-            "transfer_mode": resp.transfer_mode,
-        }
 
     def get_status(self: MimLinkScanner) -> dict[str, bool]:
         """Query device status."""

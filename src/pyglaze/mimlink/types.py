@@ -32,15 +32,11 @@ class MessageType:
     RESULTS_CHUNK: int = 12
     GET_STATUS_REQUEST: int = 13
     GET_STATUS_RESPONSE: int = 14
-    GET_SERIAL_REQUEST: int = 15
-    GET_SERIAL_RESPONSE: int = 16
-    GET_VERSION_REQUEST: int = 17
-    GET_VERSION_RESPONSE: int = 18
     REBOOT_REQUEST: int = 19
     GET_TRANSFORMED_LIST_REQUEST: int = 20
     TRANSFORMED_LIST_CHUNK: int = 21
-    GET_CAPABILITIES_REQUEST: int = 22
-    GET_CAPABILITIES_RESPONSE: int = 23
+    GET_DEVICE_INFO_REQUEST: int = 22
+    GET_DEVICE_INFO_RESPONSE: int = 23
     RAW_CAPTURE_REQUEST: int = 24
     RAW_CAPTURE_CHUNK: int = 25
     RESULT_POINT: int = 26
@@ -128,16 +124,6 @@ class StatusResponse:
 
 
 @dataclass
-class SerialResponse:
-    serial: str
-
-
-@dataclass
-class VersionResponse:
-    version: str
-
-
-@dataclass
 class TransformedListChunk:
     chunk_index: int
     values: list[int]
@@ -145,10 +131,14 @@ class TransformedListChunk:
 
 
 @dataclass
-class CapabilitiesResponse:
+class DeviceInfoResponse:
+    serial_number: str
+    firmware_version: str
     bsp_name: str
     build_type: str
     transfer_mode: int
+    hardware_type: str
+    hardware_revision: int
 
 
 @dataclass

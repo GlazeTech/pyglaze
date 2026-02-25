@@ -1,10 +1,3 @@
-// Vendored from MimLink:
-// .../MimLink/proto/envelope.proto
-// Sync workflow:
-// 1) Replace this file from upstream.
-// 2) Run: ./scripts/generate_mimlink_proto.sh
-// 3) Commit updated envelope_pb2.py, then run protocol tests.
-
 syntax = "proto3";
 
 package comm;
@@ -36,12 +29,6 @@ enum MsgType {
   MSG_TYPE_GET_STATUS_REQUEST  = 13;
   MSG_TYPE_GET_STATUS_RESPONSE = 14;
 
-  // Device info
-  MSG_TYPE_GET_SERIAL_REQUEST  = 15;
-  MSG_TYPE_GET_SERIAL_RESPONSE = 16;
-  MSG_TYPE_GET_VERSION_REQUEST  = 17;
-  MSG_TYPE_GET_VERSION_RESPONSE = 18;
-
   // Reboot
   MSG_TYPE_REBOOT_REQUEST = 19;
 
@@ -49,9 +36,9 @@ enum MsgType {
   MSG_TYPE_GET_TRANSFORMED_LIST_REQUEST = 20;
   MSG_TYPE_TRANSFORMED_LIST_CHUNK = 21;
 
-  // Capabilities
-  MSG_TYPE_GET_CAPABILITIES_REQUEST = 22;
-  MSG_TYPE_GET_CAPABILITIES_RESPONSE = 23;
+  // Device info
+  MSG_TYPE_GET_DEVICE_INFO_REQUEST = 22;
+  MSG_TYPE_GET_DEVICE_INFO_RESPONSE = 23;
 
   // Raw capture (noise characterization)
   MSG_TYPE_RAW_CAPTURE_REQUEST = 24;
@@ -167,20 +154,19 @@ message GetStatusResponse {
   bool list_valid = 6;
 }
 
-// --- Device info ---
+// --- Device Info ---
 
-message GetSerialRequest {
+message GetDeviceInfoRequest {
 }
 
-message GetSerialResponse {
-  string serial = 1;
-}
-
-message GetVersionRequest {
-}
-
-message GetVersionResponse {
-  string version = 1;
+message GetDeviceInfoResponse {
+  string serial_number = 1;
+  string firmware_version = 2;
+  string bsp_name = 3;
+  string build_type = 4;
+  TransferMode transfer_mode = 5;
+  string hardware_type = 6;
+  uint32 hardware_revision = 7;
 }
 
 // --- Reboot ---
@@ -197,17 +183,6 @@ message TransformedListChunk {
   uint32 chunk_index = 1;
   repeated uint32 values = 2;  // uint16 stored as uint32 for protobuf
   bool is_last = 3;
-}
-
-// --- Capabilities ---
-
-message GetCapabilitiesRequest {
-}
-
-message GetCapabilitiesResponse {
-  string bsp_name = 1;           // BSP identifier, e.g. "nucleo", "production"
-  string build_type = 2;         // "Debug", "Release", "RelWithDebInfo"
-  TransferMode transfer_mode = 3; // configured result transfer mode
 }
 
 // --- Raw Capture (noise characterization) ---
@@ -365,12 +340,6 @@ message Envelope {
     GetStatusRequest get_status_request = 24;
     GetStatusResponse get_status_response = 25;
 
-    // Device info
-    GetSerialRequest get_serial_request = 26;
-    GetSerialResponse get_serial_response = 27;
-    GetVersionRequest get_version_request = 28;
-    GetVersionResponse get_version_response = 29;
-
     // Reboot
     RebootRequest reboot_request = 30;
 
@@ -378,9 +347,9 @@ message Envelope {
     GetTransformedListRequest get_transformed_list_request = 31;
     TransformedListChunk transformed_list_chunk = 32;
 
-    // Capabilities
-    GetCapabilitiesRequest get_capabilities_request = 33;
-    GetCapabilitiesResponse get_capabilities_response = 34;
+    // Device info
+    GetDeviceInfoRequest get_device_info_request = 33;
+    GetDeviceInfoResponse get_device_info_response = 34;
 
     // Raw capture
     RawCaptureRequest raw_capture_request = 35;
