@@ -1,5 +1,3 @@
-"""Synchronous MimLink transport over serial."""
-
 from __future__ import annotations
 
 import contextlib
@@ -179,8 +177,6 @@ class MimLinkTransport:
             self._drain_serial()
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
-
-    # --- High-level operations ---
 
     def set_settings(
         self, n_points: int, integration_periods: int, *, use_ema: bool
