@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package comm;
+package mimlink;
 
 enum MsgType {
   MSG_TYPE_UNKNOWN = 0;
