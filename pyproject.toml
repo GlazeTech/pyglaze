@@ -16,6 +16,8 @@ dependencies = [
     "bitstring>=4.1.2",
     "typing_extensions>=4.12.2",
     "protobuf>=6.33.0",
+    "cobs>=1.2.1",
+    "crccheck>=1.3.1",
 ]
 
 [project.optional-dependencies]
@@ -106,20 +108,14 @@ convention = "google"
     "FBT003", # allow positional booleans in protocol matrix tests
     "B009", # getattr usage for generated module interop
 ]
-"src/pyglaze/mimlink/protocol.py" = [
-    "D102", # large API surface mirrors external protocol endpoint
-    "D105", # magic methods intentionally lightweight
+"src/pyglaze/mimlink/codec.py" = [
     "ANN401", # protobuf-generated envelope objects are dynamically typed
     "B009", # getattr avoids static analyzer issues with generated code
-    "FBT001", # positional booleans are part of compatibility API
-    "C901", # dispatch logic intentionally centralized
-    "PLR0911", # one return per message type mapping
-    "PLR0912", # branch count reflects protocol surface
-    "PLR0913", # function signatures mirror wire schema
-    "PLR0915", # statement count is acceptable for protocol mapper
 ]
-"src/pyglaze/mimlink/types.py" = [
-    "D101", # dataclass field names are self-documenting
+"src/pyglaze/device/mimlink_transport.py" = [
+    "ANN401", # protobuf-generated envelope objects are dynamically typed
+    "C901", # dispatch logic in collect methods
+    "PLR0912", # branch count in collect methods
 ]
 "src/pyglaze/devtools/mock_device.py" = [
     "C901", # protocol handler branching reflects message dispatch

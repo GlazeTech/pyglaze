@@ -1,6 +1,5 @@
 """Native Python MimLink protocol implementation."""
 
-from pyglaze.mimlink.protocol import ProtocolEndpoint
-from pyglaze.mimlink.types import MessageType
+from pyglaze.mimlink.codec import EnvelopeCodec
 
-__all__ = ["MessageType", "ProtocolEndpoint"]
+__all__ = ["EnvelopeCodec"]

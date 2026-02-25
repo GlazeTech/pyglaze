@@ -6,6 +6,7 @@ from serial import serialutil
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.ampcom import DeviceComError
 from pyglaze.scanning import GlazeClient
+from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
@@ -57,9 +58,9 @@ def test_get_device_info(config_name: str, request: pytest.FixtureRequest) -> No
     with client as c:
         info = c.get_device_info()
 
-    assert isinstance(info, dict)
-    assert info["serial_number"] != ""
-    assert info["firmware_version"] != ""
+    assert isinstance(info, DeviceInfo)
+    assert info.serial_number != ""
+    assert info.firmware_version != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

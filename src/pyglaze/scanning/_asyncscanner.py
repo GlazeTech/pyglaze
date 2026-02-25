@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Event, Pipe, Process, Queue, synchronize
@@ -17,7 +18,12 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from pyglaze.device.configuration import DeviceConfiguration
-    from pyglaze.scanning.scanner import PingResult
+    from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
+
+
+class _CommandType(enum.Enum):
+    PING = "ping"
+    GET_STATUS = "get_status"
 
 
 @dataclass
@@ -29,12 +35,12 @@ class _ScannerHealth:
 
 @dataclass
 class _ScannerMetadata:
-    device_info: dict[str, Any]
+    device_info: DeviceInfo
 
 
 @dataclass
 class _Command:
-    name: str  # "ping" or "get_status"
+    type: _CommandType
 
 
 @dataclass
@@ -144,7 +150,7 @@ class _AsyncScanner:
     def get_next(self: _AsyncScanner) -> UnprocessedWaveform:
         return self._get_scan().waveform
 
-    def get_device_info(self: _AsyncScanner) -> dict[str, Any]:
+    def get_device_info(self: _AsyncScanner) -> DeviceInfo:
         if not self.is_scanning:
             msg = "Scanner not connected"
             raise SerialException(msg)
@@ -164,11 +170,11 @@ class _AsyncScanner:
 
     def ping(self: _AsyncScanner) -> PingResult:
         """Send a ping command to the scanner child process."""
-        return self._send_command(_Command("ping"))
+        return self._send_command(_Command(_CommandType.PING))
 
-    def get_status(self: _AsyncScanner) -> dict[str, Any]:
+    def get_status(self: _AsyncScanner) -> DeviceStatus:
         """Query device status via the scanner child process."""
-        return self._send_command(_Command("get_status"))
+        return self._send_command(_Command(_CommandType.GET_STATUS))
 
     def _send_command(self: _AsyncScanner, cmd: _Command) -> Any:  # noqa: ANN401
         if not self.is_scanning:
@@ -265,9 +271,9 @@ class _AsyncScanner:
         while cmd_conn.poll(0):
             cmd: _Command = cmd_conn.recv()
             try:
-                if cmd.name == "ping":
+                if cmd.type == _CommandType.PING:
                     result = scanner.ping()
-                elif cmd.name == "get_status":
+                elif cmd.type == _CommandType.GET_STATUS:
                     result = scanner.get_status()
                 else:
                     result = None

@@ -6,6 +6,7 @@ from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.scanning.scanner import Scanner
+from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
@@ -60,9 +61,9 @@ def test_lescanner_get_device_info(
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
     info = scanner.get_device_info()
-    assert isinstance(info, dict)
-    assert info["serial_number"] != ""
-    assert info["firmware_version"] != ""
+    assert isinstance(info, DeviceInfo)
+    assert info.serial_number != ""
+    assert info.firmware_version != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from serial import SerialException, serialutil
 from typing_extensions import Self
@@ -11,7 +11,7 @@ from ._asyncscanner import _AsyncScanner
 if TYPE_CHECKING:
     from pyglaze.datamodels import UnprocessedWaveform
     from pyglaze.device.configuration import DeviceConfiguration
-    from pyglaze.scanning.scanner import PingResult
+    from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 
 class ScannerStartupError(Exception):
@@ -62,7 +62,7 @@ class GlazeClient:
         """
         return self._scanner.get_scans(n_pulses)
 
-    def get_device_info(self: GlazeClient) -> dict[str, Any]:
+    def get_device_info(self: GlazeClient) -> DeviceInfo:
         """Get device information."""
         try:
             return self._scanner.get_device_info()
@@ -96,7 +96,7 @@ class GlazeClient:
             msg = "No connection to device."
             raise SerialException(msg) from e
 
-    def get_status(self: GlazeClient) -> dict[str, Any]:
+    def get_status(self: GlazeClient) -> DeviceStatus:
         """Query device status."""
         try:
             return self._scanner.get_status()

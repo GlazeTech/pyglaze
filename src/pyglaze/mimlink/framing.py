@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Final
 
-CRC32_POLYNOMIAL: Final[int] = 0x04C11DB7
-CRC32_INITIAL: Final[int] = 0xFFFFFFFF
+from cobs import cobs as _cobs
+from crccheck.crc import Crc32Mpeg2
+
 FRAME_DELIMITER: Final[int] = 0x00
-COBS_MAX_CODE: Final[int] = 0xFF
 CRC_SIZE_BYTES: Final[int] = 4
 
 
@@ -17,72 +17,20 @@ class FrameDecodeError(ValueError):
 
 def crc32_stm32(data: bytes) -> int:
     """Compute STM32F4-compatible CRC-32/MPEG-2."""
-    crc = CRC32_INITIAL
-    for byte in data:
-        crc ^= byte << 24
-        for _ in range(8):
-            if crc & 0x80000000:
-                crc = ((crc << 1) ^ CRC32_POLYNOMIAL) & 0xFFFFFFFF
-            else:
-                crc = (crc << 1) & 0xFFFFFFFF
-    return crc
+    return Crc32Mpeg2.calc(data)
 
 
 def cobs_encode(data: bytes) -> bytes:
     """COBS-encode a payload (without delimiter)."""
-    out = bytearray()
-    code_idx = 0
-    out.append(0)
-    code = 1
-
-    for byte in data:
-        if byte == 0:
-            out[code_idx] = code
-            code_idx = len(out)
-            out.append(0)
-            code = 1
-        else:
-            out.append(byte)
-            code += 1
-            if code == COBS_MAX_CODE:
-                out[code_idx] = code
-                code_idx = len(out)
-                out.append(0)
-                code = 1
-
-    out[code_idx] = code
-    return bytes(out)
+    return _cobs.encode(data)
 
 
 def cobs_decode(data: bytes) -> bytes:
     """COBS-decode a payload (without delimiter)."""
-    if not data:
-        msg = "empty COBS payload"
-        raise FrameDecodeError(msg)
-
-    out = bytearray()
-    index = 0
-    length = len(data)
-
-    while index < length:
-        code = data[index]
-        if code == 0:
-            msg = "invalid COBS code 0"
-            raise FrameDecodeError(msg)
-        index += 1
-
-        run_end = index + code - 1
-        if run_end > length:
-            msg = "COBS run exceeds input length"
-            raise FrameDecodeError(msg)
-
-        out.extend(data[index:run_end])
-        index = run_end
-
-        if code != COBS_MAX_CODE and index < length:
-            out.append(0)
-
-    return bytes(out)
+    try:
+        return _cobs.decode(data)
+    except _cobs.DecodeError as e:
+        raise FrameDecodeError(str(e)) from e
 
 
 def encode_frame(payload: bytes) -> bytes:
