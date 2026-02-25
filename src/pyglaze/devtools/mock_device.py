@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -9,9 +8,6 @@ from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
 from pyglaze.mimlink.proto import envelope_pb2
 from pyglaze.mimlink.rx_stream import RxFrameStream
-
-if TYPE_CHECKING:
-    from pyglaze.device.configuration import DeviceConfiguration
 
 
 def _msg_type(name: str) -> int:
@@ -390,27 +386,27 @@ def list_mock_devices() -> list[str]:
     ]
 
 
-def _mock_device_factory(config: DeviceConfiguration) -> MimLinkMockDevice:
-    if config.amp_port == "mock_mimlink_device":
+def _mock_device_factory(port: str) -> MimLinkMockDevice:
+    if port == "mock_mimlink_device":
         return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_BULK)
-    if config.amp_port == "mock_mimlink_per_point":
+    if port == "mock_mimlink_per_point":
         return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_PER_POINT)
-    if config.amp_port == "mock_mimlink_drop_chunk":
+    if port == "mock_mimlink_drop_chunk":
         return MimLinkMockDevice(
             transfer_mode=_TRANSFER_MODE_BULK, drop_chunk_once=True
         )
-    if config.amp_port == "mock_mimlink_drop_point":
+    if port == "mock_mimlink_drop_point":
         return MimLinkMockDevice(
             transfer_mode=_TRANSFER_MODE_PER_POINT, drop_point_once=True
         )
-    if config.amp_port == "mock_mimlink_scan_should_fail":
+    if port == "mock_mimlink_scan_should_fail":
         return MimLinkMockDevice(fail_after=0, transfer_mode=_TRANSFER_MODE_BULK)
-    if config.amp_port == "mock_mimlink_fail_first_scan":
+    if port == "mock_mimlink_fail_first_scan":
         return MimLinkMockDevice(
             fail_after=0,
             n_fails=1,
             transfer_mode=_TRANSFER_MODE_BULK,
         )
 
-    msg = f"Unknown mock device requested: {config.amp_port}. Valid options are: {list_mock_devices()}"
+    msg = f"Unknown mock device requested: {port}. Valid options are: {list_mock_devices()}"
     raise ValueError(msg)

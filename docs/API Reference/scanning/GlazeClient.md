@@ -12,16 +12,15 @@
 ## Examples
 
 ```py title="Initialize a Scanner and perform two scans"
-from pyglaze.device import LeDeviceConfiguration
+from pyglaze.device import ConnectionInfo, ScannerConfiguration
 from pyglaze.scanning import GlazeClient
 
 
 def main() -> None:
     n_pulses = 2
-    device_config = LeDeviceConfiguration(
-        amp_port="mock_mimlink_device", delayunit="mock_delay"
-    )
-    with GlazeClient(device_config) as client:
+    connection = ConnectionInfo(port="mock_mimlink_device")
+    config = ScannerConfiguration()
+    with GlazeClient(connection, config) as client:
         unprocessed_waveforms = client.read(n_pulses=n_pulses)
 
 
@@ -30,4 +29,4 @@ if __name__ == "__main__":
 
 ```
 
-1. The config file should be valid JSON of the `DeviceConfiguration` type. See a list of configuration options under "API Reference > Device".
+1. The config file should be valid JSON of the `ScannerConfiguration` type. See a list of configuration options under "API Reference > Device".

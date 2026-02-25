@@ -17,7 +17,8 @@ if TYPE_CHECKING:
     import logging
     from multiprocessing.connection import Connection
 
-    from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.device.configuration import ScannerConfiguration
+    from pyglaze.device.transport import ConnectionInfo
     from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 
@@ -79,13 +80,15 @@ class _AsyncScanner:
 
     def start_scan(
         self: _AsyncScanner,
-        config: DeviceConfiguration,
+        connection: ConnectionInfo,
+        config: ScannerConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
         """Starts continuously scanning in new process.
 
         Args:
-            config: Device configuration
+            connection: Connection info for the device.
+            config: Scan configuration.
             initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
                 Use this to maintain consistent polarity across scanner instances.
         """
@@ -93,7 +96,7 @@ class _AsyncScanner:
         self._cached_phase_estimate = (
             initial_phase_estimate  # Initialize cache with initial value
         )
-        self._SCAN_TIMEOUT = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001, access to private attribute for backwards compatibility
+        self._SCAN_TIMEOUT = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
         self._shared_mem = Queue(maxsize=self.queue_maxsize)
         self._stop_signal = Event()
         self._scanner_conn, child_conn = Pipe()
@@ -107,7 +110,7 @@ class _AsyncScanner:
         )
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[config, ipc, initial_phase_estimate],
+            args=[connection, config, ipc, initial_phase_estimate],
         )
         self._child_process.start()
 
@@ -209,13 +212,16 @@ class _AsyncScanner:
 
     @staticmethod
     def _run_scanner(
-        config: DeviceConfiguration,
+        connection: ConnectionInfo,
+        config: ScannerConfiguration,
         ipc: _ScannerIPC,
         initial_phase_estimate: float | None = None,
     ) -> None:
         try:
             scanner = Scanner(
-                config=config, initial_phase_estimate=initial_phase_estimate
+                connection=connection,
+                config=config,
+                initial_phase_estimate=initial_phase_estimate,
             )
             metadata = _ScannerMetadata(device_info=scanner.get_device_info())
             ipc.parent_conn.send(

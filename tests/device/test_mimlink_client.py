@@ -3,26 +3,31 @@ from __future__ import annotations
 import pytest
 
 from pyglaze.device.ampcom import DeviceComError
-from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.mimlink_transport import _compute_scanning_list, open_client
+from pyglaze.device.configuration import Interval, ScannerConfiguration
+from pyglaze.device.mimlink_client import MimLinkClient
+from pyglaze.device.transport import ConnectionInfo
+from pyglaze.devtools.mock_device import _mock_device_factory
+from pyglaze.scanning.scanner import _compute_scanning_list
 
 
-def _build_config(
+def _build(
     port: str = "mock_mimlink_device", n_points: int = 100
-) -> LeDeviceConfiguration:
-    return LeDeviceConfiguration(
-        amp_port=port,
+) -> tuple[ConnectionInfo, ScannerConfiguration, MimLinkClient]:
+    conn = ConnectionInfo(port)
+    config = ScannerConfiguration(
         use_ema=False,
         n_points=n_points,
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
-        amp_timeout_seconds=7,
     )
+    backend = _mock_device_factory(conn.port)
+    backend.reset_input_buffer()
+    transport = MimLinkClient(backend, timeout=5.0)
+    return conn, config, transport
 
 
 def test_set_settings_and_upload_list() -> None:
-    config = _build_config()
-    transport = open_client(config)
+    _, config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -32,8 +37,7 @@ def test_set_settings_and_upload_list() -> None:
 
 
 def test_full_scan_bulk() -> None:
-    config = _build_config()
-    transport = open_client(config)
+    _, config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -47,8 +51,7 @@ def test_full_scan_bulk() -> None:
 
 
 def test_full_scan_per_point() -> None:
-    config = _build_config(port="mock_mimlink_per_point")
-    transport = open_client(config)
+    _, config, transport = _build(port="mock_mimlink_per_point")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -62,8 +65,7 @@ def test_full_scan_per_point() -> None:
 
 
 def test_get_device_info() -> None:
-    config = _build_config()
-    transport = open_client(config)
+    _, config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -76,8 +78,7 @@ def test_get_device_info() -> None:
 
 
 def test_get_status() -> None:
-    config = _build_config()
-    transport = open_client(config)
+    _, config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -90,8 +91,7 @@ def test_get_status() -> None:
 
 
 def test_retransmit_missing_chunks() -> None:
-    config = _build_config(port="mock_mimlink_drop_chunk")
-    transport = open_client(config)
+    _, config, transport = _build(port="mock_mimlink_drop_chunk")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -103,8 +103,7 @@ def test_retransmit_missing_chunks() -> None:
 
 
 def test_retransmit_missing_points() -> None:
-    config = _build_config(port="mock_mimlink_drop_point")
-    transport = open_client(config)
+    _, config, transport = _build(port="mock_mimlink_drop_point")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -116,8 +115,7 @@ def test_retransmit_missing_points() -> None:
 
 
 def test_scan_failure() -> None:
-    config = _build_config(port="mock_mimlink_scan_should_fail")
-    transport = open_client(config)
+    _, config, transport = _build(port="mock_mimlink_scan_should_fail")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -129,8 +127,7 @@ def test_scan_failure() -> None:
 
 
 def test_ping() -> None:
-    config = _build_config()
-    transport = open_client(config)
+    _, _, transport = _build()
     nonce = transport.ping(0xDEADBEEF)
     assert nonce == 0xDEADBEEF
     transport.close()

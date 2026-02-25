@@ -2,33 +2,48 @@ import numpy as np
 import pytest
 
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
-from pyglaze.device import Interval, LeDeviceConfiguration
+from pyglaze.device import ConnectionInfo, Interval, ScannerConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
-DEVICE_CONFIGS = ["le_device_config"]
+DEVICE_CONFIGS = ["scanner_config"]
 
 
 @pytest.fixture
-def le_device_config() -> LeDeviceConfiguration:
-    return LeDeviceConfiguration(
-        amp_port="mock_mimlink_device",
-        use_ema=True,
-        n_points=100,
-        scan_intervals=[Interval(0.0, 1.0)],
-        integration_periods=1,
-        amp_timeout_seconds=7,
+def scanner_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+    return (
+        ConnectionInfo("mock_mimlink_device"),
+        ScannerConfiguration(
+            use_ema=True,
+            n_points=100,
+            scan_intervals=[Interval(0.0, 1.0)],
+            integration_periods=1,
+        ),
     )
 
 
 @pytest.fixture
-def mimlink_device_config() -> LeDeviceConfiguration:
-    return LeDeviceConfiguration(
-        amp_port="mock_mimlink_device",
-        use_ema=True,
-        n_points=100,
-        scan_intervals=[Interval(0.0, 1.0)],
-        integration_periods=1,
-        amp_timeout_seconds=7,
+def le_device_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+    return (
+        ConnectionInfo("mock_mimlink_device"),
+        ScannerConfiguration(
+            use_ema=True,
+            n_points=100,
+            scan_intervals=[Interval(0.0, 1.0)],
+            integration_periods=1,
+        ),
+    )
+
+
+@pytest.fixture
+def mimlink_device_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+    return (
+        ConnectionInfo("mock_mimlink_device"),
+        ScannerConfiguration(
+            use_ema=True,
+            n_points=100,
+            scan_intervals=[Interval(0.0, 1.0)],
+            integration_periods=1,
+        ),
     )
 
 

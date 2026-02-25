@@ -3,13 +3,11 @@ from __future__ import annotations
 import contextlib
 import math
 import time
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
-import serial
 
-from pyglaze.device.ampcom import DeviceComError, _points_per_interval
-from pyglaze.devtools.mock_device import _mock_device_factory
+from pyglaze.device.ampcom import DeviceComError
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
 from pyglaze.mimlink.proto import envelope_pb2
@@ -20,7 +18,7 @@ if TYPE_CHECKING:
 
     from google.protobuf.message import Message
 
-    from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+    from pyglaze.device.transport import TransportBackend
     from pyglaze.helpers._types import FloatArray
 
 
@@ -55,53 +53,6 @@ _TRANSFER_MODE_PER_POINT = 1
 _RESULTS_CHUNK_SIZE = 20
 _MAX_RETRANSMIT_ATTEMPTS = 3
 _LIST_CHUNK_SIZE = 50
-
-
-class TransportBackend(Protocol):
-    """Byte-level I/O backend for MimLink transport.
-
-    Any object implementing this protocol can be used as a
-    backend for MimLinkClient — serial, USB, TCP, BLE, mock, etc.
-    """
-
-    @property
-    def in_waiting(self) -> int:
-        """Number of bytes waiting in the receive buffer."""
-        ...
-
-    def read(self, size: int) -> bytes:
-        """Read up to ``size`` bytes. May return fewer."""
-        ...
-
-    def write(self, data: bytes) -> int | None:
-        """Write ``data`` bytes. Returns number of bytes written."""
-        ...
-
-    def reset_input_buffer(self) -> None:
-        """Discard any buffered input data."""
-        ...
-
-    def close(self) -> None:
-        """Release the underlying resource."""
-        ...
-
-
-def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[float]:
-    """Compute the scanning frequency list from config."""
-    scanning_list: list[float] = []
-    for interval, pts in zip(
-        intervals,
-        _points_per_interval(n_points, intervals),
-    ):
-        scanning_list.extend(
-            np.linspace(
-                interval.lower,
-                interval.upper,
-                pts,
-                endpoint=len(intervals) == 1,
-            ),
-        )
-    return scanning_list
 
 
 class MimLinkClient:
@@ -411,25 +362,3 @@ class MimLinkClient:
             self._rx_stream.reset()
         with contextlib.suppress(AttributeError):
             self._ser.close()
-
-
-def open_client(config: LeDeviceConfiguration) -> MimLinkClient:
-    """Create a MimLinkClient from device configuration.
-
-    Uses serial for real devices, mock backends for testing.
-    """
-    if "mock_" in config.amp_port:
-        backend: TransportBackend = cast(
-            "TransportBackend", _mock_device_factory(config)
-        )
-    else:
-        backend = cast(
-            "TransportBackend",
-            serial.serial_for_url(
-                url=config.amp_port,
-                baudrate=config.amp_baudrate,
-                timeout=config.amp_timeout_seconds,
-            ),
-        )
-    backend.reset_input_buffer()
-    return MimLinkClient(backend, timeout=config.amp_timeout_seconds or 5.0)
