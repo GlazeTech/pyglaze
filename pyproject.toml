@@ -106,16 +106,6 @@ convention = "google"
     "T201", # allow prints in tests
     "ARG005", # allow unused callback args in tests
     "FBT003", # allow positional booleans in protocol matrix tests
-    "B009", # getattr usage for generated module interop
-]
-"src/pyglaze/mimlink/codec.py" = [
-    "ANN401", # protobuf-generated envelope objects are dynamically typed
-    "B009", # getattr avoids static analyzer issues with generated code
-]
-"src/pyglaze/device/mimlink_transport.py" = [
-    "ANN401", # protobuf-generated envelope objects are dynamically typed
-    "C901", # dispatch logic in collect methods
-    "PLR0912", # branch count in collect methods
 ]
 "src/pyglaze/devtools/mock_device.py" = [
     "C901", # protocol handler branching reflects message dispatch

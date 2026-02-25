@@ -5,7 +5,7 @@ from pyglaze.mimlink.proto import envelope_pb2
 
 
 def _msg_type(name: str) -> int:
-    return getattr(envelope_pb2, "MsgType").Value(name)
+    return envelope_pb2.MsgType.Value(name)
 
 
 def test_roundtrip_ping() -> None:

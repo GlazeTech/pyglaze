@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Event, Pipe, Process, Queue, synchronize
 from queue import Empty, Full
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from serial import SerialException, serialutil
 
@@ -176,7 +176,7 @@ class _AsyncScanner:
         """Query device status via the scanner child process."""
         return self._send_command(_Command(_CommandType.GET_STATUS))
 
-    def _send_command(self: _AsyncScanner, cmd: _Command) -> Any:  # noqa: ANN401
+    def _send_command(self: _AsyncScanner, cmd: _Command) -> PingResult | DeviceStatus:
         if not self.is_scanning:
             msg = "Scanner not connected"
             raise SerialException(msg)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import math
 import time
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import numpy as np
 import serial
@@ -18,7 +18,12 @@ from pyglaze.mimlink.proto import envelope_pb2
 from pyglaze.mimlink.rx_stream import RxFrameStream
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from google.protobuf.message import Message
+
     from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+    from pyglaze.helpers._types import FloatArray
 
 
 def _msg_type(name: str) -> int:
@@ -54,22 +59,36 @@ _MAX_RETRANSMIT_ATTEMPTS = 3
 _LIST_CHUNK_SIZE = 50
 
 
-class _SerialLike(Protocol):
+class TransportBackend(Protocol):
+    """Byte-level I/O backend for MimLink transport.
+
+    Any object implementing this protocol can be used as a
+    backend for MimLinkTransport — serial, USB, TCP, BLE, mock, etc.
+    """
+
     @property
-    def in_waiting(self) -> int: ...
+    def in_waiting(self) -> int:
+        """Number of bytes waiting in the receive buffer."""
+        ...
 
-    def read(self, size: int) -> bytes: ...
+    def read(self, size: int) -> bytes:
+        """Read up to ``size`` bytes. May return fewer."""
+        ...
 
-    def write(self, data: bytes) -> int | None: ...
+    def write(self, data: bytes) -> int | None:
+        """Write ``data`` bytes. Returns number of bytes written."""
+        ...
 
-    def reset_input_buffer(self) -> None: ...
+    def reset_input_buffer(self) -> None:
+        """Discard any buffered input data."""
+        ...
 
-    def close(self) -> None: ...
+    def close(self) -> None:
+        """Release the underlying resource."""
+        ...
 
 
-def _compute_scanning_list(
-    n_points: int, intervals: list[Interval]
-) -> list[float]:
+def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[float]:
     """Compute the scanning frequency list from config."""
     scanning_list: list[float] = []
     for interval, pts in zip(
@@ -90,33 +109,23 @@ def _compute_scanning_list(
 class MimLinkTransport:
     """Synchronous MimLink communication over serial."""
 
-    def __init__(self, config: LeDeviceConfiguration) -> None:
-        self._config = config
+    def __init__(
+        self,
+        backend: TransportBackend,
+        timeout: float = 5.0,
+    ) -> None:
+        self._ser = backend
+        self._timeout = timeout
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
-        self._env_buffer: list[Any] = []
-
-        if "mock_" in config.amp_port:
-            self._ser: _SerialLike = cast(
-                "_SerialLike", _mock_device_factory(config)
-            )
-        else:
-            self._ser = cast(
-                "_SerialLike",
-                serial.serial_for_url(
-                    url=config.amp_port,
-                    baudrate=config.amp_baudrate,
-                    timeout=config.amp_timeout_seconds,
-                ),
-            )
-        self._ser.reset_input_buffer()
+        self._env_buffer: list[Message] = []
         self.last_transfer_mode: int = 0
 
     def __del__(self) -> None:
         """Clean up serial connection."""
         self.close()
 
-    def _send(self, envelope: Any) -> None:
+    def _send(self, envelope: Message) -> None:
         self._ser.write(self._codec.encode(envelope))
 
     def _drain_serial(self) -> None:
@@ -134,10 +143,10 @@ class MimLinkTransport:
             except FrameDecodeError:  # noqa: PERF203
                 continue
 
-    def _receive(self, timeout: float | None = None) -> Any:
+    def _receive(self, timeout: float | None = None) -> Message:
         """Block until one Envelope is received. Raises DeviceComError on timeout."""
         if timeout is None:
-            timeout = self._config.amp_timeout_seconds or 5.0
+            timeout = self._timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._env_buffer:
@@ -146,19 +155,19 @@ class MimLinkTransport:
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
-    def _send_receive(self, envelope: Any, timeout: float | None = None) -> Any:
+    def _send_receive(self, envelope: Message, timeout: float | None = None) -> Message:
         self._send(envelope)
         return self._receive(timeout)
 
     def _receive_until(
         self,
-        predicate: Any,
-        collector: Any,
+        predicate: Callable[[Message], bool],
+        collector: Callable[[Message], None],
         timeout: float | None = None,
     ) -> None:
         """Read envelopes until predicate(envelope) returns True, calling collector(envelope) for each."""
         if timeout is None:
-            timeout = self._config.amp_timeout_seconds or 5.0
+            timeout = self._timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             # Process buffered envelopes first.
@@ -173,7 +182,9 @@ class MimLinkTransport:
 
     # --- High-level operations ---
 
-    def set_settings(self, n_points: int, integration_periods: int, *, use_ema: bool) -> None:
+    def set_settings(
+        self, n_points: int, integration_periods: int, *, use_ema: bool
+    ) -> None:
         """Send settings to device."""
         env = self._codec.build_envelope(_SET_SETTINGS_REQUEST)
         req = env.set_settings_request
@@ -181,7 +192,10 @@ class MimLinkTransport:
         req.integration_periods = integration_periods
         req.use_ema = use_ema
         resp = self._send_receive(env)
-        if resp.type != _SET_SETTINGS_RESPONSE or not resp.set_settings_response.success:
+        if (
+            resp.type != _SET_SETTINGS_RESPONSE
+            or not resp.set_settings_response.success
+        ):
             msg = f"Failed to set settings: {resp}"
             raise DeviceComError(msg)
 
@@ -192,7 +206,10 @@ class MimLinkTransport:
         env = self._codec.build_envelope(_SET_LIST_START_REQUEST)
         env.set_list_start_request.total_floats = total
         resp = self._send_receive(env)
-        if resp.type != _SET_LIST_START_RESPONSE or not resp.set_list_start_response.ready:
+        if (
+            resp.type != _SET_LIST_START_RESPONSE
+            or not resp.set_list_start_response.ready
+        ):
             msg = f"Failed to start list upload: {resp}"
             raise DeviceComError(msg)
 
@@ -208,11 +225,16 @@ class MimLinkTransport:
             self._send(chunk_env)
 
         resp = self._receive()
-        if resp.type != _SET_LIST_COMPLETE_RESPONSE or not resp.set_list_complete_response.success:
+        if (
+            resp.type != _SET_LIST_COMPLETE_RESPONSE
+            or not resp.set_list_complete_response.success
+        ):
             msg = f"Failed to upload list: {resp}"
             raise DeviceComError(msg)
 
-    def start_scan(self, n_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def start_scan(
+        self, n_points: int, sweep_length_ms: float
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
         """Start scan and collect results. Returns (times, Xs, Ys)."""
         env = self._codec.build_envelope(_START_SCAN_REQUEST)
         env.start_scan_request.SetInParent()
@@ -225,19 +247,21 @@ class MimLinkTransport:
 
         if resp.start_scan_response.transfer_mode == _TRANSFER_MODE_PER_POINT:
             return self._collect_per_point(n_points)
-        return self._collect_bulk(n_points)
+        return self._collect_bulk(n_points, sweep_length_ms)
 
-    def _collect_bulk(self, n_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        self._await_scan_complete()
+    def _collect_bulk(
+        self, n_points: int, sweep_length_ms: float
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
+        self._await_scan_complete(sweep_length_ms)
 
         env = self._codec.build_envelope(_GET_RESULTS_REQUEST)
         env.get_results_request.SetInParent()
         self._send(env)
 
-        chunks: list[Any] = []
+        chunks: list[Message] = []
         complete = False
 
-        def collector(e: Any) -> None:
+        def collector(e: Message) -> None:
             nonlocal complete
             if e.type == _RESULTS_CHUNK:
                 chunks.append(e.results_chunk)
@@ -262,11 +286,13 @@ class MimLinkTransport:
         Ys = np.concatenate([np.array(list(c.y)) for c in chunks])
         return times, Xs, Ys
 
-    def _collect_per_point(self, n_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        points: list[Any] = []
+    def _collect_per_point(
+        self, n_points: int
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
+        points: list[Message] = []
         complete = False
 
-        def collector(e: Any) -> None:
+        def collector(e: Message) -> None:
             nonlocal complete
             if e.type == _RESULT_POINT:
                 points.append(e.result_point)
@@ -291,7 +317,7 @@ class MimLinkTransport:
         Ys = np.array([p.y for p in points])
         return times, Xs, Ys
 
-    def _retransmit_missing_chunks(self, chunks: list[Any], n_points: int) -> None:
+    def _retransmit_missing_chunks(self, chunks: list[Message], n_points: int) -> None:
         expected_count = math.ceil(n_points / _RESULTS_CHUNK_SIZE)
         received = {c.chunk_index for c in chunks}
         missing = set(range(expected_count)) - received
@@ -303,14 +329,19 @@ class MimLinkTransport:
                 env = self._codec.build_envelope(_RESULTS_CHUNK_NAK)
                 env.results_chunk_nak.chunk_index = idx
                 resp = self._send_receive(env, timeout=5.0)
-                if resp.type == _RESULTS_CHUNK_RETRANSMIT and resp.results_chunk_retransmit.available:
+                if (
+                    resp.type == _RESULTS_CHUNK_RETRANSMIT
+                    and resp.results_chunk_retransmit.available
+                ):
                     chunks.append(resp.results_chunk_retransmit)
                     break
             else:
-                msg = f"Chunk {idx} unavailable after {_MAX_RETRANSMIT_ATTEMPTS} attempts"
+                msg = (
+                    f"Chunk {idx} unavailable after {_MAX_RETRANSMIT_ATTEMPTS} attempts"
+                )
                 raise DeviceComError(msg)
 
-    def _retransmit_missing_points(self, points: list[Any], n_points: int) -> None:
+    def _retransmit_missing_points(self, points: list[Message], n_points: int) -> None:
         expected = set(range(n_points))
         received = {p.point_index for p in points}
         missing = expected - received
@@ -322,23 +353,31 @@ class MimLinkTransport:
                 env = self._codec.build_envelope(_RESULT_POINT_NAK)
                 env.result_point_nak.point_index = idx
                 resp = self._send_receive(env, timeout=5.0)
-                if resp.type == _RESULT_POINT_RETRANSMIT and resp.result_point_retransmit.available:
+                if (
+                    resp.type == _RESULT_POINT_RETRANSMIT
+                    and resp.result_point_retransmit.available
+                ):
                     points.append(resp.result_point_retransmit)
                     break
             else:
-                msg = f"Point {idx} unavailable after {_MAX_RETRANSMIT_ATTEMPTS} attempts"
+                msg = (
+                    f"Point {idx} unavailable after {_MAX_RETRANSMIT_ATTEMPTS} attempts"
+                )
                 raise DeviceComError(msg)
 
-    def _await_scan_complete(self) -> None:
+    def _await_scan_complete(self, sweep_length_ms: float) -> None:
         """Poll device status until scan is no longer ongoing."""
-        time.sleep(self._config._sweep_length_ms * 1e-3)  # noqa: SLF001
+        time.sleep(sweep_length_ms * 1e-3)
         while True:
             env = self._codec.build_envelope(_GET_STATUS_REQUEST)
             env.get_status_request.SetInParent()
             resp = self._send_receive(env)
-            if resp.type != _GET_STATUS_RESPONSE or not resp.get_status_response.scan_ongoing:
+            if (
+                resp.type != _GET_STATUS_RESPONSE
+                or not resp.get_status_response.scan_ongoing
+            ):
                 return
-            time.sleep(self._config._sweep_length_ms * 1e-3 * 0.01)  # noqa: SLF001
+            time.sleep(sweep_length_ms * 1e-3 * 0.01)
 
     def ping(self, nonce: int) -> int:
         """Send a ping and return the echoed nonce."""
@@ -350,7 +389,7 @@ class MimLinkTransport:
             raise DeviceComError(msg)
         return resp.pong.nonce
 
-    def get_device_info(self) -> Any:
+    def get_device_info(self) -> Message:
         """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""
         env = self._codec.build_envelope(_GET_DEVICE_INFO_REQUEST)
         env.get_device_info_request.SetInParent()
@@ -360,7 +399,7 @@ class MimLinkTransport:
             raise DeviceComError(msg)
         return resp.get_device_info_response
 
-    def get_status(self) -> Any:
+    def get_status(self) -> Message:
         """Query device status. Returns the protobuf GetStatusResponse sub-message."""
         env = self._codec.build_envelope(_GET_STATUS_REQUEST)
         env.get_status_request.SetInParent()
@@ -376,3 +415,25 @@ class MimLinkTransport:
             self._rx_stream.reset()
         with contextlib.suppress(AttributeError):
             self._ser.close()
+
+
+def open_transport(config: LeDeviceConfiguration) -> MimLinkTransport:
+    """Create a MimLinkTransport from device configuration.
+
+    Uses serial for real devices, mock backends for testing.
+    """
+    if "mock_" in config.amp_port:
+        backend: TransportBackend = cast(
+            "TransportBackend", _mock_device_factory(config)
+        )
+    else:
+        backend = cast(
+            "TransportBackend",
+            serial.serial_for_url(
+                url=config.amp_port,
+                baudrate=config.amp_baudrate,
+                timeout=config.amp_timeout_seconds,
+            ),
+        )
+    backend.reset_input_buffer()
+    return MimLinkTransport(backend, timeout=config.amp_timeout_seconds or 5.0)

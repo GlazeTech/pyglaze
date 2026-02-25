@@ -5,7 +5,11 @@ import time
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
-from pyglaze.device.mimlink_transport import MimLinkTransport, _compute_scanning_list
+from pyglaze.device.mimlink_transport import (
+    MimLinkTransport,
+    _compute_scanning_list,
+    open_transport,
+)
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
@@ -53,7 +57,7 @@ class Scanner:
         if port_changed:
             if self._transport is not None:
                 self._transport.close()
-            self._transport = MimLinkTransport(new_config)
+            self._transport = open_transport(new_config)
             self._transport.set_settings(
                 new_config.n_points,
                 new_config.integration_periods,
@@ -94,7 +98,10 @@ class Scanner:
         if self._transport is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        times, Xs, Ys = self._transport.start_scan(self._config.n_points)
+        times, Xs, Ys = self._transport.start_scan(
+            self._config.n_points,
+            self._config._sweep_length_ms,  # noqa: SLF001
+        )
         self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
         return UnprocessedWaveform.from_inphase_quadrature(
             times, Xs, Ys, self._phase_estimator.phase_estimate

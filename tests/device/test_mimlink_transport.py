@@ -4,10 +4,12 @@ import pytest
 
 from pyglaze.device.ampcom import DeviceComError
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.mimlink_transport import MimLinkTransport, _compute_scanning_list
+from pyglaze.device.mimlink_transport import _compute_scanning_list, open_transport
 
 
-def _build_config(port: str = "mock_mimlink_device", n_points: int = 100) -> LeDeviceConfiguration:
+def _build_config(
+    port: str = "mock_mimlink_device", n_points: int = 100
+) -> LeDeviceConfiguration:
     return LeDeviceConfiguration(
         amp_port=port,
         use_ema=False,
@@ -20,20 +22,24 @@ def _build_config(port: str = "mock_mimlink_device", n_points: int = 100) -> LeD
 
 def test_set_settings_and_upload_list() -> None:
     config = _build_config()
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
     transport.close()
 
 
 def test_full_scan_bulk() -> None:
     config = _build_config()
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
-    times, Xs, Ys = transport.start_scan(config.n_points)
+    times, Xs, Ys = transport.start_scan(config.n_points, config._sweep_length_ms)
     assert len(times) == config.n_points
     assert len(Xs) == config.n_points
     assert len(Ys) == config.n_points
@@ -42,23 +48,26 @@ def test_full_scan_bulk() -> None:
 
 def test_full_scan_per_point() -> None:
     config = _build_config(port="mock_mimlink_per_point")
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
-    times, Xs, Ys = transport.start_scan(config.n_points)
+    times, Xs, Ys = transport.start_scan(config.n_points, config._sweep_length_ms)
     assert len(times) == config.n_points
     assert len(Xs) == config.n_points
     assert len(Ys) == config.n_points
     transport.close()
 
 
-
 def test_get_device_info() -> None:
     config = _build_config()
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
     info = transport.get_device_info()
     assert info.serial_number == "M-9999"
@@ -68,9 +77,11 @@ def test_get_device_info() -> None:
 
 def test_get_status() -> None:
     config = _build_config()
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
     status = transport.get_status()
     assert status.scan_ongoing is False
@@ -80,32 +91,46 @@ def test_get_status() -> None:
 
 def test_retransmit_missing_chunks() -> None:
     config = _build_config(port="mock_mimlink_drop_chunk")
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
-    times, _Xs, _Ys = transport.start_scan(config.n_points)
+    times, _Xs, _Ys = transport.start_scan(config.n_points, config._sweep_length_ms)
     assert len(times) == config.n_points
     transport.close()
 
 
 def test_retransmit_missing_points() -> None:
     config = _build_config(port="mock_mimlink_drop_point")
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
-    times, _Xs, _Ys = transport.start_scan(config.n_points)
+    times, _Xs, _Ys = transport.start_scan(config.n_points, config._sweep_length_ms)
     assert len(times) == config.n_points
     transport.close()
 
 
 def test_scan_failure() -> None:
     config = _build_config(port="mock_mimlink_scan_should_fail")
-    transport = MimLinkTransport(config)
+    transport = open_transport(config)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    transport.set_settings(config.n_points, config.integration_periods, use_ema=config.use_ema)
+    transport.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
     transport.upload_list(scanning_list)
     with pytest.raises(DeviceComError):
-        transport.start_scan(config.n_points)
+        transport.start_scan(config.n_points, config._sweep_length_ms)
+    transport.close()
+
+
+def test_ping() -> None:
+    config = _build_config()
+    transport = open_transport(config)
+    nonce = transport.ping(0xDEADBEEF)
+    assert nonce == 0xDEADBEEF
     transport.close()

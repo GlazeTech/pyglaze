@@ -217,7 +217,9 @@ class MimLinkMockDevice:
             self._result_chunks[chunk_idx] = env
 
     def _send_per_point_stream(self) -> None:
-        points = sorted(self._result_points.values(), key=lambda e: e.result_point.point_index)
+        points = sorted(
+            self._result_points.values(), key=lambda e: e.result_point.point_index
+        )
         if not points:
             return
         drop_idx = (
@@ -230,7 +232,9 @@ class MimLinkMockDevice:
             self._queue_tx(env)
 
     def _send_bulk_results(self) -> None:
-        chunks = sorted(self._result_chunks.values(), key=lambda e: e.results_chunk.chunk_index)
+        chunks = sorted(
+            self._result_chunks.values(), key=lambda e: e.results_chunk.chunk_index
+        )
         if not chunks:
             return
         drop_idx = (
@@ -275,7 +279,9 @@ class MimLinkMockDevice:
             if chunk.is_last:
                 resp = self._codec.build_envelope(_SET_LIST_COMPLETE_RESPONSE)
                 resp.set_list_complete_response.success = True
-                resp.set_list_complete_response.floats_received = len(self.scanning_list)
+                resp.set_list_complete_response.floats_received = len(
+                    self.scanning_list
+                )
                 self._queue_tx(resp)
             return
 
@@ -390,7 +396,9 @@ def _mock_device_factory(config: DeviceConfiguration) -> MimLinkMockDevice:
     if config.amp_port == "mock_mimlink_per_point":
         return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_PER_POINT)
     if config.amp_port == "mock_mimlink_drop_chunk":
-        return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_BULK, drop_chunk_once=True)
+        return MimLinkMockDevice(
+            transfer_mode=_TRANSFER_MODE_BULK, drop_chunk_once=True
+        )
     if config.amp_port == "mock_mimlink_drop_point":
         return MimLinkMockDevice(
             transfer_mode=_TRANSFER_MODE_PER_POINT, drop_point_once=True
