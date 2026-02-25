@@ -6,9 +6,9 @@ import time
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
 from pyglaze.device.mimlink_transport import (
-    MimLinkTransport,
+    MimLinkClient,
     _compute_scanning_list,
-    open_transport,
+    open_client,
 )
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
@@ -34,7 +34,7 @@ class Scanner:
             raise TypeError(msg)
 
         self._config: LeDeviceConfiguration
-        self._transport: MimLinkTransport | None = None
+        self._transport: MimLinkClient | None = None
         self._phase_estimator = _LockinPhaseEstimator(
             initial_phase_estimate=initial_phase_estimate
         )
@@ -57,7 +57,7 @@ class Scanner:
         if port_changed:
             if self._transport is not None:
                 self._transport.close()
-            self._transport = open_transport(new_config)
+            self._transport = open_client(new_config)
             self._transport.set_settings(
                 new_config.n_points,
                 new_config.integration_periods,
@@ -116,7 +116,7 @@ class Scanner:
         self.config = new_config
 
     def disconnect(self) -> None:
-        """Close serial connection."""
+        """Close the device connection."""
         if self._transport is None:
             msg = "Scanner not connected"
             raise ScanError(msg)

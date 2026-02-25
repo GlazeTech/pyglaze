@@ -61,7 +61,7 @@ class TransportBackend(Protocol):
     """Byte-level I/O backend for MimLink transport.
 
     Any object implementing this protocol can be used as a
-    backend for MimLinkTransport — serial, USB, TCP, BLE, mock, etc.
+    backend for MimLinkClient — serial, USB, TCP, BLE, mock, etc.
     """
 
     @property
@@ -104,8 +104,8 @@ def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[flo
     return scanning_list
 
 
-class MimLinkTransport:
-    """Synchronous MimLink communication over serial."""
+class MimLinkClient:
+    """Synchronous MimLink protocol client."""
 
     def __init__(
         self,
@@ -120,14 +120,14 @@ class MimLinkTransport:
         self.last_transfer_mode: int = 0
 
     def __del__(self) -> None:
-        """Clean up serial connection."""
+        """Clean up the connection."""
         self.close()
 
     def _send(self, envelope: Message) -> None:
         self._ser.write(self._codec.encode(envelope))
 
-    def _drain_serial(self) -> None:
-        """Read available serial bytes and decode all complete frames into the envelope buffer."""
+    def _drain(self) -> None:
+        """Read available bytes and decode complete frames into the envelope buffer."""
         available = self._ser.in_waiting
         if available > 0:
             data = self._ser.read(available)
@@ -149,7 +149,7 @@ class MimLinkTransport:
         while time.monotonic() < deadline:
             if self._env_buffer:
                 return self._env_buffer.pop(0)
-            self._drain_serial()
+            self._drain()
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
@@ -174,7 +174,7 @@ class MimLinkTransport:
                 collector(env)
                 if predicate(env):
                     return
-            self._drain_serial()
+            self._drain()
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
@@ -406,15 +406,15 @@ class MimLinkTransport:
         return resp.get_status_response
 
     def close(self) -> None:
-        """Close the serial connection."""
+        """Close the connection."""
         with contextlib.suppress(AttributeError):
             self._rx_stream.reset()
         with contextlib.suppress(AttributeError):
             self._ser.close()
 
 
-def open_transport(config: LeDeviceConfiguration) -> MimLinkTransport:
-    """Create a MimLinkTransport from device configuration.
+def open_client(config: LeDeviceConfiguration) -> MimLinkClient:
+    """Create a MimLinkClient from device configuration.
 
     Uses serial for real devices, mock backends for testing.
     """
@@ -432,4 +432,4 @@ def open_transport(config: LeDeviceConfiguration) -> MimLinkTransport:
             ),
         )
     backend.reset_input_buffer()
-    return MimLinkTransport(backend, timeout=config.amp_timeout_seconds or 5.0)
+    return MimLinkClient(backend, timeout=config.amp_timeout_seconds or 5.0)
