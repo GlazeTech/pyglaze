@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -8,6 +9,9 @@ from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
 from pyglaze.mimlink.proto import envelope_pb2
 from pyglaze.mimlink.rx_stream import RxFrameStream
+
+if TYPE_CHECKING:
+    from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 
 def _msg_type(name: str) -> int:
@@ -82,9 +86,9 @@ class MimLinkMockDevice:
         self._tx_buffer = bytearray()
 
         # Per-point result cache (for retransmit)
-        self._result_points: dict[int, object] = {}
+        self._result_points: dict[int, Envelope] = {}
         # Bulk result cache (for retransmit)
-        self._result_chunks: dict[int, object] = {}
+        self._result_chunks: dict[int, Envelope] = {}
 
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
@@ -140,7 +144,7 @@ class MimLinkMockDevice:
         del self._tx_buffer[:end]
         return data
 
-    def _queue_tx(self, env: object) -> None:
+    def _queue_tx(self, env: Envelope) -> None:
         self._tx_buffer.extend(self._codec.encode(env))
 
     @property
@@ -242,7 +246,7 @@ class MimLinkMockDevice:
                 continue
             self._queue_tx(env)
 
-    def _on_envelope(self, env: object) -> None:  # noqa: PLR0915
+    def _on_envelope(self, env: Envelope) -> None:  # noqa: PLR0915
         env_type = env.type
 
         if env_type == _PING:

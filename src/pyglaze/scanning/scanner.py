@@ -61,21 +61,21 @@ class Scanner:
         protocol_timeout = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
 
         if "mock_" in port:
-            backend: TransportBackend = cast(
+            transport: TransportBackend = cast(
                 "TransportBackend", _mock_device_factory(port)
             )
-            backend.reset_input_buffer()
+            transport.reset_input_buffer()
         else:
-            backend = cast("TransportBackend", SerialBackend(port))
+            transport = cast("TransportBackend", SerialBackend(port))
 
-        self._transport = MimLinkClient(backend, timeout=protocol_timeout)
-        self._transport.set_settings(
+        self._client = MimLinkClient(transport=transport, timeout=protocol_timeout)
+        self._client.set_settings(
             config.n_points,
             config.integration_periods,
             use_ema=config.use_ema,
         )
         scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-        self._transport.upload_list(scanning_list)
+        self._client.upload_list(scanning_list)
 
     @property
     def config(self) -> ScannerConfiguration:
@@ -88,7 +88,7 @@ class Scanner:
         Returns:
             UnprocessedWaveform: A raw waveform.
         """
-        times, Xs, Ys = self._transport.start_scan(
+        times, Xs, Ys = self._client.start_scan(
             self._config.n_points,
             self._config._sweep_length_ms,  # noqa: SLF001
         )
@@ -113,7 +113,7 @@ class Scanner:
         list_changed = self._config.scan_intervals != new_config.scan_intervals
 
         if settings_changed:
-            self._transport.set_settings(
+            self._client.set_settings(
                 new_config.n_points,
                 new_config.integration_periods,
                 use_ema=new_config.use_ema,
@@ -122,17 +122,17 @@ class Scanner:
             scanning_list = _compute_scanning_list(
                 new_config.n_points, new_config.scan_intervals
             )
-            self._transport.upload_list(scanning_list)
+            self._client.upload_list(scanning_list)
 
         self._config = new_config
 
     def disconnect(self) -> None:
         """Close the device connection."""
-        self._transport.close()
+        self._client.close()
 
     def get_device_info(self) -> DeviceInfo:
         """Get device information."""
-        resp = self._transport.get_device_info()
+        resp = self._client.get_device_info()
         return DeviceInfo(
             serial_number=str(resp.serial_number),
             firmware_version=str(resp.firmware_version),
@@ -155,13 +155,13 @@ class Scanner:
         """Send a ping and measure round-trip time."""
         nonce = random.randint(0, 0xFFFFFFFF)  # noqa: S311
         t0 = time.perf_counter_ns()
-        echoed = self._transport.ping(nonce)
+        echoed = self._client.ping(nonce)
         rtt_us = (time.perf_counter_ns() - t0) / 1_000
         return PingResult(success=True, round_trip_us=rtt_us, nonce=echoed)
 
     def get_status(self) -> DeviceStatus:
         """Query device status."""
-        resp = self._transport.get_status()
+        resp = self._client.get_status()
         return DeviceStatus(
             scan_ongoing=bool(resp.scan_ongoing),
             list_length=resp.list_length,

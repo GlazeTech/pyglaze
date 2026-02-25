@@ -20,7 +20,7 @@ def _build(
     )
     backend = _mock_device_factory(port)
     backend.reset_input_buffer()
-    transport = MimLinkClient(backend, timeout=5.0)
+    transport = MimLinkClient(transport=backend, timeout=5.0)
     return config, transport
 
 

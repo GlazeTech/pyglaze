@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import math
 import time
+from collections import deque
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -16,17 +17,24 @@ from pyglaze.mimlink.rx_stream import RxFrameStream
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from google.protobuf.message import Message
-
     from pyglaze.device.transport import TransportBackend
     from pyglaze.helpers._types import FloatArray
+    from pyglaze.mimlink.proto.envelope_pb2 import (
+        Envelope,
+        GetDeviceInfoResponse,
+        GetStatusResponse,
+        ResultPoint,
+        ResultPointRetransmit,
+        ResultsChunk,
+        ResultsChunkRetransmit,
+    )
 
 
 def _msg_type(name: str) -> int:
     return envelope_pb2.MsgType.Value(name)
 
 
-# Cache commonly used message type ints.
+# Message type constants.
 _PING = _msg_type("MSG_TYPE_PING")
 _PONG = _msg_type("MSG_TYPE_PONG")
 _SET_SETTINGS_REQUEST = _msg_type("MSG_TYPE_SET_SETTINGS_REQUEST")
@@ -60,30 +68,29 @@ class MimLinkClient:
 
     def __init__(
         self,
-        backend: TransportBackend,
+        transport: TransportBackend,
         timeout: float = 5.0,
     ) -> None:
-        self._ser = backend
+        self._transport = transport
         self._timeout = timeout
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
-        self._env_buffer: list[Message] = []
-        self.last_transfer_mode: int = 0
+        self._env_buffer: deque[Envelope] = deque()
 
     def __del__(self) -> None:
         """Clean up the connection."""
         self.close()
 
-    def _send(self, envelope: Message) -> None:
-        self._ser.write(self._codec.encode(envelope))
+    def _send(self, envelope: Envelope) -> None:
+        self._transport.write(self._codec.encode(envelope))
 
     def _drain(self) -> None:
         """Read available bytes and decode complete frames into the envelope buffer."""
-        available = self._ser.in_waiting
+        available = self._transport.in_waiting
         if available > 0:
-            data = self._ser.read(available)
+            data = self._transport.read(available)
         else:
-            data = self._ser.read(1)
+            data = self._transport.read(1)
             if not data:
                 return
         for frame in self._rx_stream.push(data):
@@ -92,38 +99,38 @@ class MimLinkClient:
             except FrameDecodeError:  # noqa: PERF203
                 continue
 
-    def _receive(self, timeout: float | None = None) -> Message:
+    def _receive(self, timeout: float | None = None) -> Envelope:
         """Block until one Envelope is received. Raises DeviceComError on timeout."""
         if timeout is None:
             timeout = self._timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            # Process buffered envelopes first.
             if self._env_buffer:
-                return self._env_buffer.pop(0)
+                return self._env_buffer.popleft()
             self._drain()
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
-    def _send_receive(self, envelope: Message, timeout: float | None = None) -> Message:
+    def _send_receive(
+        self, envelope: Envelope, timeout: float | None = None
+    ) -> Envelope:
         self._send(envelope)
         return self._receive(timeout)
 
     def _receive_until(
         self,
-        predicate: Callable[[Message], bool],
-        collector: Callable[[Message], None],
+        handler: Callable[[Envelope], bool],
         timeout: float | None = None,
     ) -> None:
-        """Read envelopes until predicate(envelope) returns True, calling collector(envelope) for each."""
+        """Read envelopes, calling handler(env) for each. Stop when handler returns True."""
         if timeout is None:
             timeout = self._timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             # Process buffered envelopes first.
             while self._env_buffer:
-                env = self._env_buffer.pop(0)
-                collector(env)
-                if predicate(env):
+                if handler(self._env_buffer.popleft()):
                     return
             self._drain()
         msg = "Timeout waiting for device response"
@@ -160,7 +167,7 @@ class MimLinkClient:
             msg = f"Failed to start list upload: {resp}"
             raise DeviceComError(msg)
 
-        total_chunks = (total + _LIST_CHUNK_SIZE - 1) // _LIST_CHUNK_SIZE
+        total_chunks = math.ceil(total / _LIST_CHUNK_SIZE)
         for i in range(total_chunks):
             start = i * _LIST_CHUNK_SIZE
             end = min(start + _LIST_CHUNK_SIZE, total)
@@ -190,8 +197,6 @@ class MimLinkClient:
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
 
-        self.last_transfer_mode = resp.start_scan_response.transfer_mode
-
         if resp.start_scan_response.transfer_mode == _TRANSFER_MODE_PER_POINT:
             return self._collect_per_point(n_points)
         return self._collect_bulk(n_points, sweep_length_ms)
@@ -205,22 +210,21 @@ class MimLinkClient:
         env.get_results_request.SetInParent()
         self._send(env)
 
-        chunks: list[Message] = []
-        complete = False
+        chunks: list[ResultsChunk | ResultsChunkRetransmit] = []
 
-        def collector(e: Message) -> None:
-            nonlocal complete
+        def handler(e: Envelope) -> bool:
             if e.type == _RESULTS_CHUNK:
                 chunks.append(e.results_chunk)
-                if e.results_chunk.is_last:
-                    complete = True
-            elif e.type == _RESULTS_CHUNK_RETRANSMIT:
-                rt = e.results_chunk_retransmit
-                if rt.available:
-                    chunks.append(rt)
+                return bool(e.results_chunk.is_last)
+            if (
+                e.type == _RESULTS_CHUNK_RETRANSMIT
+                and e.results_chunk_retransmit.available
+            ):
+                chunks.append(e.results_chunk_retransmit)
+            return False
 
         try:
-            self._receive_until(lambda _: complete, collector, timeout=10.0)
+            self._receive_until(handler, timeout=10.0)
         except DeviceComError:
             if not chunks:
                 raise
@@ -236,22 +240,21 @@ class MimLinkClient:
     def _collect_per_point(
         self, n_points: int
     ) -> tuple[FloatArray, FloatArray, FloatArray]:
-        points: list[Message] = []
-        complete = False
+        points: list[ResultPoint | ResultPointRetransmit] = []
 
-        def collector(e: Message) -> None:
-            nonlocal complete
+        def handler(e: Envelope) -> bool:
             if e.type == _RESULT_POINT:
                 points.append(e.result_point)
-                if e.result_point.is_last:
-                    complete = True
-            elif e.type == _RESULT_POINT_RETRANSMIT:
-                rt = e.result_point_retransmit
-                if rt.available:
-                    points.append(rt)
+                return bool(e.result_point.is_last)
+            if (
+                e.type == _RESULT_POINT_RETRANSMIT
+                and e.result_point_retransmit.available
+            ):
+                points.append(e.result_point_retransmit)
+            return False
 
         try:
-            self._receive_until(lambda _: complete, collector, timeout=10.0)
+            self._receive_until(handler, timeout=10.0)
         except DeviceComError:
             if not points:
                 raise
@@ -264,7 +267,9 @@ class MimLinkClient:
         Ys = np.array([p.y for p in points])
         return times, Xs, Ys
 
-    def _retransmit_missing_chunks(self, chunks: list[Message], n_points: int) -> None:
+    def _retransmit_missing_chunks(
+        self, chunks: list[ResultsChunk | ResultsChunkRetransmit], n_points: int
+    ) -> None:
         expected_count = math.ceil(n_points / _RESULTS_CHUNK_SIZE)
         received = {c.chunk_index for c in chunks}
         missing = set(range(expected_count)) - received
@@ -288,7 +293,9 @@ class MimLinkClient:
                 )
                 raise DeviceComError(msg)
 
-    def _retransmit_missing_points(self, points: list[Message], n_points: int) -> None:
+    def _retransmit_missing_points(
+        self, points: list[ResultPoint | ResultPointRetransmit], n_points: int
+    ) -> None:
         expected = set(range(n_points))
         received = {p.point_index for p in points}
         missing = expected - received
@@ -336,7 +343,7 @@ class MimLinkClient:
             raise DeviceComError(msg)
         return resp.pong.nonce
 
-    def get_device_info(self) -> Message:
+    def get_device_info(self) -> GetDeviceInfoResponse:
         """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""
         env = self._codec.build_envelope(_GET_DEVICE_INFO_REQUEST)
         env.get_device_info_request.SetInParent()
@@ -346,7 +353,7 @@ class MimLinkClient:
             raise DeviceComError(msg)
         return resp.get_device_info_response
 
-    def get_status(self) -> Message:
+    def get_status(self) -> GetStatusResponse:
         """Query device status. Returns the protobuf GetStatusResponse sub-message."""
         env = self._codec.build_envelope(_GET_STATUS_REQUEST)
         env.get_status_request.SetInParent()
@@ -361,4 +368,4 @@ class MimLinkClient:
         with contextlib.suppress(AttributeError):
             self._rx_stream.reset()
         with contextlib.suppress(AttributeError):
-            self._ser.close()
+            self._transport.close()

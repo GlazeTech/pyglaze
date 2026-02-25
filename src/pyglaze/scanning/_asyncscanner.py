@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from multiprocessing import Event, Pipe, Process, Queue, synchronize
 from queue import Empty, Full
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from serial import SerialException, serialutil
 
@@ -172,11 +172,13 @@ class _AsyncScanner:
 
     def ping(self: _AsyncScanner) -> PingResult:
         """Send a ping command to the scanner child process."""
-        return self._send_command(_Command(_CommandType.PING))
+        return cast("PingResult", self._send_command(_Command(_CommandType.PING)))
 
     def get_status(self: _AsyncScanner) -> DeviceStatus:
         """Query device status via the scanner child process."""
-        return self._send_command(_Command(_CommandType.GET_STATUS))
+        return cast(
+            "DeviceStatus", self._send_command(_Command(_CommandType.GET_STATUS))
+        )
 
     def _send_command(self: _AsyncScanner, cmd: _Command) -> PingResult | DeviceStatus:
         if not self.is_scanning:

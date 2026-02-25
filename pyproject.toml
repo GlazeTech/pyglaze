@@ -45,6 +45,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "semver>=2.13.0",
     "types-pyserial>=3.5.0.8",
+    "mypy-protobuf>=3.6.0",
     "bumpver>=2023.1129",
 ]
 
@@ -75,7 +76,7 @@ exclude_also = [
 
 [tool.ruff]
 target-version = "py39"
-extend-exclude = ["src/pyglaze/mimlink/proto/envelope_pb2.py"]
+extend-exclude = ["src/pyglaze/mimlink/proto/envelope_pb2.py", "src/pyglaze/mimlink/proto/envelope_pb2.pyi"]
 lint.select = ["ALL"]
 lint.ignore = [
     "D100",   # allow undocumented public modules
@@ -136,6 +137,9 @@ push = false
 "docs/index.md" = [
     '**Documentation Version**: {version}'
 ]
+
+[tool.ty.environment]
+extra-paths = ["typestubs"]
 
 [tool.ty.rules]
 unused-ignore-comment = "error"
