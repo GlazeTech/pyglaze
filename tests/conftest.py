@@ -2,16 +2,16 @@ import numpy as np
 import pytest
 
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
-from pyglaze.device import ConnectionInfo, Interval, ScannerConfiguration
+from pyglaze.device import Interval, ScannerConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
 DEVICE_CONFIGS = ["scanner_config"]
 
 
 @pytest.fixture
-def scanner_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+def scanner_config() -> tuple[str, ScannerConfiguration]:
     return (
-        ConnectionInfo("mock_mimlink_device"),
+        "mock_mimlink_device",
         ScannerConfiguration(
             use_ema=True,
             n_points=100,
@@ -22,9 +22,9 @@ def scanner_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
 
 
 @pytest.fixture
-def le_device_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+def le_device_config() -> tuple[str, ScannerConfiguration]:
     return (
-        ConnectionInfo("mock_mimlink_device"),
+        "mock_mimlink_device",
         ScannerConfiguration(
             use_ema=True,
             n_points=100,
@@ -35,9 +35,9 @@ def le_device_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
 
 
 @pytest.fixture
-def mimlink_device_config() -> tuple[ConnectionInfo, ScannerConfiguration]:
+def mimlink_device_config() -> tuple[str, ScannerConfiguration]:
     return (
-        ConnectionInfo("mock_mimlink_device"),
+        "mock_mimlink_device",
         ScannerConfiguration(
             use_ema=True,
             n_points=100,

@@ -15,16 +15,16 @@ This is the Pyglaze API documentation. Pyglaze is a python library used to opera
 Pyglaze provides two main interfaces for operating Glaze devices: The [`Scanner`](API%20Reference/scanning/Scanner.md) and the The [`GlazeClient`](API%20Reference/scanning/GlazeClient.md), where `Scanner`is a synchronous scanner, only scanning when requested, and `GlazeClient` is an asynchronous scanner, continuously scanning in the background.
 
 ### GlazeClient
-Using the `GlazeClient`is the preferred way to acquire scans. Before starting the scanner, a connection and scan configuration must be created. See e.g. a definition [here](API%20Reference/device/ScannerConfiguration.md). Be sure to replace `mock_mimlink_device` with a suitable value.
+Using the `GlazeClient`is the preferred way to acquire scans. Before starting the scanner, a scan configuration must be created. See e.g. a definition [here](API%20Reference/device/ScannerConfiguration.md). Use `discover_one()` to find a connected device, or replace `mock_mimlink_device` with your serial port path.
 
 ```py
 import json
 from pathlib import Path
 
-from pyglaze.device import ConnectionInfo, Interval, ScannerConfiguration
+from pyglaze.device import Interval, ScannerConfiguration, discover_one
 from pyglaze.scanning import GlazeClient
 
-connection = ConnectionInfo(port="mock_mimlink_device")
+port = discover_one()
 config = ScannerConfiguration(
     integration_periods=10,
     scan_intervals=[
@@ -38,7 +38,7 @@ config = ScannerConfiguration(
 When defining the configuration, a list of `scan_intervals` is set, determining which parts of the available timewindow should be scanned. Here, we scan a triangular waveform. Next, let's perform a scan.
 
 ```py
-with GlazeClient(connection=connection, config=config) as client:
+with GlazeClient(port=port, config=config) as client:
     scans = client.read(n_pulses=1)
     pulses = [
         pulse.from_triangular_waveform(ramp="down")
@@ -57,16 +57,16 @@ with Path("scan_result.json").open("w") as f:
 ```
 
 ### Scanner
-Much like the `GlazeClient`, a `Scanner`is instantiated by first defining a connection and configuration. Once instantiated, scans can be acquired by calling the `scanner.scan()` method.
+Much like the `GlazeClient`, a `Scanner`is instantiated by first defining a port and configuration. Once instantiated, scans can be acquired by calling the `scanner.scan()` method.
 
 ```py
 import json
 from pathlib import Path
 
-from pyglaze.device import ConnectionInfo, Interval, ScannerConfiguration
+from pyglaze.device import Interval, ScannerConfiguration, discover_one
 from pyglaze.scanning import Scanner
 
-connection = ConnectionInfo(port="mock_mimlink_device")
+port = discover_one()
 config = ScannerConfiguration(
     integration_periods=10,
     n_points=100,
@@ -77,7 +77,7 @@ config = ScannerConfiguration(
     ],
 )
 
-scanner = Scanner(connection=connection, config=config)
+scanner = Scanner(port=port, config=config)
 waveform = scanner.scan()
 pulse = (
     waveform.from_triangular_waveform(ramp="down")

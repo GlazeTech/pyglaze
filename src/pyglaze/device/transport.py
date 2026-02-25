@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -31,16 +30,3 @@ class TransportBackend(Protocol):
     def close(self) -> None:
         """Release the underlying resource."""
         ...
-
-
-@dataclass
-class ConnectionInfo:
-    """Picklable description of how to connect to a device.
-
-    Args:
-        port: Device address (serial port path, USB endpoint, etc.)
-        transport: Transport type. Only "serial" is supported currently.
-    """
-
-    port: str
-    transport: str = "serial"

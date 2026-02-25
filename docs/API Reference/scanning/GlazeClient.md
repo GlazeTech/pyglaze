@@ -12,15 +12,14 @@
 ## Examples
 
 ```py title="Initialize a Scanner and perform two scans"
-from pyglaze.device import ConnectionInfo, ScannerConfiguration
+from pyglaze.device import ScannerConfiguration
 from pyglaze.scanning import GlazeClient
 
 
 def main() -> None:
     n_pulses = 2
-    connection = ConnectionInfo(port="mock_mimlink_device")
     config = ScannerConfiguration()
-    with GlazeClient(connection, config) as client:
+    with GlazeClient("mock_mimlink_device", config) as client:
         unprocessed_waveforms = client.read(n_pulses=n_pulses)
 
 

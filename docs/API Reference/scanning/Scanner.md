@@ -8,17 +8,16 @@
 ## Examples
 
 #### Initialize a Scanner and perform a scan
-The connection specifies how to reach the device. The config holds scan parameters. Be sure to replace `mock_mimlink_device` with a suitable value.
+The config holds scan parameters. Use `discover_one()` to find a connected device, or replace `mock_mimlink_device` with your serial port path.
 
 
 === "ScannerConfiguration"
 
     ```py
-    from pyglaze.device import ConnectionInfo, ScannerConfiguration
+    from pyglaze.device import ScannerConfiguration
     from pyglaze.scanning import Scanner
 
-    connection = ConnectionInfo(port="mock_mimlink_device")
     config = ScannerConfiguration()
-    scanner = Scanner(connection=connection, config=config)
+    scanner = Scanner(port="mock_mimlink_device", config=config)
     scan_result = scanner.scan()
     ```

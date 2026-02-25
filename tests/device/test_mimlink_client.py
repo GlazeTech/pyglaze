@@ -5,29 +5,27 @@ import pytest
 from pyglaze.device.ampcom import DeviceComError
 from pyglaze.device.configuration import Interval, ScannerConfiguration
 from pyglaze.device.mimlink_client import MimLinkClient
-from pyglaze.device.transport import ConnectionInfo
 from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.scanning.scanner import _compute_scanning_list
 
 
 def _build(
     port: str = "mock_mimlink_device", n_points: int = 100
-) -> tuple[ConnectionInfo, ScannerConfiguration, MimLinkClient]:
-    conn = ConnectionInfo(port)
+) -> tuple[ScannerConfiguration, MimLinkClient]:
     config = ScannerConfiguration(
         use_ema=False,
         n_points=n_points,
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
     )
-    backend = _mock_device_factory(conn.port)
+    backend = _mock_device_factory(port)
     backend.reset_input_buffer()
     transport = MimLinkClient(backend, timeout=5.0)
-    return conn, config, transport
+    return config, transport
 
 
 def test_set_settings_and_upload_list() -> None:
-    _, config, transport = _build()
+    config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -37,7 +35,7 @@ def test_set_settings_and_upload_list() -> None:
 
 
 def test_full_scan_bulk() -> None:
-    _, config, transport = _build()
+    config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -51,7 +49,7 @@ def test_full_scan_bulk() -> None:
 
 
 def test_full_scan_per_point() -> None:
-    _, config, transport = _build(port="mock_mimlink_per_point")
+    config, transport = _build(port="mock_mimlink_per_point")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -65,7 +63,7 @@ def test_full_scan_per_point() -> None:
 
 
 def test_get_device_info() -> None:
-    _, config, transport = _build()
+    config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -78,7 +76,7 @@ def test_get_device_info() -> None:
 
 
 def test_get_status() -> None:
-    _, config, transport = _build()
+    config, transport = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -91,7 +89,7 @@ def test_get_status() -> None:
 
 
 def test_retransmit_missing_chunks() -> None:
-    _, config, transport = _build(port="mock_mimlink_drop_chunk")
+    config, transport = _build(port="mock_mimlink_drop_chunk")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -103,7 +101,7 @@ def test_retransmit_missing_chunks() -> None:
 
 
 def test_retransmit_missing_points() -> None:
-    _, config, transport = _build(port="mock_mimlink_drop_point")
+    config, transport = _build(port="mock_mimlink_drop_point")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -115,7 +113,7 @@ def test_retransmit_missing_points() -> None:
 
 
 def test_scan_failure() -> None:
-    _, config, transport = _build(port="mock_mimlink_scan_should_fail")
+    config, transport = _build(port="mock_mimlink_scan_should_fail")
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -127,7 +125,7 @@ def test_scan_failure() -> None:
 
 
 def test_ping() -> None:
-    _, _, transport = _build()
+    _, transport = _build()
     nonce = transport.ping(0xDEADBEEF)
     assert nonce == 0xDEADBEEF
     transport.close()

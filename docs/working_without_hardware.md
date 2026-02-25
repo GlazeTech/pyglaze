@@ -5,23 +5,21 @@ Pyglaze ships with a built-in *mock device* that produces synthetic data identic
 **Quick-start**
 To mock the asynchronous scanner, use
 ```python
-from pyglaze.device import ConnectionInfo, ScannerConfiguration
+from pyglaze.device import ScannerConfiguration
 from pyglaze.scanning import GlazeClient
 
-connection = ConnectionInfo(port="mock_mimlink_device")
 config = ScannerConfiguration()
-with GlazeClient(connection, config) as client:
+with GlazeClient("mock_mimlink_device", config) as client:
     pulses = client.read(n_pulses=1)
 ```
 
 To use the synchronous scanner, use
 ```python
-from pyglaze.device import ConnectionInfo, ScannerConfiguration
+from pyglaze.device import ScannerConfiguration
 from pyglaze.scanning import Scanner
 
-connection = ConnectionInfo(port="mock_mimlink_device")
 config = ScannerConfiguration()
-scanner = Scanner(connection=connection, config=config)
+scanner = Scanner(port="mock_mimlink_device", config=config)
 waveform = scanner.scan()
 ```
 

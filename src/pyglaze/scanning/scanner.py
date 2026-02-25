@@ -16,7 +16,7 @@ from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import Interval, ScannerConfiguration
-    from pyglaze.device.transport import ConnectionInfo, TransportBackend
+    from pyglaze.device.transport import TransportBackend
 
 
 def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[float]:
@@ -41,7 +41,7 @@ class Scanner:
     """A synchronous scanner for Glaze terahertz devices.
 
     Args:
-        connection: Connection info describing how to reach the device.
+        port: Serial port path or mock device name.
         config: Scan parameters for the scanner.
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanner instances.
@@ -49,7 +49,7 @@ class Scanner:
 
     def __init__(
         self,
-        connection: ConnectionInfo,
+        port: str,
         config: ScannerConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
@@ -60,16 +60,13 @@ class Scanner:
 
         protocol_timeout = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
 
-        if "mock_" in connection.port:
+        if "mock_" in port:
             backend: TransportBackend = cast(
-                "TransportBackend", _mock_device_factory(connection.port)
+                "TransportBackend", _mock_device_factory(port)
             )
             backend.reset_input_buffer()
-        elif connection.transport == "serial":
-            backend = cast("TransportBackend", SerialBackend(connection.port))
         else:
-            msg = f"Unsupported transport: {connection.transport}"
-            raise ValueError(msg)
+            backend = cast("TransportBackend", SerialBackend(port))
 
         self._transport = MimLinkClient(backend, timeout=protocol_timeout)
         self._transport.set_settings(
