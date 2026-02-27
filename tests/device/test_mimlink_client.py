@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from pyglaze.device.ampcom import DeviceComError
 from pyglaze.device.configuration import Interval, ScannerConfiguration
-from pyglaze.device.mimlink_client import MimLinkClient
-from pyglaze.devtools.mock_device import _mock_device_factory
+from pyglaze.device.mimlink_client import DeviceComError, MimLinkClient
+from pyglaze.devtools.mock_device import (
+    TRANSFER_MODE_BULK,
+    TRANSFER_MODE_PER_POINT,
+    MimLinkMockDevice,
+)
 from pyglaze.scanning.scanner import _compute_scanning_list
 
 
 def _build(
-    port: str = "mock_mimlink_device", n_points: int = 100
+    n_points: int = 100,
+    fail_after: float = np.inf,
+    *,
+    transfer_mode: int = TRANSFER_MODE_BULK,
+    drop_chunk_once: bool = False,
+    drop_point_once: bool = False,
 ) -> tuple[ScannerConfiguration, MimLinkClient]:
     config = ScannerConfiguration(
         use_ema=False,
@@ -18,7 +27,12 @@ def _build(
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
     )
-    backend = _mock_device_factory(port)
+    backend = MimLinkMockDevice(
+        fail_after=fail_after,
+        transfer_mode=transfer_mode,
+        drop_chunk_once=drop_chunk_once,
+        drop_point_once=drop_point_once,
+    )
     backend.reset_input_buffer()
     transport = MimLinkClient(transport=backend, timeout=5.0)
     return config, transport
@@ -49,7 +63,7 @@ def test_full_scan_bulk() -> None:
 
 
 def test_full_scan_per_point() -> None:
-    config, transport = _build(port="mock_mimlink_per_point")
+    config, transport = _build(transfer_mode=TRANSFER_MODE_PER_POINT)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -89,7 +103,7 @@ def test_get_status() -> None:
 
 
 def test_retransmit_missing_chunks() -> None:
-    config, transport = _build(port="mock_mimlink_drop_chunk")
+    config, transport = _build(transfer_mode=TRANSFER_MODE_BULK, drop_chunk_once=True)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -101,7 +115,9 @@ def test_retransmit_missing_chunks() -> None:
 
 
 def test_retransmit_missing_points() -> None:
-    config, transport = _build(port="mock_mimlink_drop_point")
+    config, transport = _build(
+        transfer_mode=TRANSFER_MODE_PER_POINT, drop_point_once=True
+    )
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -113,7 +129,7 @@ def test_retransmit_missing_points() -> None:
 
 
 def test_scan_failure() -> None:
-    config, transport = _build(port="mock_mimlink_scan_should_fail")
+    config, transport = _build(fail_after=0)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     transport.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
+
+TransportFactory = Callable[[], "TransportBackend"]
+"""A picklable callable that creates a ``TransportBackend`` instance."""
 
 
 class TransportBackend(Protocol):

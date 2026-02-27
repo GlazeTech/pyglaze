@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pyglaze.device.ampcom import DeviceComError
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
 from pyglaze.mimlink.proto import envelope_pb2
@@ -28,6 +27,13 @@ if TYPE_CHECKING:
         ResultsChunk,
         ResultsChunkRetransmit,
     )
+
+
+class DeviceComError(Exception):
+    """Raised when an error occurs in the communication with the device."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 def _msg_type(name: str) -> int:

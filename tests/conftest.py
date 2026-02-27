@@ -9,41 +9,12 @@ DEVICE_CONFIGS = ["scanner_config"]
 
 
 @pytest.fixture
-def scanner_config() -> tuple[str, ScannerConfiguration]:
-    return (
-        "mock_mimlink_device",
-        ScannerConfiguration(
-            use_ema=True,
-            n_points=100,
-            scan_intervals=[Interval(0.0, 1.0)],
-            integration_periods=1,
-        ),
-    )
-
-
-@pytest.fixture
-def le_device_config() -> tuple[str, ScannerConfiguration]:
-    return (
-        "mock_mimlink_device",
-        ScannerConfiguration(
-            use_ema=True,
-            n_points=100,
-            scan_intervals=[Interval(0.0, 1.0)],
-            integration_periods=1,
-        ),
-    )
-
-
-@pytest.fixture
-def mimlink_device_config() -> tuple[str, ScannerConfiguration]:
-    return (
-        "mock_mimlink_device",
-        ScannerConfiguration(
-            use_ema=True,
-            n_points=100,
-            scan_intervals=[Interval(0.0, 1.0)],
-            integration_periods=1,
-        ),
+def scanner_config() -> ScannerConfiguration:
+    return ScannerConfiguration(
+        use_ema=True,
+        n_points=100,
+        scan_intervals=[Interval(0.0, 1.0)],
+        integration_periods=1,
     )
 
 

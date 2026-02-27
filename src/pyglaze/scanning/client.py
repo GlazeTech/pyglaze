@@ -11,6 +11,7 @@ from ._asyncscanner import _AsyncScanner
 if TYPE_CHECKING:
     from pyglaze.datamodels import UnprocessedWaveform
     from pyglaze.device.configuration import ScannerConfiguration
+    from pyglaze.device.transport import TransportFactory
     from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 
@@ -28,13 +29,14 @@ class GlazeClient:
     """Open a connection to and start continuously scanning using the Glaze device.
 
     Args:
-        port: Serial port path or mock device name.
+        transport: A callable that creates a ``TransportBackend`` instance.
+            Use ``serial_transport(port)`` for serial connections.
         config: Scan configuration to use.
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanning sessions.
     """
 
-    port: str
+    transport: TransportFactory
     config: ScannerConfiguration
     initial_phase_estimate: float | None = None
     _scanner: _AsyncScanner = field(init=False)
@@ -44,7 +46,7 @@ class GlazeClient:
         self._scanner = _AsyncScanner()
         try:
             self._scanner.start_scan(
-                self.port, self.config, self.initial_phase_estimate
+                self.transport, self.config, self.initial_phase_estimate
             )
         except (TimeoutError, serialutil.SerialException) as e:
             self.__exit__(e)

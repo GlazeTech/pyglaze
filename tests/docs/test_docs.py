@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from pyglaze.devtools.mock_device import mock_transport
+
 from .doctest_deps import DOCTEST_DEPS_REGISTRY, DoctestDep
 from .markdownparser import check_md_file
 
@@ -32,7 +34,7 @@ class PulseExampleDeps(DoctestDep):
         pass
 
     def teardown(self: PulseExampleDeps) -> None:
-        self.PULSE_PATH.unlink()
+        self.PULSE_PATH.unlink(missing_ok=True)
 
 
 @DOCTEST_DEPS_REGISTRY.register
@@ -41,11 +43,19 @@ class IndexDeps(DoctestDep):
         return Path("docs/index.md")
 
     def setup(self: IndexDeps, monkeypatch: pytest.MonkeyPatch) -> None:
-        pass
+        mock_factory = lambda port: mock_transport()  # noqa: E731
+        monkeypatch.setattr("pyglaze.device.discover_one", lambda: "/dev/mock")
+        monkeypatch.setattr("pyglaze.device.serial_transport", mock_factory)
+        monkeypatch.setattr(
+            "pyglaze.device.discovery.discover_one", lambda: "/dev/mock"
+        )
+        monkeypatch.setattr(
+            "pyglaze.device.serial_backend.serial_transport", mock_factory
+        )
 
     def teardown(self: IndexDeps) -> None:
         for p in [
             Path("scan_result_scanner.json"),
             Path("scan_result.json"),
         ]:
-            p.unlink()
+            p.unlink(missing_ok=True)

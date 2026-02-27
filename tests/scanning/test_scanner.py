@@ -3,6 +3,8 @@ from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import Interval, ScannerConfiguration
+from pyglaze.device.serial_backend import SerialBackend
+from pyglaze.devtools.mock_device import mock_transport
 from pyglaze.scanning.scanner import Scanner
 from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
@@ -10,16 +12,16 @@ from tests.conftest import DEVICE_CONFIGS
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_right_data_format(config_name: str, request: pytest.FixtureRequest) -> None:
-    port, config = request.getfixturevalue(config_name)
-    scanner = Scanner(port, config)
+    config = request.getfixturevalue(config_name)
+    scanner = Scanner(config=config, transport=mock_transport())
     scan = scanner.scan()
     assert isinstance(scan, UnprocessedWaveform)
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_update_config(config_name: str, request: pytest.FixtureRequest) -> None:
-    port, config = request.getfixturevalue(config_name)
-    scanner = Scanner(port, config)
+    config = request.getfixturevalue(config_name)
+    scanner = Scanner(config=config, transport=mock_transport())
     new_conf = ScannerConfiguration(
         use_ema=False,
         n_points=50,
@@ -30,19 +32,17 @@ def test_update_config(config_name: str, request: pytest.FixtureRequest) -> None
     assert scanner.config == new_conf
 
 
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_no_connection_error(config_name: str, request: pytest.FixtureRequest) -> None:
-    _, config = request.getfixturevalue(config_name)
+def test_no_connection_error() -> None:
     with pytest.raises(serialutil.SerialException):
-        Scanner("nonexistent_port", config)
+        SerialBackend("nonexistent_port")
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_lescanner_get_device_info(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
-    port, config = request.getfixturevalue(config_name)
-    scanner = Scanner(port, config)
+    config = request.getfixturevalue(config_name)
+    scanner = Scanner(config=config, transport=mock_transport())
     info = scanner.get_device_info()
     assert isinstance(info, DeviceInfo)
     assert info.serial_number != ""
@@ -54,10 +54,14 @@ def test_scanner_with_initial_phase_estimate(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that Scanner accepts and uses initial_phase_estimate parameter."""
-    port, config = request.getfixturevalue(config_name)
+    config = request.getfixturevalue(config_name)
     initial_phase = 1.5
 
-    scanner = Scanner(port, config, initial_phase_estimate=initial_phase)
+    scanner = Scanner(
+        config=config,
+        transport=mock_transport(),
+        initial_phase_estimate=initial_phase,
+    )
 
     # Phase estimate should be set immediately
     phase = scanner.get_phase_estimate()
@@ -76,19 +80,27 @@ def test_scanner_phase_persistence_across_instances(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that phase can be extracted and reused across scanner instances."""
-    port, config = request.getfixturevalue(config_name)
+    config = request.getfixturevalue(config_name)
 
     # Use a known phase value (since mock device may not learn a phase from random IQ data)
     known_phase = 1.5
 
     # First scanner with known phase
-    scanner1 = Scanner(port, config, initial_phase_estimate=known_phase)
+    scanner1 = Scanner(
+        config=config,
+        transport=mock_transport(),
+        initial_phase_estimate=known_phase,
+    )
     phase1 = scanner1.get_phase_estimate()
     assert phase1 is not None
     assert abs(phase1 - known_phase) < 1e-6
 
     # Second scanner starts with the same phase
-    scanner2 = Scanner(port, config, initial_phase_estimate=phase1)
+    scanner2 = Scanner(
+        config=config,
+        transport=mock_transport(),
+        initial_phase_estimate=phase1,
+    )
     initial_phase2 = scanner2.get_phase_estimate()
     assert initial_phase2 is not None
     assert abs(initial_phase2 - phase1) < 1e-6

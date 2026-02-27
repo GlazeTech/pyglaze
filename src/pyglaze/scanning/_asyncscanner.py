@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 from serial import SerialException, serialutil
 
 from pyglaze.datamodels.waveform import UnprocessedWaveform, _TimestampedWaveform
-from pyglaze.device.ampcom import DeviceComError
+from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 
 if TYPE_CHECKING:
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from pyglaze.device.configuration import ScannerConfiguration
+    from pyglaze.device.transport import TransportFactory
     from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 
@@ -79,14 +80,14 @@ class _AsyncScanner:
 
     def start_scan(
         self: _AsyncScanner,
-        port: str,
+        transport_factory: TransportFactory,
         config: ScannerConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
         """Starts continuously scanning in new process.
 
         Args:
-            port: Serial port path or mock device name.
+            transport_factory: A picklable callable that creates a ``TransportBackend``.
             config: Scan configuration.
             initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
                 Use this to maintain consistent polarity across scanner instances.
@@ -109,7 +110,7 @@ class _AsyncScanner:
         )
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[port, config, ipc, initial_phase_estimate],
+            args=[transport_factory, config, ipc, initial_phase_estimate],
         )
         self._child_process.start()
 
@@ -213,15 +214,15 @@ class _AsyncScanner:
 
     @staticmethod
     def _run_scanner(
-        port: str,
+        transport_factory: TransportFactory,
         config: ScannerConfiguration,
         ipc: _ScannerIPC,
         initial_phase_estimate: float | None = None,
     ) -> None:
         try:
             scanner = Scanner(
-                port=port,
                 config=config,
+                transport=transport_factory,
                 initial_phase_estimate=initial_phase_estimate,
             )
             metadata = _ScannerMetadata(device_info=scanner.get_device_info())

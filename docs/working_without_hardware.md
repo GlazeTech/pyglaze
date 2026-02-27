@@ -6,20 +6,22 @@ Pyglaze ships with a built-in *mock device* that produces synthetic data identic
 To mock the asynchronous scanner, use
 ```python
 from pyglaze.device import ScannerConfiguration
+from pyglaze.devtools.mock_device import mock_transport
 from pyglaze.scanning import GlazeClient
 
 config = ScannerConfiguration()
-with GlazeClient("mock_mimlink_device", config) as client:
+with GlazeClient(transport=mock_transport(), config=config) as client:
     pulses = client.read(n_pulses=1)
 ```
 
 To use the synchronous scanner, use
 ```python
 from pyglaze.device import ScannerConfiguration
+from pyglaze.devtools.mock_device import mock_transport
 from pyglaze.scanning import Scanner
 
 config = ScannerConfiguration()
-scanner = Scanner(port="mock_mimlink_device", config=config)
+scanner = Scanner(transport=mock_transport(), config=config)
 waveform = scanner.scan()
 ```
 
@@ -39,21 +41,14 @@ waveform = scanner.scan()
 
 ## 2  How it works
 
-* The sentinel string `"mock_mimlink_device"` instructs Pyglaze to replace the serial driver with a software stub.
+* `MimLinkMockDevice` implements the same transport protocol as a real Glaze device. It accepts MimLink commands and returns synthetic scan results.
+* `mock_transport()` creates a picklable transport factory that `Scanner` and `GlazeClient` call to instantiate the mock.
 * All higher-level classes (`Scanner`, `GlazeClient`, `Pulse`, `UnprocessedWaveform`, ...) operate unchanged.
 
 
 ---
 
-## 3  Common pitfalls
-
-1. **Misspelling the sentinel** - the string is case-sensitive. Use exactly `"mock_mimlink_device"`.
-2. **Mistaking it for a placeholder** - it *is* the implementation, not an example to replace.
-
----
-
-
-## 4  Search keywords
+## 3  Search keywords
 
 * simulate / simulation
 * virtual device

@@ -2,21 +2,38 @@ from __future__ import annotations
 
 import random
 import time
-from typing import TYPE_CHECKING, cast
+from math import modf
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.ampcom import _points_per_interval
 from pyglaze.device.mimlink_client import MimLinkClient
-from pyglaze.device.serial_backend import SerialBackend
-from pyglaze.devtools.mock_device import _mock_device_factory
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import Interval, ScannerConfiguration
-    from pyglaze.device.transport import TransportBackend
+    from pyglaze.device.transport import TransportFactory
+
+
+def _points_per_interval(n_points: int, intervals: list[Interval]) -> list[int]:
+    """Divides a total number of points between intervals."""
+    interval_lengths = [interval.length for interval in intervals]
+    total_length = sum(interval_lengths)
+
+    points_per_interval_floats = [
+        n_points * length / total_length for length in interval_lengths
+    ]
+    points_per_interval = [int(e) for e in points_per_interval_floats]
+
+    # We must distribute the remainder from the int operation to get the right amount of total points
+    remainders = [modf(num)[0] for num in points_per_interval_floats]
+    sorted_indices = np.flip(np.argsort(remainders))
+    for i in range(int(0.5 + np.sum(remainders))):
+        points_per_interval[sorted_indices[i]] += 1
+
+    return points_per_interval
 
 
 def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[float]:
@@ -41,16 +58,17 @@ class Scanner:
     """A synchronous scanner for Glaze terahertz devices.
 
     Args:
-        port: Serial port path or mock device name.
         config: Scan parameters for the scanner.
+        transport: A callable that creates a ``TransportBackend`` instance.
+            Use ``serial_transport(port)`` for serial connections.
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanner instances.
     """
 
     def __init__(
         self,
-        port: str,
         config: ScannerConfiguration,
+        transport: TransportFactory,
         initial_phase_estimate: float | None = None,
     ) -> None:
         self._config = config
@@ -60,15 +78,9 @@ class Scanner:
 
         protocol_timeout = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
 
-        if "mock_" in port:
-            transport: TransportBackend = cast(
-                "TransportBackend", _mock_device_factory(port)
-            )
-            transport.reset_input_buffer()
-        else:
-            transport = cast("TransportBackend", SerialBackend(port))
-
-        self._client = MimLinkClient(transport=transport, timeout=protocol_timeout)
+        _transport = transport()
+        _transport.reset_input_buffer()
+        self._client = MimLinkClient(transport=_transport, timeout=protocol_timeout)
         self._client.set_settings(
             config.n_points,
             config.integration_periods,

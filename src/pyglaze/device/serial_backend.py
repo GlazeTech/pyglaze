@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+from functools import partial
+from typing import TYPE_CHECKING
+
 import serial
 
+if TYPE_CHECKING:
+    from pyglaze.device.transport import TransportFactory
+
 MIMLINK_BAUDRATE = 1_000_000
+
+
+def serial_transport(port: str) -> TransportFactory:
+    """Create a serial transport factory for the given port."""
+    return partial(SerialBackend, port=port)
 
 
 class SerialBackend:

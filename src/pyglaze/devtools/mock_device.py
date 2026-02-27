@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pyglaze.device.transport import TransportBackend
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
 from pyglaze.mimlink.proto import envelope_pb2
 from pyglaze.mimlink.rx_stream import RxFrameStream
 
 if TYPE_CHECKING:
+    from pyglaze.device.transport import TransportFactory
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 
@@ -40,11 +42,11 @@ _RESULTS_CHUNK_RETRANSMIT = _msg_type("MSG_TYPE_RESULTS_CHUNK_RETRANSMIT")
 _PING = _msg_type("MSG_TYPE_PING")
 _PONG = _msg_type("MSG_TYPE_PONG")
 
-_TRANSFER_MODE_BULK = 0
-_TRANSFER_MODE_PER_POINT = 1
+TRANSFER_MODE_BULK = 0
+TRANSFER_MODE_PER_POINT = 1
 
 
-class MimLinkMockDevice:
+class MimLinkMockDevice(TransportBackend):
     """Mock MimLink endpoint implementing the binary protocol over a serial-like API."""
 
     LI_MODULATION_FREQUENCY = 10000
@@ -59,7 +61,7 @@ class MimLinkMockDevice:
         *,
         empty_responses: bool = False,
         instant_response: bool = False,
-        transfer_mode: int = _TRANSFER_MODE_BULK,
+        transfer_mode: int = TRANSFER_MODE_BULK,
         drop_chunk_once: bool = False,
         drop_point_once: bool = False,
     ) -> None:
@@ -105,14 +107,14 @@ class MimLinkMockDevice:
     def close(self) -> None:
         """Close the mock device."""
 
-    def write(self, input_bytes: bytes) -> None:
+    def write(self, data: bytes) -> None:
         """Handle bytes written by host endpoint."""
         if self.empty_responses:
             return
         # Legacy ASCII detection byte — silently ignore.
-        if input_bytes == b"H":
+        if data == b"H":
             return
-        for frame in self._rx_stream.push(input_bytes):
+        for frame in self._rx_stream.push(data):
             try:
                 env = self._codec.decode(frame)
             except FrameDecodeError:
@@ -302,7 +304,7 @@ class MimLinkMockDevice:
             self.is_scanning = True
             self._scan_start_time = time.time()
             self._prepare_scan_data()
-            if self.transfer_mode == _TRANSFER_MODE_PER_POINT:
+            if self.transfer_mode == TRANSFER_MODE_PER_POINT:
                 self._send_per_point_stream()
             return
 
@@ -378,39 +380,60 @@ class MimLinkMockDevice:
             return
 
 
-def list_mock_devices() -> list[str]:
-    """List all available mock devices."""
-    return [
-        "mock_mimlink_device",
-        "mock_mimlink_per_point",
-        "mock_mimlink_drop_chunk",
-        "mock_mimlink_drop_point",
-        "mock_mimlink_scan_should_fail",
-        "mock_mimlink_fail_first_scan",
-    ]
+class _MockTransportFactory:
+    """Picklable callable that creates a ``MimLinkMockDevice``."""
+
+    def __init__(
+        self,
+        fail_after: float = np.inf,
+        n_fails: float = np.inf,
+        *,
+        empty_responses: bool = False,
+        instant_response: bool = False,
+        transfer_mode: int = TRANSFER_MODE_BULK,
+        drop_chunk_once: bool = False,
+        drop_point_once: bool = False,
+    ) -> None:
+        self._fail_after = fail_after
+        self._n_fails = n_fails
+        self._empty_responses = empty_responses
+        self._instant_response = instant_response
+        self._transfer_mode = transfer_mode
+        self._drop_chunk_once = drop_chunk_once
+        self._drop_point_once = drop_point_once
+
+    def __call__(self) -> TransportBackend:
+        return MimLinkMockDevice(
+            fail_after=self._fail_after,
+            n_fails=self._n_fails,
+            empty_responses=self._empty_responses,
+            instant_response=self._instant_response,
+            transfer_mode=self._transfer_mode,
+            drop_chunk_once=self._drop_chunk_once,
+            drop_point_once=self._drop_point_once,
+        )
 
 
-def _mock_device_factory(port: str) -> MimLinkMockDevice:
-    if port == "mock_mimlink_device":
-        return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_BULK)
-    if port == "mock_mimlink_per_point":
-        return MimLinkMockDevice(transfer_mode=_TRANSFER_MODE_PER_POINT)
-    if port == "mock_mimlink_drop_chunk":
-        return MimLinkMockDevice(
-            transfer_mode=_TRANSFER_MODE_BULK, drop_chunk_once=True
-        )
-    if port == "mock_mimlink_drop_point":
-        return MimLinkMockDevice(
-            transfer_mode=_TRANSFER_MODE_PER_POINT, drop_point_once=True
-        )
-    if port == "mock_mimlink_scan_should_fail":
-        return MimLinkMockDevice(fail_after=0, transfer_mode=_TRANSFER_MODE_BULK)
-    if port == "mock_mimlink_fail_first_scan":
-        return MimLinkMockDevice(
-            fail_after=0,
-            n_fails=1,
-            transfer_mode=_TRANSFER_MODE_BULK,
-        )
+def mock_transport(
+    fail_after: float = np.inf,
+    n_fails: float = np.inf,
+    *,
+    empty_responses: bool = False,
+    instant_response: bool = False,
+    transfer_mode: int = TRANSFER_MODE_BULK,
+    drop_chunk_once: bool = False,
+    drop_point_once: bool = False,
+) -> TransportFactory:
+    """Create a picklable transport factory for :class:`MimLinkMockDevice`.
 
-    msg = f"Unknown mock device requested: {port}. Valid options are: {list_mock_devices()}"
-    raise ValueError(msg)
+    All keyword arguments are forwarded to :class:`MimLinkMockDevice`.
+    """
+    return _MockTransportFactory(
+        fail_after=fail_after,
+        n_fails=n_fails,
+        empty_responses=empty_responses,
+        instant_response=instant_response,
+        transfer_mode=transfer_mode,
+        drop_chunk_once=drop_chunk_once,
+        drop_point_once=drop_point_once,
+    )
