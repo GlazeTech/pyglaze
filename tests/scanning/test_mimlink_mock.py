@@ -4,65 +4,92 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.configuration import Interval, ScannerConfiguration
-from pyglaze.device.mimlink_client import DeviceComError
+from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+from pyglaze.device.mimlink_client import DeviceComError, MimLinkClient
 from pyglaze.devtools.mock_device import (
     TRANSFER_MODE_BULK,
     TRANSFER_MODE_PER_POINT,
-    mock_transport,
+    MimLinkMockDevice,
 )
 from pyglaze.scanning import GlazeClient
-from pyglaze.scanning.scanner import Scanner
+from pyglaze.scanning.scanner import Scanner, _compute_scanning_list
 
 
 def test_mimlink_bulk_scan_returns_waveform(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport(transfer_mode=TRANSFER_MODE_BULK)
-    scanner = Scanner(config=scanner_config, transport=transport)
+    scanner = Scanner(config=le_device_config)
     scan = scanner.scan()
     assert isinstance(scan, UnprocessedWaveform)
-    assert len(scan.time) == scanner_config.n_points
+    assert len(scan.time) == le_device_config.n_points
 
 
 def test_mimlink_per_point_scan_returns_waveform(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport(transfer_mode=TRANSFER_MODE_PER_POINT)
-    scanner = Scanner(config=scanner_config, transport=transport)
+    le_device_config.amp_port = "mock_device_per_point"
+    scanner = Scanner(config=le_device_config)
     scan = scanner.scan()
     assert isinstance(scan, UnprocessedWaveform)
-    assert len(scan.time) == scanner_config.n_points
+    assert len(scan.time) == le_device_config.n_points
 
 
 def test_mimlink_bulk_retransmit_chunk_path(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport(transfer_mode=TRANSFER_MODE_BULK, drop_chunk_once=True)
-    scanner = Scanner(config=scanner_config, transport=transport)
-    scan = scanner.scan()
-    assert isinstance(scan, UnprocessedWaveform)
-    assert len(scan.time) == scanner_config.n_points
+    """Protocol-level test: verify bulk retransmit via MimLinkClient + MimLinkMockDevice."""
+    backend = MimLinkMockDevice(
+        transfer_mode=TRANSFER_MODE_BULK, drop_retransmit_once=True
+    )
+    backend.reset_input_buffer()
+    client = MimLinkClient(conn=backend, timeout=5.0)
+    scanning_list = _compute_scanning_list(
+        le_device_config.n_points, le_device_config.scan_intervals
+    )
+    client.set_settings(
+        le_device_config.n_points,
+        le_device_config.integration_periods,
+        use_ema=le_device_config.use_ema,
+    )
+    client.upload_list(scanning_list)
+    times, _Xs, _Ys = client.start_scan(
+        le_device_config.n_points, le_device_config._sweep_length_ms
+    )
+    assert len(times) == le_device_config.n_points
+    client.close()
 
 
 def test_mimlink_per_point_retransmit_path(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport(
-        transfer_mode=TRANSFER_MODE_PER_POINT, drop_point_once=True
+    """Protocol-level test: verify per-point retransmit via MimLinkClient + MimLinkMockDevice."""
+    backend = MimLinkMockDevice(
+        transfer_mode=TRANSFER_MODE_PER_POINT, drop_retransmit_once=True
     )
-    scanner = Scanner(config=scanner_config, transport=transport)
-    scan = scanner.scan()
-    assert isinstance(scan, UnprocessedWaveform)
-    assert len(scan.time) == scanner_config.n_points
+    backend.reset_input_buffer()
+    client = MimLinkClient(conn=backend, timeout=5.0)
+    scanning_list = _compute_scanning_list(
+        le_device_config.n_points, le_device_config.scan_intervals
+    )
+    client.set_settings(
+        le_device_config.n_points,
+        le_device_config.integration_periods,
+        use_ema=le_device_config.use_ema,
+    )
+    client.upload_list(scanning_list)
+    times, _Xs, _Ys = client.start_scan(
+        le_device_config.n_points, le_device_config._sweep_length_ms
+    )
+    assert len(times) == le_device_config.n_points
+    client.close()
 
 
 def test_mimlink_scanner_update_config(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport()
-    scanner = Scanner(config=scanner_config, transport=transport)
-    new_conf = ScannerConfiguration(
+    scanner = Scanner(config=le_device_config)
+    new_conf = LeDeviceConfiguration(
+        amp_port="mock_device",
         use_ema=False,
         n_points=50,
         scan_intervals=[Interval(0.0, 0.5)],
@@ -73,41 +100,38 @@ def test_mimlink_scanner_update_config(
 
 
 def test_mimlink_client_read(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport()
-    client = GlazeClient(transport=transport, config=scanner_config)
+    client = GlazeClient(config=le_device_config)
     with client as c:
         pulses = c.read(n_pulses=2)
     assert len(pulses) == 2
 
 
 def test_mimlink_client_scan_failure(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport(fail_after=0)
+    le_device_config.amp_port = "mock_device_scan_should_fail"
     with (
         pytest.raises((serialutil.SerialException, DeviceComError)),
-        GlazeClient(transport=transport, config=scanner_config) as client,
+        GlazeClient(config=le_device_config) as client,
     ):
         client.read(n_pulses=1)
 
 
 def test_mimlink_device_info(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport()
-    scanner = Scanner(config=scanner_config, transport=transport)
+    scanner = Scanner(config=le_device_config)
     info = scanner.get_device_info()
     assert info.serial_number == "M-9999"
     assert info.firmware_version == "v0.1.0"
 
 
 def test_mimlink_ping(
-    scanner_config: ScannerConfiguration,
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
-    transport = mock_transport()
-    scanner = Scanner(config=scanner_config, transport=transport)
+    scanner = Scanner(config=le_device_config)
     result = scanner.ping()
     assert result.success is True
     assert result.round_trip_us > 0

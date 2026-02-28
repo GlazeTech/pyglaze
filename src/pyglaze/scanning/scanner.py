@@ -8,13 +8,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.mimlink_client import MimLinkClient
+from pyglaze.device.mimlink_client import MimLinkClient, _connection_factory
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 if TYPE_CHECKING:
-    from pyglaze.device.configuration import Interval, ScannerConfiguration
-    from pyglaze.device.transport import TransportFactory
+    from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 
 
 def _points_per_interval(n_points: int, intervals: list[Interval]) -> list[int]:
@@ -58,17 +57,14 @@ class Scanner:
     """A synchronous scanner for Glaze terahertz devices.
 
     Args:
-        config: Scan parameters for the scanner.
-        transport: A callable that creates a ``TransportBackend`` instance.
-            Use ``serial_transport(port)`` for serial connections.
+        config: Device configuration for the scanner.
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanner instances.
     """
 
     def __init__(
         self,
-        config: ScannerConfiguration,
-        transport: TransportFactory,
+        config: LeDeviceConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
         self._config = config
@@ -78,9 +74,9 @@ class Scanner:
 
         protocol_timeout = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
 
-        _transport = transport()
-        _transport.reset_input_buffer()
-        self._client = MimLinkClient(transport=_transport, timeout=protocol_timeout)
+        conn = _connection_factory(config)
+        conn.reset_input_buffer()
+        self._client = MimLinkClient(conn=conn, timeout=protocol_timeout)
         self._client.set_settings(
             config.n_points,
             config.integration_periods,
@@ -90,7 +86,7 @@ class Scanner:
         self._client.upload_list(scanning_list)
 
     @property
-    def config(self) -> ScannerConfiguration:
+    def config(self) -> LeDeviceConfiguration:
         """Configuration used in the scan."""
         return self._config
 
@@ -109,7 +105,7 @@ class Scanner:
             times, Xs, Ys, self._phase_estimator.phase_estimate
         )
 
-    def update_config(self, new_config: ScannerConfiguration) -> None:
+    def update_config(self, new_config: LeDeviceConfiguration) -> None:
         """Update scan parameters over the existing connection.
 
         Re-sends settings and scanning list to the device. Does not reconnect.

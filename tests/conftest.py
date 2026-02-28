@@ -2,15 +2,16 @@ import numpy as np
 import pytest
 
 from pyglaze.datamodels import Pulse, UnprocessedWaveform
-from pyglaze.device import Interval, ScannerConfiguration
+from pyglaze.device import Interval, LeDeviceConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
-DEVICE_CONFIGS = ["scanner_config"]
+DEVICE_CONFIGS = ["le_device_config"]
 
 
 @pytest.fixture
-def scanner_config() -> ScannerConfiguration:
-    return ScannerConfiguration(
+def le_device_config() -> LeDeviceConfiguration:
+    return LeDeviceConfiguration(
+        amp_port="mock_device",
         use_ema=True,
         n_points=100,
         scan_intervals=[Interval(0.0, 1.0)],

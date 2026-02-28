@@ -1,5 +1,3 @@
-"""Wire framing for MimLink (COBS + CRC32 + delimiter)."""
-
 from __future__ import annotations
 
 from typing import Final

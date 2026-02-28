@@ -2,9 +2,8 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.configuration import Interval, ScannerConfiguration
-from pyglaze.device.serial_backend import SerialBackend
-from pyglaze.devtools.mock_device import mock_transport
+from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
@@ -13,7 +12,7 @@ from tests.conftest import DEVICE_CONFIGS
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_right_data_format(config_name: str, request: pytest.FixtureRequest) -> None:
     config = request.getfixturevalue(config_name)
-    scanner = Scanner(config=config, transport=mock_transport())
+    scanner = Scanner(config=config)
     scan = scanner.scan()
     assert isinstance(scan, UnprocessedWaveform)
 
@@ -21,8 +20,9 @@ def test_right_data_format(config_name: str, request: pytest.FixtureRequest) -> 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_update_config(config_name: str, request: pytest.FixtureRequest) -> None:
     config = request.getfixturevalue(config_name)
-    scanner = Scanner(config=config, transport=mock_transport())
-    new_conf = ScannerConfiguration(
+    scanner = Scanner(config=config)
+    new_conf = LeDeviceConfiguration(
+        amp_port="mock_device",
         use_ema=False,
         n_points=50,
         scan_intervals=[Interval(0.0, 0.5)],
@@ -32,9 +32,21 @@ def test_update_config(config_name: str, request: pytest.FixtureRequest) -> None
     assert scanner.config == new_conf
 
 
+def test_recover_after_single_failure(
+    le_device_config: LeDeviceConfiguration,
+) -> None:
+    le_device_config.amp_port = "mock_device_fail_first_scan"
+    scanner = Scanner(config=le_device_config)
+    with pytest.raises(DeviceComError):
+        scanner.scan()
+    scan = scanner.scan()
+    assert isinstance(scan, UnprocessedWaveform)
+
+
 def test_no_connection_error() -> None:
+    config = LeDeviceConfiguration(amp_port="nonexistent_port", n_points=100)
     with pytest.raises(serialutil.SerialException):
-        SerialBackend("nonexistent_port")
+        Scanner(config=config)
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
@@ -42,7 +54,7 @@ def test_lescanner_get_device_info(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     config = request.getfixturevalue(config_name)
-    scanner = Scanner(config=config, transport=mock_transport())
+    scanner = Scanner(config=config)
     info = scanner.get_device_info()
     assert isinstance(info, DeviceInfo)
     assert info.serial_number != ""
@@ -59,7 +71,6 @@ def test_scanner_with_initial_phase_estimate(
 
     scanner = Scanner(
         config=config,
-        transport=mock_transport(),
         initial_phase_estimate=initial_phase,
     )
 
@@ -88,7 +99,6 @@ def test_scanner_phase_persistence_across_instances(
     # First scanner with known phase
     scanner1 = Scanner(
         config=config,
-        transport=mock_transport(),
         initial_phase_estimate=known_phase,
     )
     phase1 = scanner1.get_phase_estimate()
@@ -98,7 +108,6 @@ def test_scanner_phase_persistence_across_instances(
     # Second scanner starts with the same phase
     scanner2 = Scanner(
         config=config,
-        transport=mock_transport(),
         initial_phase_estimate=phase1,
     )
     initial_phase2 = scanner2.get_phase_estimate()

@@ -8,17 +8,16 @@
 ## Examples
 
 #### Initialize a Scanner and perform a scan
-The config holds scan parameters. Use `serial_transport(discover_one())` to connect to a device, or use `mock_transport()` to run without hardware.
+The config file should be valid JSON conforming to the specific `DeviceConfiguration` type. See e.g. a definition [here](../device/LeDeviceConfiguration.md). Be sure to replace `mock_device` and `mock_delay` with suitable values.
 
 
-=== "ScannerConfiguration"
+=== "LeDeviceConfiguration"
 
     ```py
-    from pyglaze.device import ScannerConfiguration
-    from pyglaze.devtools.mock_device import mock_transport
+    from pyglaze.device import LeDeviceConfiguration
     from pyglaze.scanning import Scanner
 
-    config = ScannerConfiguration()
-    scanner = Scanner(transport=mock_transport(), config=config)
+    device_config = LeDeviceConfiguration(amp_port="mock_device")
+    scanner = Scanner(config=device_config)
     scan_result = scanner.scan()
     ```

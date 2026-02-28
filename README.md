@@ -16,23 +16,21 @@ See [our documentation](https://glazetech.github.io/pyglaze/latest/) for usage.
 
 # Developers
 
-Clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze), then install in editable mode with all dev dependencies using [uv](https://docs.astral.sh/uv/):
+To install the API with development tools in editable mode, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
 
 ```
-uv sync --all-extras
-```
-
-This gives you linting, type checking, testing, and docs tools. Run tests with:
-
-```
-uv run pytest
+python -m pip install --upgrade pip
+pip install -e . --config-settings editable_mode=strict
+pip install -r requirements-dev.txt
 ```
 
 ## Documentation - local build
+To build and serve the documentation locally
 
-```
-uv run mkdocs serve
-```
+1. Checkout the repository (or a specific version)
+2. Install `mkdocs`
+3. Run `mkdocs serve` while standing in the project root.
+
 
 ## MimLink protocol schema sync
 

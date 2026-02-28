@@ -17,8 +17,7 @@ if TYPE_CHECKING:
     import logging
     from multiprocessing.connection import Connection
 
-    from pyglaze.device.configuration import ScannerConfiguration
-    from pyglaze.device.transport import TransportFactory
+    from pyglaze.device.configuration import LeDeviceConfiguration
     from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
 
 
@@ -80,15 +79,13 @@ class _AsyncScanner:
 
     def start_scan(
         self: _AsyncScanner,
-        transport_factory: TransportFactory,
-        config: ScannerConfiguration,
+        config: LeDeviceConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
         """Starts continuously scanning in new process.
 
         Args:
-            transport_factory: A picklable callable that creates a ``TransportBackend``.
-            config: Scan configuration.
+            config: Device configuration.
             initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
                 Use this to maintain consistent polarity across scanner instances.
         """
@@ -110,7 +107,7 @@ class _AsyncScanner:
         )
         self._child_process = Process(
             target=_AsyncScanner._run_scanner,
-            args=[transport_factory, config, ipc, initial_phase_estimate],
+            args=[config, ipc, initial_phase_estimate],
         )
         self._child_process.start()
 
@@ -214,15 +211,13 @@ class _AsyncScanner:
 
     @staticmethod
     def _run_scanner(
-        transport_factory: TransportFactory,
-        config: ScannerConfiguration,
+        config: LeDeviceConfiguration,
         ipc: _ScannerIPC,
         initial_phase_estimate: float | None = None,
     ) -> None:
         try:
             scanner = Scanner(
                 config=config,
-                transport=transport_factory,
                 initial_phase_estimate=initial_phase_estimate,
             )
             metadata = _ScannerMetadata(device_info=scanner.get_device_info())

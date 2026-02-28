@@ -4,8 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from pyglaze.devtools.mock_device import mock_transport
-
 from .doctest_deps import DOCTEST_DEPS_REGISTRY, DoctestDep
 from .markdownparser import check_md_file
 
@@ -43,15 +41,7 @@ class IndexDeps(DoctestDep):
         return Path("docs/index.md")
 
     def setup(self: IndexDeps, monkeypatch: pytest.MonkeyPatch) -> None:
-        mock_factory = lambda port: mock_transport()  # noqa: E731
-        monkeypatch.setattr("pyglaze.device.discover_one", lambda: "/dev/mock")
-        monkeypatch.setattr("pyglaze.device.serial_transport", mock_factory)
-        monkeypatch.setattr(
-            "pyglaze.device.discovery.discover_one", lambda: "/dev/mock"
-        )
-        monkeypatch.setattr(
-            "pyglaze.device.serial_backend.serial_transport", mock_factory
-        )
+        pass
 
     def teardown(self: IndexDeps) -> None:
         for p in [

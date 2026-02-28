@@ -1,5 +1,3 @@
-"""Incremental parser for MimLink framed byte stream."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

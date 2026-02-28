@@ -4,10 +4,8 @@ import pytest
 from serial.serialutil import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.configuration import ScannerConfiguration
+from pyglaze.device.configuration import LeDeviceConfiguration
 from pyglaze.device.mimlink_client import DeviceComError
-from pyglaze.device.serial_backend import serial_transport
-from pyglaze.devtools.mock_device import mock_transport
 from pyglaze.scanning._asyncscanner import _AsyncScanner
 from tests.conftest import DEVICE_CONFIGS
 
@@ -16,7 +14,7 @@ from tests.conftest import DEVICE_CONFIGS
 def test_start_stop(config_name: str, request: pytest.FixtureRequest) -> None:
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config)
+    scanner.start_scan(config)
     assert scanner._child_process.is_alive()
     assert scanner.is_scanning
 
@@ -32,7 +30,7 @@ def test_get_next(
 ) -> None:
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config)
+    scanner.start_scan(config)
     for _ in range(n_scans):
         scan = scanner.get_next()
         assert isinstance(scan, UnprocessedWaveform)
@@ -44,24 +42,41 @@ def test_raise_timeout(config_name: str, request: pytest.FixtureRequest) -> None
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner(startup_timeout=0.0)
     with pytest.raises(TimeoutError):
-        scanner.start_scan(mock_transport(), config)
+        scanner.start_scan(config)
     assert scanner.is_scanning is False
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_scanner_wrong_port(config_name: str, request: pytest.FixtureRequest) -> None:
     config = request.getfixturevalue(config_name)
+    config.amp_port = "Nonexisting"
     scanner = _AsyncScanner()
     with pytest.raises(SerialException):
-        scanner.start_scan(serial_transport("Nonexisting"), config)
+        scanner.start_scan(config)
     assert scanner.is_scanning is False
 
 
-def test_recover_from_failed_scan(
-    scanner_config: ScannerConfiguration,
+def test_recover_from_startup_error(
+    le_device_config: LeDeviceConfiguration,
 ) -> None:
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(fail_after=0), scanner_config)
+    le_device_config.amp_port = "mock_device_empty_responses"
+    with pytest.raises((SerialException, DeviceComError)):
+        scanner.start_scan(le_device_config)
+    assert scanner.is_scanning is False
+
+    le_device_config.amp_port = "mock_device"
+    scanner.start_scan(le_device_config)
+    assert scanner.is_scanning
+    scanner.stop_scan()
+
+
+def test_recover_from_failed_scan(
+    le_device_config: LeDeviceConfiguration,
+) -> None:
+    le_device_config.amp_port = "mock_device_scan_should_fail"
+    scanner = _AsyncScanner()
+    scanner.start_scan(le_device_config)
     with pytest.raises((SerialException, DeviceComError)):
         scanner.get_scans(1)
     assert scanner.is_scanning is False
@@ -69,7 +84,8 @@ def test_recover_from_failed_scan(
     # Verify that the child process is closed - is_alive raises an error if called on a closed process
     with pytest.raises(ValueError, match="process object is closed"):
         scanner._child_process.is_alive()
-    scanner.start_scan(mock_transport(), scanner_config)
+    le_device_config.amp_port = "mock_device"
+    scanner.start_scan(le_device_config)
     assert scanner.is_scanning
     scanner.stop_scan()
 
@@ -81,7 +97,7 @@ def test_get_phase_estimate_while_scanning(
     """Test getting phase estimate while scanner is running."""
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config)
+    scanner.start_scan(config)
 
     # Get a few scans to allow phase estimator to learn
     for _ in range(1):
@@ -104,7 +120,7 @@ def test_get_phase_estimate_with_initial_value(
     config = request.getfixturevalue(config_name)
     initial_phase = 1.5
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config, initial_phase_estimate=initial_phase)
+    scanner.start_scan(config, initial_phase_estimate=initial_phase)
 
     # Should be able to get phase estimate immediately
     phase = scanner.get_phase_estimate()
@@ -122,7 +138,7 @@ def test_get_phase_estimate_after_stop_works(
     config = request.getfixturevalue(config_name)
     initial_phase = 1.5
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config, initial_phase_estimate=initial_phase)
+    scanner.start_scan(config, initial_phase_estimate=initial_phase)
 
     # Get at least one scan to ensure cache is populated
     scanner.get_next()
@@ -146,7 +162,7 @@ def test_get_phase_estimate_doesnt_interfere_with_scanning(
     """Test that requesting phase estimate doesn't interrupt the scanning loop."""
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config, initial_phase_estimate=1.0)
+    scanner.start_scan(config, initial_phase_estimate=1.0)
 
     # Interleave scanning with phase estimate requests
     for _ in range(1):
@@ -169,7 +185,7 @@ def test_get_phase_estimate_returns_instantly(
     """Test that get_phase_estimate returns instantly without blocking on scans."""
     config = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(mock_transport(), config, initial_phase_estimate=1.0)
+    scanner.start_scan(config, initial_phase_estimate=1.0)
 
     # Get one scan to ensure cache is populated
     scanner.get_next()

@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from pyglaze.device.configuration import Interval, ScannerConfiguration
+from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 
 
 def test_save_load_scanner_config(tmp_path: Path) -> None:
-    config = ScannerConfiguration(
+    config = LeDeviceConfiguration(
+        amp_port="mock_device",
         use_ema=True,
         n_points=100,
         scan_intervals=[Interval(0.0, 1.0)],
@@ -13,5 +14,5 @@ def test_save_load_scanner_config(tmp_path: Path) -> None:
     save_path = tmp_path / "test_save_config.json"
 
     config.save(save_path)
-    loaded_conf = ScannerConfiguration.load(save_path)
+    loaded_conf = LeDeviceConfiguration.load(save_path)
     assert loaded_conf == config
