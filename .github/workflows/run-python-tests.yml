@@ -48,7 +48,7 @@ jobs:
       - name: Set up protoc
         uses: arduino/setup-protoc@v3
         with:
-          version: "33.x"
+          version: "33.4"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run buf lint
