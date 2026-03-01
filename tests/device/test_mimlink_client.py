@@ -36,7 +36,11 @@ def _build(
     )
     backend = LeMockDevice(config)
     backend.reset_input_buffer()
-    client = MimLinkClient(conn=backend, timeout=5.0)
+    client = MimLinkClient(
+        conn=backend,
+        n_points=dev_config.n_points,
+        sweep_length_ms=dev_config._sweep_length_ms,
+    )
     return dev_config, client
 
 
@@ -57,7 +61,7 @@ def test_full_scan_bulk() -> None:
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.upload_list(scanning_list)
-    times, Xs, Ys = client.start_scan(config.n_points, config._sweep_length_ms)
+    times, Xs, Ys = client.start_scan()
     assert len(times) == config.n_points
     assert len(Xs) == config.n_points
     assert len(Ys) == config.n_points
@@ -73,7 +77,7 @@ def test_full_scan_per_point() -> None:
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.upload_list(scanning_list)
-    times, Xs, Ys = client.start_scan(config.n_points, config._sweep_length_ms)
+    times, Xs, Ys = client.start_scan()
     assert len(times) == config.n_points
     assert len(Xs) == config.n_points
     assert len(Ys) == config.n_points
@@ -113,7 +117,7 @@ def test_retransmit_missing_chunks() -> None:
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.upload_list(scanning_list)
-    times, _Xs, _Ys = client.start_scan(config.n_points, config._sweep_length_ms)
+    times, _Xs, _Ys = client.start_scan()
     assert len(times) == config.n_points
     client.close()
 
@@ -129,7 +133,7 @@ def test_retransmit_missing_points() -> None:
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.upload_list(scanning_list)
-    times, _Xs, _Ys = client.start_scan(config.n_points, config._sweep_length_ms)
+    times, _Xs, _Ys = client.start_scan()
     assert len(times) == config.n_points
     client.close()
 
@@ -142,7 +146,7 @@ def test_scan_failure() -> None:
     )
     client.upload_list(scanning_list)
     with pytest.raises(DeviceComError):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -185,7 +189,7 @@ def test_start_scan_rejected() -> None:
     )
     client.upload_list(scanning_list)
     with pytest.raises(DeviceComError, match="Failed to start scan"):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -242,7 +246,7 @@ def test_retransmit_chunk_exhaustion() -> None:
     )
     client.upload_list(scanning_list)
     with pytest.raises(DeviceComError, match="unavailable after"):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -260,7 +264,7 @@ def test_retransmit_point_exhaustion() -> None:
     )
     client.upload_list(scanning_list)
     with pytest.raises(DeviceComError, match="unavailable after"):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -271,7 +275,7 @@ def test_start_scan_without_list() -> None:
     )
     # Don't upload a list → mock returns started=False
     with pytest.raises(DeviceComError, match="Failed to start scan"):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -291,7 +295,7 @@ def test_scan_failure_per_point() -> None:
     )
     client.upload_list(scanning_list)
     with pytest.raises(DeviceComError):
-        client.start_scan(config.n_points, config._sweep_length_ms)
+        client.start_scan()
     client.close()
 
 
@@ -305,16 +309,20 @@ def test_await_scan_complete_timeout() -> None:
         integration_periods=10000,
     )
     backend = LeMockDevice()
-    client = MimLinkClient(conn=backend, timeout=2.0)
+    # Pass a very short sweep_length_ms so the polling window expires
+    # before the mock scan finishes (mock scan takes ~10s).
+    client = MimLinkClient(
+        conn=backend,
+        n_points=config.n_points,
+        sweep_length_ms=1.0,
+    )
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.upload_list(scanning_list)
-    # Pass a very short sweep_length_ms so the polling window expires
-    # before the mock scan finishes (mock scan takes ~10s).
     with pytest.raises(DeviceComError, match="Timeout waiting for scan"):
-        client.start_scan(config.n_points, sweep_length_ms=1.0)
+        client.start_scan()
     client.close()
 
 
@@ -343,8 +351,8 @@ def test_inline_retransmit_per_point() -> None:
 
     data = _build_scripted_envelopes(codec, [env0, env_rt, env2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, timeout=5.0)
-    times, _Xs, _Ys = client._collect_per_point(3, 100.0)
+    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=100.0)
+    times, _Xs, _Ys = client._collect_per_point()
     assert len(times) == 3
     client.close()
 
@@ -383,8 +391,8 @@ def test_inline_retransmit_bulk() -> None:
 
     data = _build_scripted_envelopes(codec, [status_env, chunk0, rt_chunk, chunk2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, timeout=5.0)
-    times, _Xs, _Ys = client._collect_bulk(3, 1.0)
+    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=1.0)
+    times, _Xs, _Ys = client._collect_bulk()
     assert len(times) == 3
     client.close()
 

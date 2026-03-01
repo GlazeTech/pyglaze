@@ -26,7 +26,7 @@ def test_update_device(config_name: str, request: pytest.FixtureRequest) -> None
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
     new_conf = deepcopy(device_config)
-    new_conf.amp_port = "mock_device"
+    new_conf.amp_port = "mock_device_scan_should_fail"
     scanner.update_config(new_conf)
     assert scanner.config == new_conf
 
@@ -36,7 +36,7 @@ def test_update_device_v2(config_name: str, request: pytest.FixtureRequest) -> N
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
     new_conf = deepcopy(device_config)
-    new_conf.amp_port = "mock_device"
+    new_conf.amp_port = "mock_device_scan_should_fail"
     scanner.config = new_conf
     assert scanner.config == new_conf
 

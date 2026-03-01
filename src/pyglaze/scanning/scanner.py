@@ -10,6 +10,7 @@ from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
 from pyglaze.device.mimlink_client import MimLinkClient, _connection_factory
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
+from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning._types import DeviceInfo
 
 if TYPE_CHECKING:
@@ -169,23 +170,12 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         config: LeDeviceConfiguration,
         initial_phase_estimate: float | None = None,
     ) -> None:
-        self._config = config
+        self._config: LeDeviceConfiguration
+        self._client: MimLinkClient | None = None
+        self.config = config
         self._phase_estimator = _LockinPhaseEstimator(
             initial_phase_estimate=initial_phase_estimate
         )
-
-        protocol_timeout = config._sweep_length_ms * 2e-3 + 1  # noqa: SLF001
-
-        conn = _connection_factory(config)
-        conn.reset_input_buffer()
-        self._client = MimLinkClient(conn=conn, timeout=protocol_timeout)
-        self._client.set_settings(
-            config.n_points,
-            config.integration_periods,
-            use_ema=config.use_ema,
-        )
-        scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-        self._client.upload_list(scanning_list)
 
     @property
     def config(self: LeScanner) -> LeDeviceConfiguration:
@@ -198,20 +188,38 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @config.setter
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
-        settings_changed = (
-            self._config.integration_periods != new_config.integration_periods
-            or self._config.n_points != new_config.n_points
-            or self._config.use_ema != new_config.use_ema
+        conn = _connection_factory(new_config)
+        conn.reset_input_buffer()
+        self._client = MimLinkClient(
+            conn=conn,
+            n_points=new_config.n_points,
+            sweep_length_ms=new_config._sweep_length_ms,  # noqa: SLF001
         )
-        list_changed = self._config.scan_intervals != new_config.scan_intervals
 
-        if settings_changed:
+        if getattr(self, "_config", None):
+            settings_changed = (
+                self._config.integration_periods != new_config.integration_periods
+                or self._config.n_points != new_config.n_points
+                or self._config.use_ema != new_config.use_ema
+            )
+            list_changed = self._config.scan_intervals != new_config.scan_intervals
+            if settings_changed:
+                self._client.set_settings(
+                    new_config.n_points,
+                    new_config.integration_periods,
+                    use_ema=new_config.use_ema,
+                )
+            if list_changed or settings_changed:
+                scanning_list = _compute_scanning_list(
+                    new_config.n_points, new_config.scan_intervals
+                )
+                self._client.upload_list(scanning_list)
+        else:
             self._client.set_settings(
                 new_config.n_points,
                 new_config.integration_periods,
                 use_ema=new_config.use_ema,
             )
-        if list_changed or settings_changed:
             scanning_list = _compute_scanning_list(
                 new_config.n_points, new_config.scan_intervals
             )
@@ -225,10 +233,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
-        times, Xs, Ys = self._client.start_scan(
-            self._config.n_points,
-            self._config._sweep_length_ms,  # noqa: SLF001
-        )
+        if self._client is None:
+            msg = "Scanner not configured"
+            raise ScanError(msg)
+        times, Xs, Ys = self._client.start_scan()
         self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
         return UnprocessedWaveform.from_inphase_quadrature(
             times, Xs, Ys, self._phase_estimator.phase_estimate
@@ -244,10 +252,17 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def disconnect(self: LeScanner) -> None:
         """Close serial connection."""
+        if self._client is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
         self._client.close()
+        self._client = None
 
     def get_device_info(self: LeScanner) -> DeviceInfo:
         """Get device information."""
+        if self._client is None:
+            msg = "Scanner not connected"
+            raise ScanError(msg)
         resp = self._client.get_device_info()
         return DeviceInfo(
             serial_number=str(resp.serial_number),

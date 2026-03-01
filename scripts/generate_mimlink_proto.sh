@@ -11,4 +11,4 @@ command -v buf >/dev/null 2>&1 || { echo "error: missing 'buf' on PATH" >&2; exi
 buf lint
 buf generate
 
-echo "Generated: $PROTO_DIR/envelope_pb2.py"
+echo "Generated: $PROTO_DIR/envelope_pb2.py, $PROTO_DIR/envelope_pb2.pyi"
