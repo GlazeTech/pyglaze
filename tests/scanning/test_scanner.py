@@ -2,7 +2,11 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+from pyglaze.device.configuration import (
+    DeviceConfiguration,
+    Interval,
+    LeDeviceConfiguration,
+)
 from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 from pyglaze.scanning.types import DeviceInfo
@@ -33,7 +37,7 @@ def test_update_config(config_name: str, request: pytest.FixtureRequest) -> None
 
 
 def test_recover_after_single_failure(
-    le_device_config: LeDeviceConfiguration,
+    le_device_config: DeviceConfiguration,
 ) -> None:
     le_device_config.amp_port = "mock_device_fail_first_scan"
     scanner = Scanner(config=le_device_config)

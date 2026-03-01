@@ -1,5 +1,5 @@
 from .client import GlazeClient
 from .scanner import Scanner
-from .types import DeviceInfo, DeviceStatus, PingResult
+from .types import DeviceInfo
 
-__all__ = ["DeviceInfo", "DeviceStatus", "GlazeClient", "PingResult", "Scanner"]
+__all__ = ["DeviceInfo", "GlazeClient", "Scanner"]

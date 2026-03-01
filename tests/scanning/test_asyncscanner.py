@@ -4,7 +4,7 @@ import pytest
 from serial.serialutil import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.configuration import LeDeviceConfiguration
+from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning._asyncscanner import _AsyncScanner
 from tests.conftest import DEVICE_CONFIGS
@@ -57,7 +57,7 @@ def test_scanner_wrong_port(config_name: str, request: pytest.FixtureRequest) ->
 
 
 def test_recover_from_startup_error(
-    le_device_config: LeDeviceConfiguration,
+    le_device_config: DeviceConfiguration,
 ) -> None:
     scanner = _AsyncScanner()
     le_device_config.amp_port = "mock_device_empty_responses"
@@ -72,7 +72,7 @@ def test_recover_from_startup_error(
 
 
 def test_recover_from_failed_scan(
-    le_device_config: LeDeviceConfiguration,
+    le_device_config: DeviceConfiguration,
 ) -> None:
     le_device_config.amp_port = "mock_device_scan_should_fail"
     scanner = _AsyncScanner()

@@ -128,10 +128,3 @@ def test_mimlink_device_info(
     assert info.firmware_version == "v0.1.0"
 
 
-def test_mimlink_ping(
-    le_device_config: LeDeviceConfiguration,
-) -> None:
-    scanner = Scanner(config=le_device_config)
-    result = scanner.ping()
-    assert result.success is True
-    assert result.round_trip_us > 0

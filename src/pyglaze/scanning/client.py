@@ -10,8 +10,8 @@ from ._asyncscanner import _AsyncScanner
 
 if TYPE_CHECKING:
     from pyglaze.datamodels import UnprocessedWaveform
-    from pyglaze.device.configuration import LeDeviceConfiguration
-    from pyglaze.scanning.types import DeviceInfo, DeviceStatus, PingResult
+    from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.scanning.types import DeviceInfo
 
 
 class ScannerStartupError(Exception):
@@ -28,12 +28,12 @@ class GlazeClient:
     """Open a connection to and start continuously scanning using the Glaze device.
 
     Args:
-        config: Device configuration to use.
+        config: Configuration to use for scans
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanning sessions.
     """
 
-    config: LeDeviceConfiguration
+    config: DeviceConfiguration
     initial_phase_estimate: float | None = None
     _scanner: _AsyncScanner = field(init=False)
 
@@ -84,22 +84,6 @@ class GlazeClient:
         """
         try:
             return self._scanner.get_phase_estimate()
-        except AttributeError as e:
-            msg = "No connection to device."
-            raise SerialException(msg) from e
-
-    def ping(self: GlazeClient) -> PingResult:
-        """Send a ping and measure round-trip time."""
-        try:
-            return self._scanner.ping()
-        except AttributeError as e:
-            msg = "No connection to device."
-            raise SerialException(msg) from e
-
-    def get_status(self: GlazeClient) -> DeviceStatus:
-        """Query device status."""
-        try:
-            return self._scanner.get_status()
         except AttributeError as e:
             msg = "No connection to device."
             raise SerialException(msg) from e
