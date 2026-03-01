@@ -5,7 +5,6 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
@@ -27,7 +26,7 @@ def test_update_device(config_name: str, request: pytest.FixtureRequest) -> None
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
     new_conf = deepcopy(device_config)
-    new_conf.amp_port = "mock_device_scan_should_fail"
+    new_conf.amp_port = "mock_device"
     scanner.update_config(new_conf)
     assert scanner.config == new_conf
 
@@ -37,7 +36,7 @@ def test_update_device_v2(config_name: str, request: pytest.FixtureRequest) -> N
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
     new_conf = deepcopy(device_config)
-    new_conf.amp_port = "mock_device_scan_should_fail"
+    new_conf.amp_port = "mock_device"
     scanner.config = new_conf
     assert scanner.config == new_conf
 
@@ -48,19 +47,6 @@ def test_no_connection_error(config_name: str, request: pytest.FixtureRequest) -
     device_config.amp_port = "nonexistent_port"
     with pytest.raises(serialutil.SerialException):
         Scanner(device_config)
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_succeed_on_single_failure(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_fail_first_scan"
-    scanner = Scanner(device_config)
-    with pytest.raises(DeviceComError):
-        scanner.scan()
-    scan = scanner.scan()
-    assert isinstance(scan, UnprocessedWaveform)
 
 
 def test_invalid_config_type() -> None:

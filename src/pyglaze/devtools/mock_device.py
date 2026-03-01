@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -21,13 +22,57 @@ TRANSFER_MODE_BULK = 0
 TRANSFER_MODE_PER_POINT = 1
 
 
+@dataclass(frozen=True)
+class MockDeviceConfig:
+    """Configuration for LeMockDevice behavior and fault injection."""
+
+    transfer_mode: int = TRANSFER_MODE_BULK
+    fail_after: float = np.inf
+    n_fails: float = np.inf
+    empty_responses: bool = False
+    drop_retransmit_once: bool = False
+    reject_settings: bool = False
+    reject_list_start: bool = False
+    reject_list_complete: bool = False
+    reject_scan_start: bool = False
+    timeout_after_n_responses: int | None = None
+    retransmit_unavailable: bool = False
+
+
+class ScriptedTransport:
+    """Minimal serial-like transport returning pre-built response bytes."""
+
+    def __init__(self, data: bytes) -> None:
+        self._buf = bytearray(data)
+
+    @property
+    def in_waiting(self) -> int:
+        """Bytes available for reading."""
+        return len(self._buf)
+
+    def read(self, size: int) -> bytes:
+        """Read up to *size* bytes from the buffer."""
+        chunk = bytes(self._buf[:size])
+        del self._buf[:size]
+        return chunk
+
+    def write(self, _data: bytes) -> None:
+        """Accept and discard written bytes."""
+
+    def close(self) -> None:
+        """Close the transport (no-op)."""
+
+    def reset_input_buffer(self) -> None:
+        """Discard all buffered bytes."""
+        self._buf.clear()
+
+
 def list_mock_devices() -> list[str]:
     """List all available mock devices."""
     return [
         "mock_device",
         "mock_device_per_point",
         "mock_device_scan_should_fail",
-        "mock_device_fail_first_scan",
         "mock_device_empty_responses",
     ]
 
@@ -39,18 +84,15 @@ def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
         ``"mock_device"`` — default mock (bulk transfer)
         ``"mock_device_per_point"`` — per-point transfer mode
         ``"mock_device_scan_should_fail"`` — scan fails immediately
-        ``"mock_device_fail_first_scan"`` — first scan fails, then recovers
         ``"mock_device_empty_responses"`` — silently ignores writes, returns empty reads
     """
     port = config.amp_port
     if "mock_device_per_point" in port:
-        return LeMockDevice(transfer_mode=TRANSFER_MODE_PER_POINT)
+        return LeMockDevice(MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT))
     if "mock_device_scan_should_fail" in port:
-        return LeMockDevice(fail_after=0)
-    if "mock_device_fail_first_scan" in port:
-        return LeMockDevice(fail_after=0, n_fails=1)
+        return LeMockDevice(MockDeviceConfig(fail_after=0))
     if "mock_device_empty_responses" in port:
-        return LeMockDevice(empty_responses=True)
+        return LeMockDevice(MockDeviceConfig(empty_responses=True))
     return LeMockDevice()
 
 
@@ -66,22 +108,14 @@ class LeMockDevice:
 
     def __init__(
         self,
-        *,
-        transfer_mode: int = TRANSFER_MODE_BULK,
-        fail_after: float = np.inf,
-        n_fails: float = np.inf,
-        empty_responses: bool = False,
-        drop_retransmit_once: bool = False,
+        config: MockDeviceConfig | None = None,
     ) -> None:
-        self._transfer_mode = transfer_mode
-        self._fail_after = fail_after
-        self._n_fails = n_fails
+        self._config = config or MockDeviceConfig()
         self._n_failures = 0
         self._n_scans = 0
         self._rng = np.random.default_rng()
-        self._empty_responses = empty_responses
-        self._drop_retransmit_once = drop_retransmit_once
         self._retransmit_drop_done = False
+        self._responses_sent = 0
 
         self._list_length: int | None = None
         self._expected_total_floats: int | None = None
@@ -124,7 +158,7 @@ class LeMockDevice:
 
     def write(self, data: bytes) -> None:
         """Handle bytes written by host endpoint."""
-        if self._empty_responses:
+        if self._config.empty_responses:
             return
         for frame in self._rx_stream.push(data):
             try:
@@ -135,7 +169,7 @@ class LeMockDevice:
 
     def read(self, size: int) -> bytes:
         """Read queued bytes produced by device endpoint."""
-        if self._empty_responses or size <= 0 or not self._tx_buffer:
+        if self._config.empty_responses or size <= 0 or not self._tx_buffer:
             return b""
         n_to_read = min(size, len(self._tx_buffer))
         data = bytes(self._tx_buffer[:n_to_read])
@@ -143,7 +177,13 @@ class LeMockDevice:
         return data
 
     def _queue_tx(self, env: Envelope) -> None:
+        if (
+            self._config.timeout_after_n_responses is not None
+            and self._responses_sent >= self._config.timeout_after_n_responses
+        ):
+            return
         self._tx_buffer.extend(self._codec.encode(env))
+        self._responses_sent += 1
 
     @property
     def _scanning_time(self) -> float:
@@ -174,8 +214,8 @@ class LeMockDevice:
 
         self._n_scans += 1
         should_fail = (
-            self._n_scans > self._fail_after
-            and self._n_failures < self._n_fails
+            self._n_scans > self._config.fail_after
+            and self._n_failures < self._config.n_fails
         )
         if should_fail:
             self._n_failures += 1
@@ -229,7 +269,7 @@ class LeMockDevice:
     ) -> list[Envelope]:
         """Return envelopes, optionally dropping one item to test retransmit."""
         if (
-            not self._drop_retransmit_once
+            not self._config.drop_retransmit_once
             or self._retransmit_drop_done
             or len(envelopes) <= self._MIN_ITEMS_FOR_DROP
         ):
@@ -259,7 +299,8 @@ class LeMockDevice:
     def _handle_set_settings(self, env: Envelope) -> None:
         req = env.set_settings_request
         valid = (
-            1 <= req.list_length <= self.MAX_LIST_LENGTH
+            not self._config.reject_settings
+            and 1 <= req.list_length <= self.MAX_LIST_LENGTH
             and 1 <= req.integration_periods <= self.MAX_INTEGRATION_PERIODS
         )
         if valid:
@@ -275,7 +316,8 @@ class LeMockDevice:
     def _handle_set_list_start(self, env: Envelope) -> None:
         total = env.set_list_start_request.total_floats
         ready = (
-            not self._is_scanning
+            not self._config.reject_list_start
+            and not self._is_scanning
             and self._list_length is not None
             and 0 < total <= self.MAX_LIST_LENGTH
             and total == self._list_length
@@ -292,7 +334,7 @@ class LeMockDevice:
         self._scanning_list.extend(list(chunk.values))
         if chunk.is_last:
             resp = self._codec.build_envelope(mt.SET_LIST_COMPLETE_RESPONSE)
-            resp.set_list_complete_response.success = True
+            resp.set_list_complete_response.success = not self._config.reject_list_complete
             resp.set_list_complete_response.floats_received = len(
                 self._scanning_list
             )
@@ -303,19 +345,19 @@ class LeMockDevice:
             self._list_length is not None and self._integration_periods is not None
         )
         list_valid = len(self._scanning_list) > 0
-        started = settings_valid and list_valid
+        started = not self._config.reject_scan_start and settings_valid and list_valid
         resp = self._codec.build_envelope(mt.START_SCAN_RESPONSE)
         r = resp.start_scan_response
         r.started = started
         r.error = "" if started else "Settings/list missing"
-        r.transfer_mode = self._transfer_mode
+        r.transfer_mode = self._config.transfer_mode
         self._queue_tx(resp)
         if not started:
             return
         self._is_scanning = True
         self._scan_start_time = time.time()
         self._prepare_scan_data()
-        if self._transfer_mode == TRANSFER_MODE_PER_POINT:
+        if self._config.transfer_mode == TRANSFER_MODE_PER_POINT:
             self._send_per_point_stream()
 
     def _handle_get_status(self, _env: Envelope) -> None:
@@ -342,7 +384,7 @@ class LeMockDevice:
         r.firmware_version = "v0.1.0"
         r.bsp_name = "mock"
         r.build_type = "Release"
-        r.transfer_mode = self._transfer_mode
+        r.transfer_mode = self._config.transfer_mode
         r.hardware_type = "mock"
         r.hardware_revision = 0
         self._queue_tx(resp)
@@ -353,7 +395,7 @@ class LeMockDevice:
         resp = self._codec.build_envelope(mt.RESULT_POINT_RETRANSMIT)
         r = resp.result_point_retransmit
         r.point_index = point_idx
-        if point_env is None:
+        if self._config.retransmit_unavailable or point_env is None:
             r.available = False
             r.time = 0.0
             r.x = 0.0
@@ -372,7 +414,7 @@ class LeMockDevice:
         resp = self._codec.build_envelope(mt.RESULTS_CHUNK_RETRANSMIT)
         r = resp.results_chunk_retransmit
         r.chunk_index = chunk_idx
-        if chunk_env is None:
+        if self._config.retransmit_unavailable or chunk_env is None:
             r.available = False
             r.is_last = False
         else:

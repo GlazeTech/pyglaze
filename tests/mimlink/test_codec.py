@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
+from pyglaze.mimlink.framing import FrameDecodeError, encode_frame
 
 
 def test_roundtrip_settings_response() -> None:
@@ -59,3 +62,12 @@ def test_sequence_numbers_increment() -> None:
 
     seqs = [codec.decode(f).seq for f in frames]
     assert seqs == [0, 1, 2]
+
+
+def test_decode_garbage_protobuf() -> None:
+    # Valid COBS+CRC frame wrapping garbage that isn't valid protobuf.
+    garbage = b"\xff\xfe\xfd\xfc\xfb"
+    frame = encode_frame(garbage)
+    codec = EnvelopeCodec()
+    with pytest.raises(FrameDecodeError, match="protobuf"):
+        codec.decode(frame)

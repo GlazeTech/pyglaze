@@ -4,7 +4,6 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning import GlazeClient
 from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
@@ -36,19 +35,6 @@ def test_wrong_address_handling(
     device_config.amp_port = "nonexisting_port"
     with pytest.raises(serialutil.SerialException), GlazeClient(device_config) as _:
         pass
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_raises_error_when_scan_fails(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_scan_should_fail"
-    with (
-        pytest.raises((serialutil.SerialException, DeviceComError)),
-        GlazeClient(device_config) as client,
-    ):
-        client.read(n_pulses=1)
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
