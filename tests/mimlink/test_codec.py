@@ -65,7 +65,6 @@ def test_sequence_numbers_increment() -> None:
 
 
 def test_decode_garbage_protobuf() -> None:
-    # Valid COBS+CRC frame wrapping garbage that isn't valid protobuf.
     garbage = b"\xff\xfe\xfd\xfc\xfb"
     frame = encode_frame(garbage)
     codec = EnvelopeCodec()

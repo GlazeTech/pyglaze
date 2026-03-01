@@ -51,14 +51,9 @@ def test_decode_frame_empty() -> None:
 
 
 def test_decode_frame_too_short_for_crc() -> None:
-    # Encode a 1-byte payload normally, then tamper: replace the COBS body
-    # with something that decodes to fewer than 4 bytes.
     short_cobs = cobs_encode(b"\x01\x02") + bytes([FRAME_DELIMITER])
     with pytest.raises(FrameDecodeError, match="too short"):
         decode_frame(short_cobs)
-
-
-# --- RxFrameStream tests ---
 
 
 def test_rx_stream_push_empty() -> None:

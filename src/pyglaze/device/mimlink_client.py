@@ -4,7 +4,7 @@ import contextlib
 import math
 import time
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 import numpy as np
 import serial
@@ -19,9 +19,34 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from pyglaze.device.configuration import DeviceConfiguration
-    from pyglaze.devtools.mock_device import LeMockDevice
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
+
+
+@runtime_checkable
+class Connection(Protocol):
+    """Serial-like connection interface used by MimLinkClient."""
+
+    @property
+    def in_waiting(self) -> int:
+        """Bytes available for reading."""
+        ...
+
+    def read(self, size: int) -> bytes:
+        """Read up to *size* bytes."""
+        ...
+
+    def write(self, data: bytes) -> None:
+        """Write bytes to the connection."""
+        ...
+
+    def close(self) -> None:
+        """Close the connection."""
+        ...
+
+    def reset_input_buffer(self) -> None:
+        """Discard buffered input bytes."""
+        ...
 
 # Transfer timeout estimation constants.
 _SERIAL_BITS_PER_BYTE = 10  # 8 data + start + stop
@@ -51,16 +76,19 @@ def _transfer_timeout_s(n_points: int) -> float:
 
 def _connection_factory(
     config: DeviceConfiguration,
-) -> serial.Serial | LeMockDevice:
+) -> Connection:
     """Create a connection from config. Dispatches on ``amp_port`` sentinel strings."""
     if "mock_device" in config.amp_port:
         from pyglaze.devtools.mock_device import _mock_device_factory  # noqa: PLC0415
 
         return _mock_device_factory(config)
-    return serial.serial_for_url(
-        url=config.amp_port,
-        baudrate=config.amp_baudrate,
-        timeout=config.amp_timeout_seconds,
+    return cast(
+        "Connection",
+        serial.serial_for_url(
+            url=config.amp_port,
+            baudrate=config.amp_baudrate,
+            timeout=config.amp_timeout_seconds,
+        ),
     )
 
 
@@ -69,7 +97,7 @@ class MimLinkClient:
 
     def __init__(
         self,
-        conn: serial.Serial | LeMockDevice,
+        conn: Connection,
         timeout: float = 5.0,
     ) -> None:
         self._conn = conn

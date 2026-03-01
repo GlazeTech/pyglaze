@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pyglaze.device.mimlink_client import Connection
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
@@ -39,7 +40,7 @@ class MockDeviceConfig:
     retransmit_unavailable: bool = False
 
 
-class ScriptedTransport:
+class ScriptedTransport(Connection):
     """Minimal serial-like transport returning pre-built response bytes."""
 
     def __init__(self, data: bytes) -> None:
@@ -56,7 +57,7 @@ class ScriptedTransport:
         del self._buf[:size]
         return chunk
 
-    def write(self, _data: bytes) -> None:
+    def write(self, data: bytes) -> None:
         """Accept and discard written bytes."""
 
     def close(self) -> None:

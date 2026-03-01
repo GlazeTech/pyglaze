@@ -65,7 +65,9 @@ def test_full_scan_bulk() -> None:
 
 
 def test_full_scan_per_point() -> None:
-    config, client = _build(config=MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT))
+    config, client = _build(
+        config=MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT)
+    )
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -118,7 +120,9 @@ def test_retransmit_missing_chunks() -> None:
 
 def test_retransmit_missing_points() -> None:
     config, client = _build(
-        config=MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT, drop_retransmit_once=True),
+        config=MockDeviceConfig(
+            transfer_mode=TRANSFER_MODE_PER_POINT, drop_retransmit_once=True
+        ),
     )
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -142,11 +146,7 @@ def test_scan_failure() -> None:
     client.close()
 
 
-# --- Error / retry path tests ---
-
-
 def test_set_settings_rejected() -> None:
-    """L159-160: set_settings returns success=False."""
     config, client = _build(config=MockDeviceConfig(reject_settings=True))
     with pytest.raises(DeviceComError, match="Failed to set settings"):
         client.set_settings(
@@ -156,7 +156,6 @@ def test_set_settings_rejected() -> None:
 
 
 def test_upload_list_start_rejected() -> None:
-    """L182-183: set_list_start returns ready=False."""
     config, client = _build(config=MockDeviceConfig(reject_list_start=True))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -168,7 +167,6 @@ def test_upload_list_start_rejected() -> None:
 
 
 def test_upload_list_complete_rejected() -> None:
-    """L201-202: set_list_complete returns success=False."""
     config, client = _build(config=MockDeviceConfig(reject_list_complete=True))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -180,7 +178,6 @@ def test_upload_list_complete_rejected() -> None:
 
 
 def test_start_scan_rejected() -> None:
-    """L212-213: start_scan returns started=False."""
     config, client = _build(config=MockDeviceConfig(reject_scan_start=True))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -193,13 +190,6 @@ def test_start_scan_rejected() -> None:
 
 
 def test_send_expect_timeout_then_retry() -> None:
-    """L139-141: first attempt times out, second succeeds.
-
-    Use timeout_after_n_responses=0 initially, then reset to allow responses.
-    Actually: easier to test via _send_expect directly with empty_responses.
-    We use timeout_after_n_responses=1 so the settings response arrives but
-    the list start response doesn't, triggering retry.
-    """
     # The mock responds to set_settings (1 response) but then times out.
     # upload_list calls _send_expect for set_list_start which will timeout,
     # retry, and timeout again → exhaustion.
@@ -215,7 +205,6 @@ def test_send_expect_timeout_then_retry() -> None:
 
 
 def test_send_expect_wrong_type() -> None:
-    """L143-144: response has unexpected message type."""
     config, client = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -233,10 +222,8 @@ def test_send_expect_wrong_type() -> None:
 
 
 def test_drain_corrupt_frame() -> None:
-    """L100-101: FrameDecodeError during _drain is silently skipped."""
     config, client = _build()
-    # Inject garbage bytes directly into the connection's tx buffer.
-    # The mock's tx_buffer is what the client reads from.
+    assert isinstance(client._conn, LeMockDevice)
     client._conn._tx_buffer.extend(b"\x01\x02\x03\x00")  # invalid frame
     # Now send a valid command — the corrupt frame should be skipped.
     client.set_settings(
@@ -246,7 +233,6 @@ def test_drain_corrupt_frame() -> None:
 
 
 def test_retransmit_chunk_exhaustion() -> None:
-    """L328-331: chunk retransmit attempts exhausted (available=False)."""
     config, client = _build(
         config=MockDeviceConfig(drop_retransmit_once=True, retransmit_unavailable=True),
     )
@@ -261,7 +247,6 @@ def test_retransmit_chunk_exhaustion() -> None:
 
 
 def test_retransmit_point_exhaustion() -> None:
-    """L355-358: point retransmit attempts exhausted (available=False)."""
     config, client = _build(
         config=MockDeviceConfig(
             transfer_mode=TRANSFER_MODE_PER_POINT,
@@ -280,7 +265,6 @@ def test_retransmit_point_exhaustion() -> None:
 
 
 def test_start_scan_without_list() -> None:
-    """L212-213 + mock L171-173, L314: start scan without uploading list."""
     config, client = _build()
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -292,15 +276,15 @@ def test_start_scan_without_list() -> None:
 
 
 def test_list_mock_devices() -> None:
-    """Cover mock_device.py L26."""
     devices = list_mock_devices()
     assert "mock_device" in devices
     assert len(devices) >= 3
 
 
 def test_scan_failure_per_point() -> None:
-    """L288-290: per-point scan produces no results → re-raises timeout."""
-    config, client = _build(config=MockDeviceConfig(fail_after=0, transfer_mode=TRANSFER_MODE_PER_POINT))
+    config, client = _build(
+        config=MockDeviceConfig(fail_after=0, transfer_mode=TRANSFER_MODE_PER_POINT)
+    )
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -312,7 +296,6 @@ def test_scan_failure_per_point() -> None:
 
 
 def test_await_scan_complete_timeout() -> None:
-    """L371-373: scan_ongoing stays True past the polling deadline."""
     # Use high integration_periods so mock scan takes very long.
     config = LeDeviceConfiguration(
         amp_port="mock_device",
@@ -336,12 +319,10 @@ def test_await_scan_complete_timeout() -> None:
 
 
 def _build_scripted_envelopes(codec: EnvelopeCodec, envelopes: list[Envelope]) -> bytes:
-    """Encode a list of envelopes to concatenated framed wire bytes."""
     return b"".join(codec.encode(env) for env in envelopes)
 
 
 def test_inline_retransmit_per_point() -> None:
-    """L282-287: RESULT_POINT_RETRANSMIT arrives during per-point stream."""
     codec = EnvelopeCodec()
 
     env0 = codec.build_envelope(mt.RESULT_POINT)
