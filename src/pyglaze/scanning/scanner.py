@@ -156,10 +156,10 @@ class Scanner:
 
 
 class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
-    """Perform synchronous terahertz scanning using a LeDeviceConfiguration.
+    """Perform synchronous terahertz scanning using a given DeviceConfiguration.
 
     Args:
-        config: A LeDeviceConfiguration to use for the scan.
+        config: A DeviceConfiguration to use for the scan.
         initial_phase_estimate: Optional initial phase estimate in radians for lock-in detection.
             Use this to maintain consistent polarity across scanner instances.
     """
@@ -189,7 +189,11 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @property
     def config(self: LeScanner) -> LeDeviceConfiguration:
-        """The device configuration to use for the scan."""
+        """The device configuration to use for the scan.
+
+        Returns:
+            DeviceConfiguration: a DeviceConfiguration.
+        """
         return self._config
 
     @config.setter
@@ -219,7 +223,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         """Perform a scan.
 
         Returns:
-            UnprocessedWaveform: A raw waveform.
+            Unprocessed scan.
         """
         times, Xs, Ys = self._client.start_scan(
             self._config.n_points,
@@ -234,12 +238,12 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         """Update the DeviceConfiguration used in the scan.
 
         Args:
-            new_config: A LeDeviceConfiguration to use for the scan.
+            new_config: A DeviceConfiguration to use for the scan.
         """
         self.config = new_config
 
     def disconnect(self: LeScanner) -> None:
-        """Close the device connection."""
+        """Close serial connection."""
         self._client.close()
 
     def get_device_info(self: LeScanner) -> DeviceInfo:

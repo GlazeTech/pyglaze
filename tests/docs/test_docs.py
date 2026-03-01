@@ -32,7 +32,7 @@ class PulseExampleDeps(DoctestDep):
         pass
 
     def teardown(self: PulseExampleDeps) -> None:
-        self.PULSE_PATH.unlink(missing_ok=True)
+        self.PULSE_PATH.unlink()
 
 
 @DOCTEST_DEPS_REGISTRY.register
@@ -48,4 +48,4 @@ class IndexDeps(DoctestDep):
             Path("scan_result_scanner.json"),
             Path("scan_result.json"),
         ]:
-            p.unlink(missing_ok=True)
+            p.unlink()

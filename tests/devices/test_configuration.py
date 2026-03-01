@@ -1,18 +1,21 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from pyglaze.device.configuration import Interval, LeDeviceConfiguration
+import pytest
+
+from tests.conftest import DEVICE_CONFIGS
+
+if TYPE_CHECKING:
+    from pyglaze.device.configuration import DeviceConfiguration
 
 
-def test_save_load_scanner_config(tmp_path: Path) -> None:
-    config = LeDeviceConfiguration(
-        amp_port="mock_device",
-        use_ema=True,
-        n_points=100,
-        scan_intervals=[Interval(0.0, 1.0)],
-        integration_periods=1,
-    )
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_save_load_device_config(
+    config_name: str, tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     save_path = tmp_path / "test_save_config.json"
 
-    config.save(save_path)
-    loaded_conf = LeDeviceConfiguration.load(save_path)
-    assert loaded_conf == config
+    device_config.save(save_path)
+    loaded_conf = device_config.load(save_path)
+    assert loaded_conf == device_config

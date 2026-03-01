@@ -208,3 +208,5 @@ class _AsyncScanner:
             # this call required - see https://docs.python.org/3.9/library/multiprocessing.html#programming-guidelines
             shared_mem.cancel_join_thread()
             parent_conn.close()
+            shared_mem.cancel_join_thread()
+            parent_conn.close()

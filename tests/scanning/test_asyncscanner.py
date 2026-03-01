@@ -12,9 +12,9 @@ from tests.conftest import DEVICE_CONFIGS
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_start_stop(config_name: str, request: pytest.FixtureRequest) -> None:
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(config)
+    scanner.start_scan(device_config)
     assert scanner._child_process.is_alive()
     assert scanner.is_scanning
 
@@ -28,9 +28,9 @@ def test_start_stop(config_name: str, request: pytest.FixtureRequest) -> None:
 def test_get_next(
     n_scans: int, config_name: str, request: pytest.FixtureRequest
 ) -> None:
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(config)
+    scanner.start_scan(device_config)
     for _ in range(n_scans):
         scan = scanner.get_next()
         assert isinstance(scan, UnprocessedWaveform)
@@ -39,28 +39,27 @@ def test_get_next(
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_raise_timeout(config_name: str, request: pytest.FixtureRequest) -> None:
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner(startup_timeout=0.0)
     with pytest.raises(TimeoutError):
-        scanner.start_scan(config)
+        scanner.start_scan(device_config)
     assert scanner.is_scanning is False
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_scanner_wrong_port(config_name: str, request: pytest.FixtureRequest) -> None:
-    config = request.getfixturevalue(config_name)
-    config.amp_port = "Nonexisting"
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    device_config.amp_port = "Nonexisting"
     scanner = _AsyncScanner()
     with pytest.raises(SerialException):
-        scanner.start_scan(config)
+        scanner.start_scan(device_config)
     assert scanner.is_scanning is False
 
 
-def test_recover_from_startup_error(
-    le_device_config: DeviceConfiguration,
-) -> None:
+def test_recover_from_startup_error(le_device_config: DeviceConfiguration) -> None:
     scanner = _AsyncScanner()
     le_device_config.amp_port = "mock_device_empty_responses"
+
     with pytest.raises((SerialException, DeviceComError)):
         scanner.start_scan(le_device_config)
     assert scanner.is_scanning is False
@@ -71,11 +70,9 @@ def test_recover_from_startup_error(
     scanner.stop_scan()
 
 
-def test_recover_from_failed_scan(
-    le_device_config: DeviceConfiguration,
-) -> None:
-    le_device_config.amp_port = "mock_device_scan_should_fail"
+def test_recover_from_failed_scan(le_device_config: DeviceConfiguration) -> None:
     scanner = _AsyncScanner()
+    le_device_config.amp_port = "mock_device_scan_should_fail"
     scanner.start_scan(le_device_config)
     with pytest.raises((SerialException, DeviceComError)):
         scanner.get_scans(1)
@@ -95,9 +92,9 @@ def test_get_phase_estimate_while_scanning(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test getting phase estimate while scanner is running."""
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(config)
+    scanner.start_scan(device_config)
 
     # Get a few scans to allow phase estimator to learn
     for _ in range(1):
@@ -117,10 +114,10 @@ def test_get_phase_estimate_with_initial_value(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that initial phase estimate is available immediately."""
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     initial_phase = 1.5
     scanner = _AsyncScanner()
-    scanner.start_scan(config, initial_phase_estimate=initial_phase)
+    scanner.start_scan(device_config, initial_phase_estimate=initial_phase)
 
     # Should be able to get phase estimate immediately
     phase = scanner.get_phase_estimate()
@@ -135,10 +132,10 @@ def test_get_phase_estimate_after_stop_works(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that getting phase estimate after stop still works (returns cached value)."""
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     initial_phase = 1.5
     scanner = _AsyncScanner()
-    scanner.start_scan(config, initial_phase_estimate=initial_phase)
+    scanner.start_scan(device_config, initial_phase_estimate=initial_phase)
 
     # Get at least one scan to ensure cache is populated
     scanner.get_next()
@@ -160,9 +157,9 @@ def test_get_phase_estimate_doesnt_interfere_with_scanning(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that requesting phase estimate doesn't interrupt the scanning loop."""
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(config, initial_phase_estimate=1.0)
+    scanner.start_scan(device_config, initial_phase_estimate=1.0)
 
     # Interleave scanning with phase estimate requests
     for _ in range(1):
@@ -183,9 +180,9 @@ def test_get_phase_estimate_returns_instantly(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     """Test that get_phase_estimate returns instantly without blocking on scans."""
-    config = request.getfixturevalue(config_name)
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = _AsyncScanner()
-    scanner.start_scan(config, initial_phase_estimate=1.0)
+    scanner.start_scan(device_config, initial_phase_estimate=1.0)
 
     # Get one scan to ensure cache is populated
     scanner.get_next()

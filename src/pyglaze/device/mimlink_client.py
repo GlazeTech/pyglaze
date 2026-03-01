@@ -18,8 +18,8 @@ from pyglaze.mimlink.rx_stream import RxFrameStream
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from pyglaze.device.configuration import LeDeviceConfiguration
-    from pyglaze.devtools.mock_device import MimLinkMockDevice
+    from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.devtools.mock_device import LeMockDevice
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
 
@@ -33,6 +33,7 @@ _TRANSFER_BASELINE_S = 0.5  # fixed latency headroom
 _TRANSFER_MODE_PER_POINT = 1
 _RESULTS_CHUNK_SIZE = 20
 _MAX_RETRANSMIT_ATTEMPTS = 3
+_MAX_COMMAND_RETRIES = 2
 _LIST_CHUNK_SIZE = 50
 
 
@@ -49,8 +50,8 @@ def _transfer_timeout_s(n_points: int) -> float:
 
 
 def _connection_factory(
-    config: LeDeviceConfiguration,
-) -> serial.Serial | MimLinkMockDevice:
+    config: DeviceConfiguration,
+) -> serial.Serial | LeMockDevice:
     """Create a connection from config. Dispatches on ``amp_port`` sentinel strings."""
     if "mock_device" in config.amp_port:
         from pyglaze.devtools.mock_device import _mock_device_factory  # noqa: PLC0415
@@ -68,7 +69,7 @@ class MimLinkClient:
 
     def __init__(
         self,
-        conn: serial.Serial | MimLinkMockDevice,
+        conn: serial.Serial | LeMockDevice,
         timeout: float = 5.0,
     ) -> None:
         self._conn = conn
@@ -127,12 +128,22 @@ class MimLinkClient:
     def _send_expect(
         self, envelope: pb.Envelope, expected: int, *, timeout: float | None = None
     ) -> pb.Envelope:
-        """Send an envelope and verify the response type. Raises DeviceComError on mismatch."""
-        resp = self._send_receive(envelope, timeout=timeout)
-        if resp.type != expected:
-            msg = f"Unexpected response: expected {expected}, got {resp.type}"
-            raise DeviceComError(msg)
-        return resp
+        """Send an envelope and verify the response type.
+
+        Retries on timeout. Raises DeviceComError on type mismatch or explicit rejection.
+        """
+        last_err: DeviceComError | None = None
+        for _ in range(_MAX_COMMAND_RETRIES + 1):
+            try:
+                resp = self._send_receive(envelope, timeout=timeout)
+            except DeviceComError as e:
+                last_err = e
+                continue
+            if resp.type != expected:
+                msg = f"Unexpected response: expected {expected}, got {resp.type}"
+                raise DeviceComError(msg)
+            return resp
+        raise last_err  # type: ignore[misc]
 
     def set_settings(
         self, n_points: int, integration_periods: int, *, use_ema: bool
@@ -149,7 +160,19 @@ class MimLinkClient:
             raise DeviceComError(msg)
 
     def upload_list(self, scanning_list: list[float]) -> None:
-        """Upload scanning frequency list to device."""
+        """Upload scanning frequency list to device. Retries the full sequence on failure."""
+        last_err: DeviceComError | None = None
+        for _ in range(_MAX_COMMAND_RETRIES + 1):
+            try:
+                self._upload_list_sequence(scanning_list)
+            except DeviceComError as e:  # noqa: PERF203
+                last_err = e
+            else:
+                return
+        raise last_err  # type: ignore[misc]
+
+    def _upload_list_sequence(self, scanning_list: list[float]) -> None:
+        """Execute the list upload sequence once."""
         total = len(scanning_list)
 
         env = self._codec.build_envelope(mt.SET_LIST_START_REQUEST)
@@ -348,16 +371,6 @@ class MimLinkClient:
             time.sleep(sweep_s * 0.01)
         msg = "Timeout waiting for scan to complete"
         raise DeviceComError(msg)
-
-    def ping(self, nonce: int) -> int:
-        """Send a ping and return the echoed nonce."""
-        env = self._codec.build_envelope(mt.PING)
-        env.ping.nonce = nonce
-        resp = self._send_expect(env, mt.PONG)
-        if resp.pong.nonce != nonce:
-            msg = f"Ping nonce mismatch: sent {nonce}, got {resp}"
-            raise DeviceComError(msg)
-        return resp.pong.nonce
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
         """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""

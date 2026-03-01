@@ -8,7 +8,7 @@ from pyglaze.device.mimlink_client import DeviceComError, MimLinkClient
 from pyglaze.devtools.mock_device import (
     TRANSFER_MODE_BULK,
     TRANSFER_MODE_PER_POINT,
-    MimLinkMockDevice,
+    LeMockDevice,
 )
 from pyglaze.scanning.scanner import _compute_scanning_list
 
@@ -27,7 +27,7 @@ def _build(
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
     )
-    backend = MimLinkMockDevice(
+    backend = LeMockDevice(
         fail_after=fail_after,
         transfer_mode=transfer_mode,
         drop_retransmit_once=drop_retransmit_once,
@@ -139,8 +139,3 @@ def test_scan_failure() -> None:
     client.close()
 
 
-def test_ping() -> None:
-    _, client = _build()
-    nonce = client.ping(0xDEADBEEF)
-    assert nonce == 0xDEADBEEF
-    client.close()

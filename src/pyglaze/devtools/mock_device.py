@@ -13,7 +13,7 @@ from pyglaze.mimlink.rx_stream import RxFrameStream
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from pyglaze.device.configuration import LeDeviceConfiguration
+    from pyglaze.device.configuration import DeviceConfiguration
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
@@ -21,8 +21,19 @@ TRANSFER_MODE_BULK = 0
 TRANSFER_MODE_PER_POINT = 1
 
 
-def _mock_device_factory(config: LeDeviceConfiguration) -> MimLinkMockDevice:
-    """Create a ``MimLinkMockDevice`` dispatching on ``amp_port`` sentinel strings.
+def list_mock_devices() -> list[str]:
+    """List all available mock devices."""
+    return [
+        "mock_device",
+        "mock_device_per_point",
+        "mock_device_scan_should_fail",
+        "mock_device_fail_first_scan",
+        "mock_device_empty_responses",
+    ]
+
+
+def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
+    """Create a ``LeMockDevice`` dispatching on ``amp_port`` sentinel strings.
 
     Sentinel values:
         ``"mock_device"`` — default mock (bulk transfer)
@@ -33,17 +44,17 @@ def _mock_device_factory(config: LeDeviceConfiguration) -> MimLinkMockDevice:
     """
     port = config.amp_port
     if "mock_device_per_point" in port:
-        return MimLinkMockDevice(transfer_mode=TRANSFER_MODE_PER_POINT)
+        return LeMockDevice(transfer_mode=TRANSFER_MODE_PER_POINT)
     if "mock_device_scan_should_fail" in port:
-        return MimLinkMockDevice(fail_after=0)
+        return LeMockDevice(fail_after=0)
     if "mock_device_fail_first_scan" in port:
-        return MimLinkMockDevice(fail_after=0, fail_count=1)
+        return LeMockDevice(fail_after=0, n_fails=1)
     if "mock_device_empty_responses" in port:
-        return MimLinkMockDevice(empty_responses=True)
-    return MimLinkMockDevice()
+        return LeMockDevice(empty_responses=True)
+    return LeMockDevice()
 
 
-class MimLinkMockDevice:
+class LeMockDevice:
     """Mock MimLink endpoint implementing the binary protocol over a serial-like API."""
 
     LI_MODULATION_FREQUENCY = 10000
@@ -58,13 +69,13 @@ class MimLinkMockDevice:
         *,
         transfer_mode: int = TRANSFER_MODE_BULK,
         fail_after: float = np.inf,
-        fail_count: float = np.inf,
+        n_fails: float = np.inf,
         empty_responses: bool = False,
         drop_retransmit_once: bool = False,
     ) -> None:
         self._transfer_mode = transfer_mode
         self._fail_after = fail_after
-        self._fail_count = fail_count
+        self._n_fails = n_fails
         self._n_failures = 0
         self._n_scans = 0
         self._rng = np.random.default_rng()
@@ -88,7 +99,6 @@ class MimLinkMockDevice:
         self._rx_stream = RxFrameStream()
 
         self._dispatch: dict[int, Callable[[Envelope], None]] = {
-            mt.PING: self._handle_ping,
             mt.SET_SETTINGS_REQUEST: self._handle_set_settings,
             mt.SET_LIST_START_REQUEST: self._handle_set_list_start,
             mt.LIST_CHUNK: self._handle_list_chunk,
@@ -165,7 +175,7 @@ class MimLinkMockDevice:
         self._n_scans += 1
         should_fail = (
             self._n_scans > self._fail_after
-            and self._n_failures < self._fail_count
+            and self._n_failures < self._n_fails
         )
         if should_fail:
             self._n_failures += 1
@@ -245,11 +255,6 @@ class MimLinkMockDevice:
         handler = self._dispatch.get(env.type)
         if handler is not None:
             handler(env)
-
-    def _handle_ping(self, env: Envelope) -> None:
-        resp = self._codec.build_envelope(mt.PONG)
-        resp.pong.nonce = env.ping.nonce
-        self._queue_tx(resp)
 
     def _handle_set_settings(self, env: Envelope) -> None:
         req = env.set_settings_request
