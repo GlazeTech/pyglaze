@@ -10,7 +10,7 @@ from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
 from pyglaze.device.mimlink_client import MimLinkClient, _connection_factory
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
-from pyglaze.scanning.types import DeviceInfo
+from pyglaze.scanning._types import DeviceInfo
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import Interval

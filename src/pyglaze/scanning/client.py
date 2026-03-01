@@ -11,7 +11,7 @@ from ._asyncscanner import _AsyncScanner
 if TYPE_CHECKING:
     from pyglaze.datamodels import UnprocessedWaveform
     from pyglaze.device.configuration import DeviceConfiguration
-    from pyglaze.scanning.types import DeviceInfo
+    from pyglaze.scanning._types import DeviceInfo
 
 
 class ScannerStartupError(Exception):

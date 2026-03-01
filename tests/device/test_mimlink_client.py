@@ -350,7 +350,6 @@ def test_inline_retransmit_per_point() -> None:
 
 
 def test_inline_retransmit_bulk() -> None:
-    """L239-243: RESULTS_CHUNK_RETRANSMIT arrives during bulk chunk stream."""
     codec = EnvelopeCodec()
 
     # GET_STATUS_RESPONSE for _await_scan_complete
@@ -390,11 +389,7 @@ def test_inline_retransmit_bulk() -> None:
     client.close()
 
 
-# --- MimOS boundary constraint tests ---
-
-
 def test_list_length_zero_rejected() -> None:
-    """list_length=0 is below the minimum (1)."""
     config, client = _build(n_points=0)
     with pytest.raises(DeviceComError, match="Failed to set settings"):
         client.set_settings(0, config.integration_periods, use_ema=config.use_ema)
@@ -402,7 +397,6 @@ def test_list_length_zero_rejected() -> None:
 
 
 def test_list_length_max_accepted() -> None:
-    """list_length=6000 is the maximum allowed."""
     config, client = _build(n_points=6000)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -413,7 +407,6 @@ def test_list_length_max_accepted() -> None:
 
 
 def test_list_length_over_max_rejected() -> None:
-    """list_length=6001 exceeds the maximum."""
     config, client = _build(n_points=6001)
     with pytest.raises(DeviceComError, match="Failed to set settings"):
         client.set_settings(
@@ -423,7 +416,6 @@ def test_list_length_over_max_rejected() -> None:
 
 
 def test_integration_periods_zero_rejected() -> None:
-    """integration_periods=0 is below the minimum (1)."""
     config, client = _build(integration_periods=0)
     with pytest.raises(DeviceComError, match="Failed to set settings"):
         client.set_settings(config.n_points, 0, use_ema=config.use_ema)
@@ -431,7 +423,6 @@ def test_integration_periods_zero_rejected() -> None:
 
 
 def test_integration_periods_max_accepted() -> None:
-    """integration_periods=10000 is the maximum allowed."""
     config, client = _build(integration_periods=10000)
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
     client.set_settings(
@@ -442,7 +433,6 @@ def test_integration_periods_max_accepted() -> None:
 
 
 def test_integration_periods_over_max_rejected() -> None:
-    """integration_periods=10001 exceeds the maximum."""
     config, client = _build(integration_periods=10001)
     with pytest.raises(DeviceComError, match="Failed to set settings"):
         client.set_settings(

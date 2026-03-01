@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -21,6 +22,14 @@ if TYPE_CHECKING:
 
 TRANSFER_MODE_BULK = 0
 TRANSFER_MODE_PER_POINT = 1
+
+
+class MockDevice(ABC):
+    """Base class for Mock devices for testing purposes."""
+
+    @abstractmethod
+    def __init__(self: MockDevice, config: MockDeviceConfig | None = None) -> None:
+        pass
 
 
 @dataclass(frozen=True)
@@ -97,7 +106,7 @@ def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
     return LeMockDevice()
 
 
-class LeMockDevice:
+class LeMockDevice(MockDevice):
     """Mock MimLink endpoint implementing the binary protocol over a serial-like API."""
 
     LI_MODULATION_FREQUENCY = 10000
@@ -191,9 +200,7 @@ class LeMockDevice:
         if self._list_length is None or self._integration_periods is None:
             return 0.0
         return (
-            self._list_length
-            * self._integration_periods
-            / self.LI_MODULATION_FREQUENCY
+            self._list_length * self._integration_periods / self.LI_MODULATION_FREQUENCY
         )
 
     def _scan_has_finished(self) -> bool:
@@ -335,10 +342,10 @@ class LeMockDevice:
         self._scanning_list.extend(list(chunk.values))
         if chunk.is_last:
             resp = self._codec.build_envelope(mt.SET_LIST_COMPLETE_RESPONSE)
-            resp.set_list_complete_response.success = not self._config.reject_list_complete
-            resp.set_list_complete_response.floats_received = len(
-                self._scanning_list
+            resp.set_list_complete_response.success = (
+                not self._config.reject_list_complete
             )
+            resp.set_list_complete_response.floats_received = len(self._scanning_list)
             self._queue_tx(resp)
 
     def _handle_start_scan(self, _env: Envelope) -> None:

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from pyglaze.device.configuration import DeviceConfiguration
-    from pyglaze.scanning.types import DeviceInfo
+    from pyglaze.scanning._types import DeviceInfo
 
 
 @dataclass

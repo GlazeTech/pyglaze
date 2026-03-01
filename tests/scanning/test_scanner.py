@@ -5,8 +5,8 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.scanning._types import DeviceInfo
 from pyglaze.scanning.scanner import Scanner
-from pyglaze.scanning.types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:

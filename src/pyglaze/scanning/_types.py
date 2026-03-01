@@ -1,5 +1,3 @@
-"""Typed return values for Scanner and GlazeClient APIs."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
