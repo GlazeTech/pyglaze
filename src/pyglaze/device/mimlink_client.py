@@ -48,6 +48,7 @@ class Connection(Protocol):
         """Discard buffered input bytes."""
         ...
 
+
 # Transfer timeout estimation constants.
 _SERIAL_BITS_PER_BYTE = 10  # 8 data + start + stop
 _BYTES_PER_RESULT_POINT = 16  # 3 x float32 + framing overhead
