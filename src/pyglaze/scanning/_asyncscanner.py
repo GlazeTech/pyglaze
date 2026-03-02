@@ -126,6 +126,14 @@ class _AsyncScanner:
             raise SerialException(msg)
         return self._metadata.device_info
 
+    def get_serial_number(self: _AsyncScanner) -> str:
+        """Convenience wrapper for glaze-desktop compatibility. Delegates to get_device_info()."""
+        return self.get_device_info().serial_number
+
+    def get_firmware_version(self: _AsyncScanner) -> str:
+        """Convenience wrapper for glaze-desktop compatibility. Delegates to get_device_info()."""
+        return self.get_device_info().firmware_version
+
     def get_phase_estimate(self: _AsyncScanner) -> float | None:
         """Get the current phase estimate from the scanner.
 
