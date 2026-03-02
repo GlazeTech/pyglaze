@@ -98,10 +98,17 @@ def _connection_factory(
         from pyglaze.devtools.mock_device import _mock_device_factory  # noqa: PLC0415
 
         return _mock_device_factory(config)
+
+    port = config.amp_port
+    if port == "auto":
+        from pyglaze.device.discovery import discover_one  # noqa: PLC0415
+
+        port = discover_one()
+
     return cast(
         "Connection",
         serial.serial_for_url(
-            url=config.amp_port,
+            url=port,
             baudrate=config.amp_baudrate,
             timeout=config.amp_timeout_seconds,
         ),
