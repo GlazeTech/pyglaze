@@ -4,9 +4,8 @@ import sys
 
 import serial.tools.list_ports
 
-_FTDI_VENDOR_ID = 0x0403
-_SKIP_SUBSTRINGS = ("Bluetooth", "debug")
-_FTDI_TEXTUAL_MARKERS = ("ftdi", "ft232")
+_GLAZE_MANUFACTURER = "GLAZE Technologies"
+_GLAZE_PRODUCT = "THz-CCS"
 
 
 class DeviceNotFoundError(Exception):
@@ -28,9 +27,7 @@ def discover() -> list[str]:
     """
     candidates: list[tuple[str, str | None]] = []
     for port_info in serial.tools.list_ports.comports():
-        if _should_skip(port_info):
-            continue
-        if _is_ftdi(port_info):
+        if _is_glaze_device(port_info):
             candidates.append((port_info.device, port_info.serial_number))
 
     if sys.platform == "darwin":
@@ -59,25 +56,10 @@ def discover_one() -> str:
     return devices[0]
 
 
-def _should_skip(port_info: object) -> bool:
-    device = getattr(port_info, "device", "") or ""
-    return any(s in device for s in _SKIP_SUBSTRINGS)
-
-
-def _is_ftdi(port_info: object) -> bool:
-    vid = getattr(port_info, "vid", None)
-    if vid == _FTDI_VENDOR_ID:
-        return True
-    meta = _port_metadata(port_info).lower()
-    return any(marker in meta for marker in _FTDI_TEXTUAL_MARKERS)
-
-
-def _port_metadata(port_info: object) -> str:
-    parts = [
-        getattr(port_info, attr, None)
-        for attr in ("description", "manufacturer", "product", "hwid")
-    ]
-    return " ".join(str(p) for p in parts if p)
+def _is_glaze_device(port_info: object) -> bool:
+    manufacturer = getattr(port_info, "manufacturer", None) or ""
+    product = getattr(port_info, "product", None) or ""
+    return manufacturer == _GLAZE_MANUFACTURER and product == _GLAZE_PRODUCT
 
 
 def _deduplicate_macos(
