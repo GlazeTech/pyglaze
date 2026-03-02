@@ -88,6 +88,20 @@ def test_recover_from_failed_scan(le_device_config: DeviceConfiguration) -> None
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_serial_number_and_firmware_version(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    scanner = _AsyncScanner()
+    scanner.start_scan(device_config)
+
+    assert scanner.get_serial_number() == "M-9999"
+    assert scanner.get_firmware_version() == "v0.1.0"
+
+    scanner.stop_scan()
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
 def test_get_phase_estimate_while_scanning(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
