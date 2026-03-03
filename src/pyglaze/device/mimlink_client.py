@@ -10,6 +10,7 @@ import numpy as np
 import serial
 
 from pyglaze.device.configuration import AMP_BAUDRATE
+from pyglaze.device.discovery import discover_one
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
@@ -101,8 +102,6 @@ def _connection_factory(
 
     port = config.amp_port
     if port == "auto":
-        from pyglaze.device.discovery import discover_one  # noqa: PLC0415
-
         port = discover_one()
 
     return cast(

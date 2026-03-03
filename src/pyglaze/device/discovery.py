@@ -5,7 +5,7 @@ import sys
 import serial.tools.list_ports
 
 _GLAZE_MANUFACTURER = "GLAZE Technologies"
-_GLAZE_PRODUCT = "THz-CCS"
+_GLAZE_PRODUCTS = ("THz-CCS",)
 
 
 class DeviceNotFoundError(Exception):
@@ -25,10 +25,11 @@ def discover() -> list[str]:
     Returns:
         List of serial port device paths.
     """
-    candidates: list[tuple[str, str | None]] = []
-    for port_info in serial.tools.list_ports.comports():
-        if _is_glaze_device(port_info):
-            candidates.append((port_info.device, port_info.serial_number))
+    candidates = [
+        (port_info.device, port_info.serial_number)
+        for port_info in serial.tools.list_ports.comports()
+        if _is_glaze_device(port_info)
+    ]
 
     if sys.platform == "darwin":
         candidates = _deduplicate_macos(candidates)
@@ -59,7 +60,7 @@ def discover_one() -> str:
 def _is_glaze_device(port_info: object) -> bool:
     manufacturer = getattr(port_info, "manufacturer", None) or ""
     product = getattr(port_info, "product", None) or ""
-    return manufacturer == _GLAZE_MANUFACTURER and product == _GLAZE_PRODUCT
+    return manufacturer == _GLAZE_MANUFACTURER and product in _GLAZE_PRODUCTS
 
 
 def _deduplicate_macos(
