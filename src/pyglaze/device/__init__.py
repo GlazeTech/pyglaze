@@ -4,6 +4,7 @@ from .discovery import (
     MultipleDevicesError,
     discover,
     discover_one,
+    list_serial_ports,
 )
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "MultipleDevicesError",
     "discover",
     "discover_one",
+    "list_serial_ports",
 ]

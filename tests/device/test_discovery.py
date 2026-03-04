@@ -10,6 +10,7 @@ from pyglaze.device.discovery import (
     MultipleDevicesError,
     discover,
     discover_one,
+    list_serial_ports,
 )
 from pyglaze.device.mimlink_client import _connection_factory
 
@@ -197,3 +198,53 @@ def test_connection_factory_auto_resolves_to_discovered_port(
     _connection_factory(LeDeviceConfiguration(amp_port="auto"))
 
     assert captured["url"] == "COM9"
+
+
+# --- list_serial_ports ---
+
+
+def test_list_serial_ports_returns_non_junk_ports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regular serial ports are returned."""
+    monkeypatch.setattr(
+        _COMPORTS,
+        lambda: [
+            FakePortInfo("/dev/ttyUSB0"),
+            FakePortInfo("COM3"),
+        ],
+    )
+
+    assert list_serial_ports() == ["/dev/ttyUSB0", "COM3"]
+
+
+def test_list_serial_ports_skips_bluetooth_and_debug(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bluetooth and debug ports are excluded."""
+    monkeypatch.setattr(
+        _COMPORTS,
+        lambda: [
+            FakePortInfo("/dev/ttyUSB0"),
+            FakePortInfo("/dev/tty.Bluetooth-Incoming-Port"),
+            FakePortInfo("/dev/cu.debug-console"),
+        ],
+    )
+
+    assert list_serial_ports() == ["/dev/ttyUSB0"]
+
+
+def test_list_serial_ports_deduplicates_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On macOS, cu/tty pairs are deduplicated (keeps cu.*)."""
+    monkeypatch.setattr(
+        _COMPORTS,
+        lambda: [
+            FakePortInfo("/dev/cu.usbserial-A001", serial_number="A001"),
+            FakePortInfo("/dev/tty.usbserial-A001", serial_number="A001"),
+        ],
+    )
+    monkeypatch.setattr(_PLATFORM, "darwin")
+
+    assert list_serial_ports() == ["/dev/cu.usbserial-A001"]

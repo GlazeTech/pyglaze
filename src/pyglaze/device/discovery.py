@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 
 import serial.tools.list_ports
 
 _GLAZE_MANUFACTURER = "GLAZE Technologies"
 _GLAZE_PRODUCTS = ("THz-CCS",)
+_SKIP_SUBSTRINGS = ("Bluetooth", "debug")
 
 
 class DeviceNotFoundError(Exception):
@@ -25,16 +27,18 @@ def discover() -> list[str]:
     Returns:
         List of serial port device paths.
     """
-    candidates = [
-        (port_info.device, port_info.serial_number)
-        for port_info in serial.tools.list_ports.comports()
-        if _is_glaze_device(port_info)
-    ]
+    return _enumerate_ports(_is_glaze_device)
 
-    if sys.platform == "darwin":
-        candidates = _deduplicate_macos(candidates)
 
-    return [device for device, _ in candidates]
+def list_serial_ports() -> list[str]:
+    """List all plausible serial ports (Bluetooth and debug ports excluded).
+
+    On macOS, deduplicates cu.*/tty.* pairs (keeps cu.*).
+
+    Returns:
+        List of serial port device paths.
+    """
+    return _enumerate_ports(lambda _: True)
 
 
 def discover_one() -> str:
@@ -55,6 +59,23 @@ def discover_one() -> str:
         msg = f"Multiple GLAZE devices found: {devices}. Specify amp_port explicitly."
         raise MultipleDevicesError(msg)
     return devices[0]
+
+
+def _enumerate_ports(
+    predicate: Callable[[object], bool],
+) -> list[str]:
+    """Enumerate serial ports, apply *predicate*, skip junk, and deduplicate."""
+    candidates = [
+        (port_info.device, port_info.serial_number)
+        for port_info in serial.tools.list_ports.comports()
+        if predicate(port_info)
+        and not any(s in port_info.device for s in _SKIP_SUBSTRINGS)
+    ]
+
+    if sys.platform == "darwin":
+        candidates = _deduplicate_macos(candidates)
+
+    return [device for device, _ in candidates]
 
 
 def _is_glaze_device(port_info: object) -> bool:
