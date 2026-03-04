@@ -6,9 +6,11 @@ from .discovery import (
     discover_one,
     list_serial_ports,
 )
+from .mimlink_client import FirmwareUpdateError
 
 __all__ = [
     "DeviceNotFoundError",
+    "FirmwareUpdateError",
     "Interval",
     "LeDeviceConfiguration",
     "MultipleDevicesError",

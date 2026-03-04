@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import math
 import time
+import zlib
 from collections import deque
 from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
 
@@ -66,6 +67,10 @@ _RESULTS_CHUNK_SIZE = 20
 _MAX_RETRANSMIT_ATTEMPTS = 3
 _MAX_COMMAND_RETRIES = 2
 _LIST_CHUNK_SIZE = 50
+_FW_CHUNK_SIZE = 256
+_FW_START_TIMEOUT_S = 10.0  # flash erase is slow
+_FW_CHUNK_TIMEOUT_S = 2.0
+_FW_FINISH_TIMEOUT_S = 10.0
 
 
 _T = TypeVar("_T")
@@ -73,6 +78,10 @@ _T = TypeVar("_T")
 
 class DeviceComError(Exception):
     """Raised when an error occurs in the communication with the device."""
+
+
+class FirmwareUpdateError(DeviceComError):
+    """Raised when a firmware update fails."""
 
 
 def _dedup_sorted(items: list[_T], key: Callable[[_T], int]) -> list[_T]:
@@ -436,6 +445,100 @@ class MimLinkClient:
         env = self._codec.build_envelope(mt.GET_STATUS_REQUEST)
         env.get_status_request.SetInParent()
         return self._send_expect(env, mt.GET_STATUS_RESPONSE).get_status_response
+
+    def update_firmware(
+        self,
+        firmware: bytes,
+        *,
+        chunk_size: int = _FW_CHUNK_SIZE,
+        version: str = "",
+    ) -> None:
+        """Upload firmware to the device.
+
+        After a successful upload the device reboots automatically.
+        Call :meth:`confirm_boot` on a fresh connection to make the
+        update permanent.
+        """
+        from pyglaze.mimlink.proto import envelope_pb2 as pb  # noqa: PLC0415
+
+        firmware_crc = zlib.crc32(firmware) & 0xFFFFFFFF
+
+        # --- start ---
+        env = self._codec.build_envelope(mt.FW_UPDATE_START_REQUEST)
+        req = env.fw_update_start_request
+        req.firmware_size = len(firmware)
+        req.firmware_crc = firmware_crc
+        req.chunk_size = chunk_size
+        req.version = version
+        resp = self._send_expect(
+            env, mt.FW_UPDATE_START_RESPONSE, timeout=_FW_START_TIMEOUT_S
+        )
+        if not resp.fw_update_start_response.accepted:
+            error = resp.fw_update_start_response.error
+            msg = f"Firmware update rejected: {error}"
+            raise FirmwareUpdateError(msg)
+
+        # --- chunks ---
+        total_chunks = math.ceil(len(firmware) / chunk_size)
+        for i in range(total_chunks):
+            chunk_data = firmware[i * chunk_size : (i + 1) * chunk_size]
+            chunk_crc = zlib.crc32(chunk_data) & 0xFFFFFFFF
+
+            for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
+                chunk_env = self._codec.build_envelope(mt.FW_UPDATE_CHUNK)
+                c = chunk_env.fw_update_chunk
+                c.chunk_index = i
+                c.data = chunk_data
+                c.chunk_crc = chunk_crc
+                ack = self._send_expect(
+                    chunk_env, mt.FW_UPDATE_CHUNK_ACK, timeout=_FW_CHUNK_TIMEOUT_S
+                )
+                status = ack.fw_update_chunk_ack.status
+                if status == pb.FW_CHUNK_STATUS_OK:
+                    break
+                if status == pb.FW_CHUNK_STATUS_ABORT:
+                    msg = f"Device aborted firmware update at chunk {i}"
+                    raise FirmwareUpdateError(msg)
+                # CRC_MISMATCH → retry
+            else:
+                msg = f"Chunk {i} CRC mismatch after {_MAX_RETRANSMIT_ATTEMPTS} retries"
+                raise FirmwareUpdateError(msg)
+
+        # --- finish ---
+        fin_env = self._codec.build_envelope(mt.FW_UPDATE_FINISH_REQUEST)
+        fin_env.fw_update_finish_request.SetInParent()
+        fin_resp = self._send_expect(
+            fin_env, mt.FW_UPDATE_FINISH_RESPONSE, timeout=_FW_FINISH_TIMEOUT_S
+        )
+        if not fin_resp.fw_update_finish_response.success:
+            error = fin_resp.fw_update_finish_response.error
+            msg = f"Firmware update finish failed: {error}"
+            raise FirmwareUpdateError(msg)
+
+    def confirm_boot(self) -> str:
+        """Confirm the current firmware after a successful update.
+
+        Returns:
+            The firmware version string reported by the device.
+        """
+        env = self._codec.build_envelope(mt.FW_BOOT_CONFIRM_REQUEST)
+        env.fw_boot_confirm_request.SetInParent()
+        resp = self._send_expect(env, mt.FW_BOOT_CONFIRM_RESPONSE)
+        return resp.fw_boot_confirm_response.version
+
+    def get_firmware_update_status(self) -> pb.FwUpdateStatusResponse:
+        """Query firmware update progress."""
+        env = self._codec.build_envelope(mt.FW_UPDATE_STATUS_REQUEST)
+        env.fw_update_status_request.SetInParent()
+        return self._send_expect(
+            env, mt.FW_UPDATE_STATUS_RESPONSE
+        ).fw_update_status_response
+
+    def reboot(self) -> None:
+        """Request a device reboot. Fire-and-forget — no response expected."""
+        env = self._codec.build_envelope(mt.REBOOT_REQUEST)
+        env.reboot_request.SetInParent()
+        self._send(env)
 
     def close(self) -> None:
         """Close the connection."""
