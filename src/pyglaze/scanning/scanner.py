@@ -190,11 +190,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
         conn = _connection_factory(new_config)
         conn.reset_input_buffer()
-        self._client = MimLinkClient(
-            conn=conn,
-            n_points=new_config.n_points,
-            sweep_length_ms=new_config._sweep_length_ms,  # noqa: SLF001
-        )
+        self._client = MimLinkClient(conn=conn)
 
         if getattr(self, "_config", None):
             settings_changed = (
@@ -236,7 +232,10 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._client is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        times, Xs, Ys = self._client.start_scan()
+        times, Xs, Ys = self._client.start_scan(
+            n_points=self._config.n_points,
+            sweep_length_ms=self._config._sweep_length_ms,  # noqa: SLF001
+        )
         self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
         return UnprocessedWaveform.from_inphase_quadrature(
             times, Xs, Ys, self._phase_estimator.phase_estimate

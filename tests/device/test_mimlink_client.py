@@ -198,13 +198,13 @@ def test_start_scan_rejected() -> None:
     client.close()
 
 
-def test_send_expect_timeout_then_retry() -> None:
+def test_send_expect_timeout_then_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     # The mock responds to set_settings (1 response) but then times out.
     # upload_list calls _send_expect for set_list_start which will timeout,
     # retry, and timeout again → exhaustion.
     config, client = _build(config=MockDeviceConfig(timeout_after_n_responses=1))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client._timeout = 0.1  # Short timeout to speed up test
+    monkeypatch.setattr("pyglaze.device.mimlink_client._PROTOCOL_BASELINE_S", 0.1)
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )

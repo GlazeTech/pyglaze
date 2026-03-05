@@ -126,20 +126,43 @@ def _connection_factory(
 class MimLinkClient:
     """Synchronous MimLink protocol client."""
 
+    @classmethod
+    def from_config(cls, config: DeviceConfiguration) -> MimLinkClient:
+        """Construct a client from a device configuration."""
+        conn = _connection_factory(config)
+        conn.reset_input_buffer()
+        return cls(conn=conn)
+
+    @classmethod
+    def from_port(
+        cls,
+        port: str,
+        *,
+        baudrate: int = AMP_BAUDRATE,
+        timeout_s: float = 0.1,
+    ) -> MimLinkClient:
+        """Construct a client from a serial port."""
+        conn = cast(
+            "Connection",
+            serial.serial_for_url(
+                url=port,
+                baudrate=baudrate,
+                timeout=timeout_s,
+            ),
+        )
+        conn.reset_input_buffer()
+        return cls(conn=conn)
+
     def __init__(
         self,
         conn: Connection,
         *,
-        n_points: int,
-        sweep_length_ms: float,
+        n_points: int | None = None,
+        sweep_length_ms: float | None = None,
     ) -> None:
         self._conn = conn
-        self._n_points = n_points
-        self._sweep_length_ms = sweep_length_ms
-        self._timeout = (
-            sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR
-            + _PROTOCOL_BASELINE_S
-        )
+        self._default_n_points = n_points
+        self._default_sweep_length_ms = sweep_length_ms
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
         self._env_buffer: deque[pb.Envelope] = deque()
@@ -171,7 +194,7 @@ class MimLinkClient:
     ) -> Generator[pb.Envelope, None, None]:
         """Yield envelopes until timeout. Raises DeviceComError when deadline expires."""
         if timeout is None:
-            timeout = self._timeout
+            timeout = _PROTOCOL_BASELINE_S
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._env_buffer:
@@ -267,25 +290,52 @@ class MimLinkClient:
             msg = f"Failed to upload list: {resp}"
             raise DeviceComError(msg)
 
-    def start_scan(self) -> tuple[FloatArray, FloatArray, FloatArray]:
+    def start_scan(
+        self, *, n_points: int | None = None, sweep_length_ms: float | None = None
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
         """Start scan and collect results. Returns (times, Xs, Ys)."""
+        n_points, sweep_length_ms = self._resolve_scan_context(
+            n_points=n_points,
+            sweep_length_ms=sweep_length_ms,
+        )
+        timeout = self._scan_timeout_s(sweep_length_ms)
         env = self._codec.build_envelope(mt.START_SCAN_REQUEST)
         env.start_scan_request.SetInParent()
-        resp = self._send_expect(env, mt.START_SCAN_RESPONSE)
+        resp = self._send_expect(env, mt.START_SCAN_RESPONSE, timeout=timeout)
         if not resp.start_scan_response.started:
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
 
         if resp.start_scan_response.transfer_mode == _TRANSFER_MODE_PER_POINT:
-            return self._collect_per_point()
-        return self._collect_bulk()
+            return self._collect_per_point(
+                n_points=n_points,
+                sweep_length_ms=sweep_length_ms,
+                timeout=timeout,
+            )
+        return self._collect_bulk(
+            n_points=n_points,
+            sweep_length_ms=sweep_length_ms,
+            timeout=timeout,
+        )
 
-    def _collect_bulk(self) -> tuple[FloatArray, FloatArray, FloatArray]:
+    def _collect_bulk(
+        self,
+        *,
+        n_points: int | None = None,
+        sweep_length_ms: float | None = None,
+        timeout: float | None = None,
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
         """Wait for scan to finish, then request and collect chunked results.
 
         Tolerates a timeout if at least one chunk was received, then retransmits missing chunks.
         """
-        self._await_scan_complete()
+        n_points, sweep_length_ms = self._resolve_scan_context(
+            n_points=n_points,
+            sweep_length_ms=sweep_length_ms,
+        )
+        if timeout is None:
+            timeout = self._scan_timeout_s(sweep_length_ms)
+        self._await_scan_complete(sweep_length_ms=sweep_length_ms, timeout=timeout)
 
         env = self._codec.build_envelope(mt.GET_RESULTS_REQUEST)
         env.get_results_request.SetInParent()
@@ -293,7 +343,7 @@ class MimLinkClient:
 
         chunks: list[pb.ResultsChunk | pb.ResultsChunkRetransmit] = []
         try:
-            for e in self._envelope_stream(timeout=_transfer_timeout_s(self._n_points)):
+            for e in self._envelope_stream(timeout=_transfer_timeout_s(n_points)):
                 if e.type == mt.RESULTS_CHUNK:
                     chunks.append(e.results_chunk)
                     if e.results_chunk.is_last:
@@ -307,7 +357,7 @@ class MimLinkClient:
             if not chunks:
                 raise
 
-        self._retransmit_missing_chunks(chunks, self._n_points)
+        self._retransmit_missing_chunks(chunks, n_points=n_points, timeout=timeout)
 
         chunks = _dedup_sorted(chunks, key=lambda c: c.chunk_index)
         times = np.concatenate([np.array(list(c.times)) for c in chunks])
@@ -315,19 +365,32 @@ class MimLinkClient:
         Ys = np.concatenate([np.array(list(c.y)) for c in chunks])
         return times, Xs, Ys
 
-    def _collect_per_point(self) -> tuple[FloatArray, FloatArray, FloatArray]:
+    def _collect_per_point(
+        self,
+        *,
+        n_points: int | None = None,
+        sweep_length_ms: float | None = None,
+        timeout: float | None = None,
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
         """Collect results streamed per-point during the scan.
 
         Detects gaps inline and NAKs missing points before they age out of the
         device's circular buffer. Retransmit responses arrive interleaved in the
         same stream. A final retransmit pass catches any stragglers.
         """
+        n_points, sweep_length_ms = self._resolve_scan_context(
+            n_points=n_points,
+            sweep_length_ms=sweep_length_ms,
+        )
+        if timeout is None:
+            timeout = self._scan_timeout_s(sweep_length_ms)
+
         points: list[pb.ResultPoint | pb.ResultPointRetransmit] = []
         received: set[int] = set()
         next_expected = 0
-        timeout = self._sweep_length_ms * 1e-3 + _transfer_timeout_s(self._n_points)
+        stream_timeout = sweep_length_ms * 1e-3 + _transfer_timeout_s(n_points)
         try:
-            for e in self._envelope_stream(timeout=timeout):
+            for e in self._envelope_stream(timeout=stream_timeout):
                 if e.type == mt.RESULT_POINT:
                     p = e.result_point
                     points.append(p)
@@ -349,7 +412,7 @@ class MimLinkClient:
             if not points:
                 raise
 
-        self._retransmit_missing_points(points, self._n_points)
+        self._retransmit_missing_points(points, n_points=n_points, timeout=timeout)
 
         points = _dedup_sorted(points, key=lambda p: p.point_index)
         times = np.array([p.time for p in points])
@@ -364,7 +427,11 @@ class MimLinkClient:
         self._send(env)
 
     def _retransmit_missing_chunks(
-        self, chunks: list[pb.ResultsChunk | pb.ResultsChunkRetransmit], n_points: int
+        self,
+        chunks: list[pb.ResultsChunk | pb.ResultsChunkRetransmit],
+        *,
+        n_points: int,
+        timeout: float,
     ) -> None:
         """NAK-retry any chunks missing from the received set. Appends recovered chunks in place."""
         expected_count = math.ceil(n_points / _RESULTS_CHUNK_SIZE)
@@ -377,7 +444,7 @@ class MimLinkClient:
             for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
                 env = self._codec.build_envelope(mt.RESULTS_CHUNK_NAK)
                 env.results_chunk_nak.chunk_index = idx
-                resp = self._send_receive(env, timeout=self._timeout)
+                resp = self._send_receive(env, timeout=timeout)
                 if (
                     resp.type == mt.RESULTS_CHUNK_RETRANSMIT
                     and resp.results_chunk_retransmit.available
@@ -391,7 +458,11 @@ class MimLinkClient:
                 raise DeviceComError(msg)
 
     def _retransmit_missing_points(
-        self, points: list[pb.ResultPoint | pb.ResultPointRetransmit], n_points: int
+        self,
+        points: list[pb.ResultPoint | pb.ResultPointRetransmit],
+        *,
+        n_points: int,
+        timeout: float,
     ) -> None:
         """NAK-retry any points missing from the received set. Appends recovered points in place."""
         expected = set(range(n_points))
@@ -404,7 +475,7 @@ class MimLinkClient:
             for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
                 env = self._codec.build_envelope(mt.RESULT_POINT_NAK)
                 env.result_point_nak.point_index = idx
-                resp = self._send_receive(env, timeout=self._timeout)
+                resp = self._send_receive(env, timeout=timeout)
                 if (
                     resp.type == mt.RESULT_POINT_RETRANSMIT
                     and resp.result_point_retransmit.available
@@ -417,20 +488,44 @@ class MimLinkClient:
                 )
                 raise DeviceComError(msg)
 
-    def _await_scan_complete(self) -> None:
+    def _await_scan_complete(self, *, sweep_length_ms: float, timeout: float) -> None:
         """Poll device status until scan is no longer ongoing."""
-        sweep_s = self._sweep_length_ms * 1e-3
+        sweep_s = sweep_length_ms * 1e-3
         time.sleep(sweep_s)
         deadline = time.monotonic() + sweep_s
         while time.monotonic() < deadline:
             env = self._codec.build_envelope(mt.GET_STATUS_REQUEST)
             env.get_status_request.SetInParent()
-            resp = self._send_expect(env, mt.GET_STATUS_RESPONSE)
+            resp = self._send_expect(env, mt.GET_STATUS_RESPONSE, timeout=timeout)
             if not resp.get_status_response.scan_ongoing:
                 return
             time.sleep(sweep_s * 0.01)
         msg = "Timeout waiting for scan to complete"
         raise DeviceComError(msg)
+
+    @staticmethod
+    def _scan_timeout_s(sweep_length_ms: float) -> float:
+        return (
+            sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR
+            + _PROTOCOL_BASELINE_S
+        )
+
+    def _resolve_scan_context(
+        self, *, n_points: int | None, sweep_length_ms: float | None
+    ) -> tuple[int, float]:
+        resolved_n_points = n_points if n_points is not None else self._default_n_points
+        resolved_sweep_ms = (
+            sweep_length_ms
+            if sweep_length_ms is not None
+            else self._default_sweep_length_ms
+        )
+        if resolved_n_points is None or resolved_sweep_ms is None:
+            msg = (
+                "Scan context is missing. Pass n_points and sweep_length_ms to "
+                "start_scan(), or provide defaults in MimLinkClient(...)."
+            )
+            raise DeviceComError(msg)
+        return resolved_n_points, resolved_sweep_ms
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
         """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""

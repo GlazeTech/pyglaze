@@ -188,6 +188,7 @@ def test_connection_factory_auto_resolves_to_discovered_port(
         baudrate: int,
         timeout: float | None,  # noqa: ARG001
     ) -> object:
+        _ = baudrate
         captured["url"] = url
         return object()
 
