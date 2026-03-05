@@ -28,6 +28,7 @@ class _FakeClient:
     status: int = 0
     confirm_version: str = "v0.2.0"
     fail_on_get_info: bool = False
+    fail_on_get_status: bool = False
     updated: list[tuple[bytes, str]] | None = None
     closed: bool = False
 
@@ -38,6 +39,9 @@ class _FakeClient:
         return _DeviceInfo(firmware_version=self.firmware_version)
 
     def get_firmware_update_status(self) -> _FwStatus:
+        if self.fail_on_get_status:
+            msg = "status not reachable"
+            raise DeviceComError(msg)
         return _FwStatus(status=self.status)
 
     def update_firmware(self, firmware: bytes, *, version: str = "") -> None:
@@ -77,7 +81,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
     clients = [
         _FakeClient(firmware_version="v1.0.0", status=0),
         _FakeClient(updated=uploaded),
-        _FakeClient(fail_on_get_info=True),
+        _FakeClient(fail_on_get_status=True),
         _FakeClient(firmware_version="v1.1.0", status=3),
         _FakeClient(status=4, confirm_version="v1.1.0"),
     ]

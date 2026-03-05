@@ -166,7 +166,7 @@ class FirmwareUpdater:
 
         self._emit_progress(on_progress, "reconnecting")
         time.sleep(self._reboot_wait_s)
-        self._wait_until_reachable()
+        self._wait_until_status_reachable()
 
         self._emit_progress(on_progress, "confirming")
         client = self._client_factory()
@@ -212,14 +212,14 @@ class FirmwareUpdater:
             )
             raise FirmwareUpdateError(msg)
 
-    def _wait_until_reachable(self) -> None:
+    def _wait_until_status_reachable(self) -> None:
         deadline = time.monotonic() + self._reconnect_timeout_s
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             client: FirmwareClient | None = None
             try:
                 client = self._client_factory()
-                client.get_device_info()
+                client.get_firmware_update_status()
             except (DeviceComError, SerialException, OSError) as e:
                 last_error = e
                 time.sleep(self._reconnect_interval_s)
