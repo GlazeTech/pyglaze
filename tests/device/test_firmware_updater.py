@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -30,8 +30,6 @@ class _FakeClient:
     fail_on_get_info: bool = False
     fail_on_get_status: bool = False
     fail_on_confirm: bool = False
-    status_failures_remaining: int = 0
-    confirm_failures_remaining: int = 0
     update_error: Exception | None = None
     updated: list[tuple[bytes, str]] | None = None
     closed: bool = False
@@ -43,10 +41,6 @@ class _FakeClient:
         return _DeviceInfo(firmware_version=self.firmware_version)
 
     def get_firmware_update_status(self) -> _FwStatus:
-        if self.status_failures_remaining > 0:
-            self.status_failures_remaining -= 1
-            msg = "status not reachable"
-            raise DeviceComError(msg)
         if self.fail_on_get_status:
             msg = "status not reachable"
             raise DeviceComError(msg)
@@ -59,10 +53,6 @@ class _FakeClient:
             self.updated.append((firmware, version))
 
     def confirm_boot(self) -> str:
-        if self.confirm_failures_remaining > 0:
-            self.confirm_failures_remaining -= 1
-            msg = "confirm not reachable"
-            raise DeviceComError(msg)
         if self.fail_on_confirm:
             msg = "confirm not reachable"
             raise DeviceComError(msg)
@@ -76,25 +66,15 @@ class _Factory:
     def __init__(self, clients: list[_FakeClient]) -> None:
         self._clients = clients
         self.calls = 0
+        self.issued: list[_FakeClient] = []
 
     def __call__(self) -> _FakeClient:
         self.calls += 1
         if not self._clients:
             msg = "factory exhausted"
             raise RuntimeError(msg)
-        return self._clients.pop(0)
-
-
-class _BuilderFactory:
-    def __init__(self, builder: Callable[[int], _FakeClient]) -> None:
-        self._builder = builder
-        self.calls = 0
-        self.created: list[_FakeClient] = []
-
-    def __call__(self) -> _FakeClient:
-        self.calls += 1
-        client = self._builder(self.calls)
-        self.created.append(client)
+        client = self._clients.pop(0)
+        self.issued.append(client)
         return client
 
 
@@ -116,7 +96,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
         _FakeClient(status=4, confirm_version="v1.1.0"),
         _FakeClient(status=4),
     ]
-    factory = _Factory(clients)
+    factory = _Factory(clients.copy())
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
@@ -170,20 +150,17 @@ def test_update_preflight_unreachable_continues(tmp_path: Path) -> None:
 
 def test_update_reconnect_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
-
-    def _build(call: int) -> _FakeClient:
-        if call == 1:
-            return _FakeClient(firmware_version="v1.0.0", status=0)
-        if call == 2:
-            return _FakeClient()
-        return _FakeClient(fail_on_get_status=True)
-
-    factory = _BuilderFactory(_build)
+    clients = [
+        _FakeClient(firmware_version="v1.0.0", status=0),
+        _FakeClient(),
+        *[_FakeClient(fail_on_get_status=True) for _ in range(8)],
+    ]
+    factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
         reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.0,
+        reconnect_interval_s=0.002,
     )
 
     with pytest.raises(
@@ -191,27 +168,23 @@ def test_update_reconnect_timeout_raises(tmp_path: Path) -> None:
         match="Timed out waiting for device to reconnect after firmware upload",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.created)
+    assert all(client.closed for client in factory.issued)
 
 
 def test_update_confirm_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
-
-    def _build(call: int) -> _FakeClient:
-        if call == 1:
-            return _FakeClient(firmware_version="v1.0.0", status=0)
-        if call == 2:
-            return _FakeClient()
-        if call == 3:
-            return _FakeClient(status=3)
-        return _FakeClient(fail_on_confirm=True)
-
-    factory = _BuilderFactory(_build)
+    clients = [
+        _FakeClient(firmware_version="v1.0.0", status=0),
+        _FakeClient(),
+        _FakeClient(status=3),
+        *[_FakeClient(fail_on_confirm=True) for _ in range(8)],
+    ]
+    factory = _Factory(clients.copy())
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
         reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.0,
+        reconnect_interval_s=0.002,
     )
 
     with pytest.raises(
@@ -219,29 +192,24 @@ def test_update_confirm_timeout_raises(tmp_path: Path) -> None:
         match="Timed out confirming boot after firmware upload",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.created)
+    assert all(client.closed for client in factory.issued)
 
 
 def test_update_final_status_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
-
-    def _build(call: int) -> _FakeClient:
-        if call == 1:
-            return _FakeClient(firmware_version="v1.0.0", status=0)
-        if call == 2:
-            return _FakeClient()
-        if call == 3:
-            return _FakeClient(status=3)
-        if call == 4:
-            return _FakeClient(confirm_version="v1.1.0")
-        return _FakeClient(fail_on_get_status=True)
-
-    factory = _BuilderFactory(_build)
+    clients = [
+        _FakeClient(firmware_version="v1.0.0", status=0),
+        _FakeClient(),
+        _FakeClient(status=3),
+        _FakeClient(confirm_version="v1.1.0"),
+        *[_FakeClient(fail_on_get_status=True) for _ in range(8)],
+    ]
+    factory = _Factory(clients.copy())
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
         reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.0,
+        reconnect_interval_s=0.002,
     )
 
     with pytest.raises(
@@ -249,7 +217,7 @@ def test_update_final_status_timeout_raises(tmp_path: Path) -> None:
         match="Timed out reading firmware status after boot confirmation",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.created)
+    assert all(client.closed for client in factory.issued)
 
 
 def test_update_upload_error_closes_clients(tmp_path: Path) -> None:
