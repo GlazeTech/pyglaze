@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 _MCUBOOT_MAGIC_BYTES = 4
+_FW_STATUS_UNKNOWN = -1
 
 
 class FirmwareClient(Protocol):
@@ -154,7 +155,7 @@ class FirmwareUpdater:
         firmware = path.read_bytes()
         self._validate_signed_image(firmware)
 
-        previous = self.get_boot_info()
+        previous = self._try_get_boot_info()
         self._emit_progress(on_progress, "uploading")
 
         client = self._client_factory()
@@ -183,6 +184,13 @@ class FirmwareUpdater:
             confirmed_version=confirmed_version,
             final_status=final_status,
         )
+
+    def _try_get_boot_info(self) -> BootInfo:
+        """Try to read boot info without failing the update preflight."""
+        try:
+            return self.get_boot_info()
+        except (DeviceComError, SerialException, OSError):
+            return BootInfo(firmware_version="", update_status=_FW_STATUS_UNKNOWN)
 
     @staticmethod
     def _emit_progress(

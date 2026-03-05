@@ -131,7 +131,11 @@ class MimLinkClient:
         """Construct a client from a device configuration."""
         conn = _connection_factory(config)
         conn.reset_input_buffer()
-        return cls(conn=conn)
+        return cls(
+            conn=conn,
+            n_points=config.n_points,
+            sweep_length_ms=config._sweep_length_ms,  # noqa: SLF001
+        )
 
     @classmethod
     def from_port(
@@ -140,6 +144,7 @@ class MimLinkClient:
         *,
         baudrate: int = AMP_BAUDRATE,
         timeout_s: float = 0.1,
+        command_timeout_s: float | None = None,
     ) -> MimLinkClient:
         """Construct a client from a serial port."""
         conn = cast(
@@ -151,7 +156,7 @@ class MimLinkClient:
             ),
         )
         conn.reset_input_buffer()
-        return cls(conn=conn)
+        return cls(conn=conn, command_timeout_s=command_timeout_s or timeout_s)
 
     def __init__(
         self,
@@ -159,10 +164,17 @@ class MimLinkClient:
         *,
         n_points: int | None = None,
         sweep_length_ms: float | None = None,
+        command_timeout_s: float | None = None,
     ) -> None:
         self._conn = conn
         self._default_n_points = n_points
         self._default_sweep_length_ms = sweep_length_ms
+        if command_timeout_s is not None:
+            self._default_timeout_s = command_timeout_s
+        elif sweep_length_ms is not None:
+            self._default_timeout_s = self._scan_timeout_s(sweep_length_ms)
+        else:
+            self._default_timeout_s = _PROTOCOL_BASELINE_S
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
         self._env_buffer: deque[pb.Envelope] = deque()
@@ -194,7 +206,7 @@ class MimLinkClient:
     ) -> Generator[pb.Envelope, None, None]:
         """Yield envelopes until timeout. Raises DeviceComError when deadline expires."""
         if timeout is None:
-            timeout = _PROTOCOL_BASELINE_S
+            timeout = self._default_timeout_s
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._env_buffer:

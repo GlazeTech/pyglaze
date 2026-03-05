@@ -8,7 +8,7 @@ import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import MimLinkClient, _connection_factory
+from pyglaze.device.mimlink_client import MimLinkClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning._types import DeviceInfo
@@ -188,9 +188,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @config.setter
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
-        conn = _connection_factory(new_config)
-        conn.reset_input_buffer()
-        self._client = MimLinkClient(conn=conn)
+        self._client = MimLinkClient.from_config(new_config)
 
         if getattr(self, "_config", None):
             settings_changed = (
