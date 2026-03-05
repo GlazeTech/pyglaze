@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypeVar, cast
 
 from serial import SerialException
 
@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 _MCUBOOT_MAGIC_BYTES = 4
 _FW_STATUS_UNKNOWN = -1
+_OPERATION_ATTEMPTS_PER_CLIENT = 2
+_NO_RESULT = object()
+_T = TypeVar("_T")
 
 
 class FirmwareClient(Protocol):
@@ -169,12 +172,18 @@ class FirmwareUpdater:
         self._wait_until_status_reachable()
 
         self._emit_progress(on_progress, "confirming")
-        client = self._client_factory()
-        try:
-            confirmed_version = client.confirm_boot()
-            final_status = int(client.get_firmware_update_status().status)
-        finally:
-            client.close()
+        confirmed_version = self._run_with_reconnect_retry(
+            lambda client: client.confirm_boot(),
+            error_message="Timed out confirming boot after firmware upload",
+        )
+        final_status = int(
+            self._run_with_reconnect_retry(
+                lambda client: client.get_firmware_update_status(),
+                error_message=(
+                    "Timed out reading firmware status after boot confirmation"
+                ),
+            ).status
+        )
 
         self._emit_progress(on_progress, "done")
         return FirmwareUpdateResult(
@@ -213,21 +222,44 @@ class FirmwareUpdater:
             raise FirmwareUpdateError(msg)
 
     def _wait_until_status_reachable(self) -> None:
+        self._run_with_reconnect_retry(
+            lambda client: client.get_firmware_update_status(),
+            error_message="Timed out waiting for device to reconnect after firmware upload",
+        )
+
+    def _run_with_reconnect_retry(
+        self,
+        operation: Callable[[FirmwareClient], _T],
+        *,
+        error_message: str,
+    ) -> _T:
+        """Run an operation with bounded retries on each connection and across reconnects."""
         deadline = time.monotonic() + self._reconnect_timeout_s
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             client: FirmwareClient | None = None
             try:
                 client = self._client_factory()
-                client.get_firmware_update_status()
+                for _ in range(_OPERATION_ATTEMPTS_PER_CLIENT):
+                    result, error = self._try_operation(client, operation)
+                    if error is None:
+                        return cast("_T", result)
+                    last_error = error
             except (DeviceComError, SerialException, OSError) as e:
                 last_error = e
-                time.sleep(self._reconnect_interval_s)
-            else:
-                return
             finally:
                 if client is not None:
                     client.close()
+            time.sleep(self._reconnect_interval_s)
 
-        msg = "Timed out waiting for device to reconnect after firmware upload"
-        raise FirmwareUpdateError(msg) from last_error
+        raise FirmwareUpdateError(error_message) from last_error
+
+    @staticmethod
+    def _try_operation(
+        client: FirmwareClient,
+        operation: Callable[[FirmwareClient], _T],
+    ) -> tuple[object, Exception | None]:
+        try:
+            return operation(client), None
+        except (DeviceComError, SerialException, OSError) as e:
+            return _NO_RESULT, e

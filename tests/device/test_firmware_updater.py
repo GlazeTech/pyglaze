@@ -84,6 +84,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
         _FakeClient(fail_on_get_status=True),
         _FakeClient(firmware_version="v1.1.0", status=3),
         _FakeClient(status=4, confirm_version="v1.1.0"),
+        _FakeClient(status=4),
     ]
     factory = _Factory(clients)
     updater = FirmwareUpdater(
@@ -102,7 +103,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
     assert uploaded
     assert uploaded[0][1] == "v1.1.0"
     assert stages == ["uploading", "reconnecting", "confirming", "done"]
-    assert factory.calls == 5
+    assert factory.calls == 6
 
 
 def test_update_rejects_unsigned_image(tmp_path: Path) -> None:
