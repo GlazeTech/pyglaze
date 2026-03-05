@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
 from pyglaze.device.firmware import MCUBOOT_IMAGE_MAGIC, FirmwareUpdater
-from pyglaze.device.mimlink_client import FirmwareUpdateError
+from pyglaze.device.mimlink_client import DeviceComError, FirmwareUpdateError
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from collections.abc import Callable
-
-    from pyglaze.device.mimlink_client import MimLinkClient
 
 
 @dataclass(frozen=True)
@@ -37,7 +34,7 @@ class _FakeClient:
     def get_device_info(self) -> _DeviceInfo:
         if self.fail_on_get_info:
             msg = "not reachable"
-            raise RuntimeError(msg)
+            raise DeviceComError(msg)
         return _DeviceInfo(firmware_version=self.firmware_version)
 
     def get_firmware_update_status(self) -> _FwStatus:
@@ -86,7 +83,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
     ]
     factory = _Factory(clients)
     updater = FirmwareUpdater(
-        client_factory=cast("Callable[[], MimLinkClient]", factory),
+        client_factory=factory,
         reboot_wait_s=0.0,
         reconnect_timeout_s=0.1,
         reconnect_interval_s=0.0,
@@ -108,8 +105,6 @@ def test_update_rejects_unsigned_image(tmp_path: Path) -> None:
     firmware_path = tmp_path / "unsigned.bin"
     firmware_path.write_bytes(b"\x01\x02\x03\x04")
 
-    updater = FirmwareUpdater(
-        client_factory=cast("Callable[[], MimLinkClient]", _Factory([]))
-    )
+    updater = FirmwareUpdater(client_factory=_Factory([]))
     with pytest.raises(FirmwareUpdateError, match="not MCUboot-signed"):
         updater.update(firmware_path)

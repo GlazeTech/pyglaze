@@ -3,13 +3,53 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Protocol
+
+from serial import SerialException
 
 from pyglaze.device.configuration import AMP_BAUDRATE
-from pyglaze.device.mimlink_client import FirmwareUpdateError, MimLinkClient
+from pyglaze.device.mimlink_client import (
+    DeviceComError,
+    FirmwareUpdateError,
+    MimLinkClient,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 _MCUBOOT_MAGIC_BYTES = 4
+
+
+class FirmwareClient(Protocol):
+    """Protocol for the client surface used by FirmwareUpdater."""
+
+    def get_device_info(self) -> DeviceInfoPayload:
+        """Query device metadata."""
+
+    def get_firmware_update_status(self) -> FirmwareStatusPayload:
+        """Query firmware update state."""
+
+    def update_firmware(self, firmware: bytes, *, version: str = "") -> None:
+        """Upload a firmware image."""
+
+    def confirm_boot(self) -> str:
+        """Confirm a pending boot image and return firmware version."""
+
+    def close(self) -> None:
+        """Close underlying transport resources."""
+
+
+class DeviceInfoPayload(Protocol):
+    """Subset of device info used by firmware updater."""
+
+    firmware_version: str
+
+
+class FirmwareStatusPayload(Protocol):
+    """Subset of firmware status used by firmware updater."""
+
+    status: int
 
 
 @dataclass(frozen=True)
@@ -37,7 +77,7 @@ class FirmwareUpdater:
     def __init__(
         self,
         *,
-        client_factory: Callable[[], MimLinkClient],
+        client_factory: Callable[[], FirmwareClient],
         reboot_wait_s: float = 2.0,
         reconnect_timeout_s: float = 20.0,
         reconnect_interval_s: float = 0.5,
@@ -55,7 +95,16 @@ class FirmwareUpdater:
         baudrate: int = AMP_BAUDRATE,
         timeout_s: float = 0.1,
     ) -> FirmwareUpdater:
-        """Create a firmware updater that opens MimLinkClient on a serial port."""
+        """Create a firmware updater that opens MimLinkClient on a serial port.
+
+        Args:
+            port: Serial port path.
+            baudrate: UART baud rate.
+            timeout_s: Serial read timeout in seconds.
+
+        Returns:
+            FirmwareUpdater configured to open a fresh client per operation.
+        """
         return cls(
             client_factory=lambda: MimLinkClient.from_port(
                 port=port,
@@ -65,7 +114,11 @@ class FirmwareUpdater:
         )
 
     def get_boot_info(self) -> BootInfo:
-        """Get the currently running firmware version and update state."""
+        """Get the currently running firmware version and update state.
+
+        Returns:
+            BootInfo: Current firmware version and firmware-update status.
+        """
         client = self._client_factory()
         try:
             info = client.get_device_info()
@@ -84,7 +137,19 @@ class FirmwareUpdater:
         version: str = "",
         on_progress: Callable[[str], None] | None = None,
     ) -> FirmwareUpdateResult:
-        """Upload signed firmware, wait for reboot, then confirm the new boot image."""
+        """Upload signed firmware, wait for reboot, then confirm the new boot image.
+
+        Args:
+            firmware_path: Path to a pre-signed MCUboot image.
+            version: Optional version string passed to the device update start request.
+            on_progress: Optional callback receiving progress stages.
+
+        Returns:
+            FirmwareUpdateResult: Summary of the update lifecycle and final status.
+
+        Raises:
+            FirmwareUpdateError: If validation fails, transfer fails, or reconnect times out.
+        """
         path = Path(firmware_path)
         firmware = path.read_bytes()
         self._validate_signed_image(firmware)
@@ -143,11 +208,11 @@ class FirmwareUpdater:
         deadline = time.monotonic() + self._reconnect_timeout_s
         last_error: Exception | None = None
         while time.monotonic() < deadline:
-            client: MimLinkClient | None = None
+            client: FirmwareClient | None = None
             try:
                 client = self._client_factory()
                 client.get_device_info()
-            except Exception as e:  # noqa: BLE001
+            except (DeviceComError, SerialException, OSError) as e:
                 last_error = e
                 time.sleep(self._reconnect_interval_s)
             else:
