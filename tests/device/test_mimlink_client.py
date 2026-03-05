@@ -563,6 +563,26 @@ def test_update_firmware_chunk_crc_mismatch_retries() -> None:
     client.close()
 
 
+def test_update_firmware_chunk_crc_mismatch_retries_exhausted() -> None:
+    """CRC mismatches beyond retry budget raise FirmwareUpdateError."""
+    firmware = b"\xAB" * 256  # 1 chunk
+    codec = EnvelopeCodec()
+
+    envelopes = [
+        _fw_start_response(codec, accepted=True),
+        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
+        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
+        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
+    ]
+    data = _build_scripted_envelopes(codec, envelopes)
+    conn = ScriptedTransport(data)
+    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+
+    with pytest.raises(FirmwareUpdateError, match="CRC mismatch after"):
+        client.update_firmware(firmware)
+    client.close()
+
+
 def test_update_firmware_chunk_abort() -> None:
     """Device aborts during chunk transfer."""
     firmware = b"\x00" * 256
