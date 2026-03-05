@@ -14,6 +14,15 @@ pip install pyglaze
 # Usage 
 See [our documentation](https://glazetech.github.io/pyglaze/latest/) for usage.
 
+## Firmware Updates
+
+Pyglaze supports firmware updates over MimLink via `FirmwareUpdater`.
+
+- Guide: [Firmware Updates](https://glazetech.github.io/pyglaze/latest/firmware_update/)
+- API: `pyglaze.device.FirmwareUpdater`
+
+Note: `pyglaze` expects a pre-signed MCUboot image and does not sign firmware itself.
+
 # Developers
 
 To install the API with development tools in editable mode, first clone the repository from our [public GitHub repository](https://github.com/GlazeTech/pyglaze). Then, from the root of the project, run
