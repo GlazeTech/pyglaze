@@ -10,13 +10,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T", bound="DeviceConfiguration")
 
-
-# Serial protocol constants for timeout calculation
-SERIAL_BITS_PER_BYTE = 10  # 8 data bits + start + stop bits
-N_CHANNELS = 3  # delays, X, Y arrays transmitted
-BYTES_PER_CHANNEL = 4  # 32-bit float = 4 bytes
-TIMEOUT_SAFETY_FACTOR = 2.5  # Safety multiplier for network/processing delays
-TIMEOUT_BASELINE_S = 0.05  # Fixed additive latency
+AMP_BAUDRATE = 1000000
 
 
 @dataclass
@@ -58,7 +52,7 @@ class Interval:
 class DeviceConfiguration(ABC):
     """Base class for device configurations."""
 
-    amp_timeout_seconds: float | None
+    amp_timeout_seconds: float
     amp_port: str
     amp_baudrate: ClassVar[int]
     n_points: int
@@ -101,21 +95,10 @@ class LeDeviceConfiguration(DeviceConfiguration):
     n_points: int = 1000
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
     integration_periods: int = 10
-    amp_timeout_seconds: float | None = None
+    amp_timeout_seconds: float = 0.1
     modulation_frequency: int = 10000  # Hz
 
-    amp_baudrate: ClassVar[int] = 1000000  # bit/s
-
-    def __post_init__(self: LeDeviceConfiguration) -> None:
-        """Calculate dynamic timeout if not explicitly set."""
-        if self.amp_timeout_seconds is None:
-            # Calculate timeout based on data transfer requirements
-            bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL
-            bits_to_transfer = bytes_to_receive * SERIAL_BITS_PER_BYTE
-            transfer_time = bits_to_transfer / self.amp_baudrate
-            self.amp_timeout_seconds = (
-                transfer_time + TIMEOUT_BASELINE_S
-            ) * TIMEOUT_SAFETY_FACTOR
+    amp_baudrate: ClassVar[int] = AMP_BAUDRATE
 
     @property
     def _sweep_length_ms(self: LeDeviceConfiguration) -> float:

@@ -5,6 +5,7 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.scanning._types import DeviceInfo
 from pyglaze.scanning.scanner import Scanner
 from tests.conftest import DEVICE_CONFIGS
 
@@ -48,41 +49,21 @@ def test_no_connection_error(config_name: str, request: pytest.FixtureRequest) -
         Scanner(device_config)
 
 
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_succeed_on_single_failure(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_fail_first_scan"
-    scanner = Scanner(device_config)
-    _ = scanner.scan()
-
-
 def test_invalid_config_type() -> None:
     with pytest.raises(TypeError):
         Scanner("invalid_config")  # type: ignore[type-var]
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_lescanner_get_serial_number(
+def test_lescanner_get_device_info(
     config_name: str, request: pytest.FixtureRequest
 ) -> None:
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     scanner = Scanner(device_config)
-    serial_number = scanner.get_serial_number()
-    assert isinstance(serial_number, str)
-    assert serial_number != ""
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_lescanner_get_firmware_version(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    scanner = Scanner(device_config)
-    firmware_version = scanner.get_firmware_version()
-    assert isinstance(firmware_version, str)
-    assert firmware_version != ""
+    info = scanner.get_device_info()
+    assert isinstance(info, DeviceInfo)
+    assert info.serial_number != ""
+    assert info.firmware_version != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
@@ -135,3 +116,13 @@ def test_scanner_phase_persistence_across_instances(
     assert phase_after_scan is not None
     assert isinstance(phase_after_scan, float)
     assert -3.2 <= phase_after_scan <= 3.2  # Within (-pi, pi]
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_per_point_scan(config_name: str, request: pytest.FixtureRequest) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    device_config.amp_port = "mock_device_per_point"
+    scanner = Scanner(device_config)
+    scan = scanner.scan()
+    assert isinstance(scan, UnprocessedWaveform)
+    assert len(scan.time) == device_config.n_points

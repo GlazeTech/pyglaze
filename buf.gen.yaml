@@ -1,0 +1,10 @@
+version: v2
+
+plugins:
+  - protoc_builtin: python
+    out: src/pyglaze/mimlink/proto
+  - local: protoc-gen-mypy
+    out: src/pyglaze/mimlink/proto
+
+inputs:
+  - directory: src/pyglaze/mimlink/proto

@@ -43,8 +43,20 @@ jobs:
           python-version: "3.9"
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "33.4"
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Run buf lint
+        run: buf lint
+      - name: Regenerate vendored protobuf artifacts
+        run: uv run ./scripts/generate_mimlink_proto.sh
+      - name: Check generated protobuf drift
+        run: git diff --exit-code -- src/pyglaze/mimlink/proto/envelope_pb2.py src/pyglaze/mimlink/proto/envelope_pb2.pyi
       - name: Run ruff linter
         run: uv run ruff check .
       - name: Run ruff formatter

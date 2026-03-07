@@ -1,0 +1,381 @@
+syntax = "proto3";
+
+package mimlink;
+
+enum MsgType {
+  MSG_TYPE_UNKNOWN = 0;
+  MSG_TYPE_PING    = 1;
+  MSG_TYPE_PONG    = 2;
+
+  // Settings
+  MSG_TYPE_SET_SETTINGS_REQUEST  = 3;
+  MSG_TYPE_SET_SETTINGS_RESPONSE = 4;
+
+  // List upload (chunked)
+  MSG_TYPE_SET_LIST_START_REQUEST     = 5;
+  MSG_TYPE_SET_LIST_START_RESPONSE    = 6;
+  MSG_TYPE_LIST_CHUNK                 = 7;
+  MSG_TYPE_SET_LIST_COMPLETE_RESPONSE = 8;
+
+  // Scan
+  MSG_TYPE_START_SCAN_REQUEST  = 9;
+  MSG_TYPE_START_SCAN_RESPONSE = 10;
+
+  // Results (chunked)
+  MSG_TYPE_GET_RESULTS_REQUEST = 11;
+  MSG_TYPE_RESULTS_CHUNK       = 12;
+
+  // Status
+  MSG_TYPE_GET_STATUS_REQUEST  = 13;
+  MSG_TYPE_GET_STATUS_RESPONSE = 14;
+
+  // Reboot
+  MSG_TYPE_REBOOT_REQUEST = 19;
+
+  // Transformed list (diagnostic)
+  MSG_TYPE_GET_TRANSFORMED_LIST_REQUEST = 20;
+  MSG_TYPE_TRANSFORMED_LIST_CHUNK = 21;
+
+  // Device info
+  MSG_TYPE_GET_DEVICE_INFO_REQUEST = 22;
+  MSG_TYPE_GET_DEVICE_INFO_RESPONSE = 23;
+
+  // Raw capture (noise characterization)
+  MSG_TYPE_RAW_CAPTURE_REQUEST = 24;
+  MSG_TYPE_RAW_CAPTURE_CHUNK = 25;
+
+  // Per-point result streaming
+  MSG_TYPE_RESULT_POINT = 26;
+
+  // Reliable streaming (NAK-based retransmission)
+  MSG_TYPE_RESULT_POINT_NAK = 27;
+  MSG_TYPE_RESULT_POINT_RETRANSMIT = 28;
+
+  // Firmware update
+  MSG_TYPE_FW_UPDATE_START_REQUEST  = 29;
+  MSG_TYPE_FW_UPDATE_START_RESPONSE = 30;
+  MSG_TYPE_FW_UPDATE_CHUNK          = 31;
+  MSG_TYPE_FW_UPDATE_CHUNK_ACK      = 32;
+  MSG_TYPE_FW_UPDATE_FINISH_REQUEST  = 33;
+  MSG_TYPE_FW_UPDATE_FINISH_RESPONSE = 34;
+  MSG_TYPE_FW_UPDATE_STATUS_REQUEST  = 35;
+  MSG_TYPE_FW_UPDATE_STATUS_RESPONSE = 36;
+  MSG_TYPE_FW_BOOT_CONFIRM_REQUEST   = 37;
+  MSG_TYPE_FW_BOOT_CONFIRM_RESPONSE  = 38;
+
+  // Reliable bulk transfer (NAK-based retransmission for results chunks)
+  MSG_TYPE_RESULTS_CHUNK_NAK        = 39;
+  MSG_TYPE_RESULTS_CHUNK_RETRANSMIT = 40;
+}
+
+// --- Existing messages ---
+
+message Ping {
+  uint32 nonce = 1;
+}
+
+message Pong {
+  uint32 nonce = 1;
+}
+
+// --- Settings ---
+
+message SetSettingsRequest {
+  uint32 list_length = 1;
+  uint32 integration_periods = 2;
+  bool use_ema = 3;
+}
+
+message SetSettingsResponse {
+  bool success = 1;
+}
+
+// --- List upload (chunked) ---
+
+message SetListStartRequest {
+  uint32 total_floats = 1;
+}
+
+message SetListStartResponse {
+  bool ready = 1;
+}
+
+message ListChunk {
+  uint32 chunk_index = 1;
+  repeated float values = 2;
+  bool is_last = 3;
+}
+
+message SetListCompleteResponse {
+  bool success = 1;
+  uint32 floats_received = 2;
+}
+
+// --- Scan ---
+
+enum TransferMode {
+  TRANSFER_MODE_BULK      = 0;
+  TRANSFER_MODE_PER_POINT = 1;
+}
+
+message StartScanRequest {
+}
+
+message StartScanResponse {
+  bool started = 1;
+  string error = 2;
+  TransferMode transfer_mode = 3;
+}
+
+// --- Results (chunked) ---
+
+message GetResultsRequest {
+}
+
+message ResultsChunk {
+  uint32 chunk_index = 1;
+  repeated float times = 2;
+  repeated float x = 3;
+  repeated float y = 4;
+  bool is_last = 5;
+}
+
+// --- Status ---
+
+message GetStatusRequest {
+}
+
+message GetStatusResponse {
+  bool scan_ongoing = 1;
+  uint32 list_length = 2;
+  uint32 max_list_length = 3;
+  uint32 modulation_frequency_hz = 4;
+  bool settings_valid = 5;
+  bool list_valid = 6;
+}
+
+// --- Device Info ---
+
+message GetDeviceInfoRequest {
+}
+
+message GetDeviceInfoResponse {
+  string serial_number = 1;
+  string firmware_version = 2;
+  string bsp_name = 3;
+  string build_type = 4;
+  TransferMode transfer_mode = 5;
+  string hardware_type = 6;
+  uint32 hardware_revision = 7;
+}
+
+// --- Reboot ---
+
+message RebootRequest {
+}
+
+// --- Transformed List (diagnostic) ---
+
+message GetTransformedListRequest {
+}
+
+message TransformedListChunk {
+  uint32 chunk_index = 1;
+  repeated uint32 values = 2;  // uint16 stored as uint32 for protobuf
+  bool is_last = 3;
+}
+
+// --- Raw Capture (noise characterization) ---
+
+message RawCaptureRequest {
+  uint32 num_samples = 1;  // Optional, defaults to RAW_CAPTURE_SAMPLES
+}
+
+message RawCaptureChunk {
+  uint32 chunk_index = 1;
+  repeated uint32 samples = 2;  // uint16 stored as uint32 for protobuf
+  bool is_last = 3;
+}
+
+// --- Per-Point Result Streaming ---
+
+message ResultPoint {
+  uint32 point_index = 1;
+  float time = 2;
+  float x = 3;
+  float y = 4;
+  bool is_last = 5;
+  uint32 send_timestamp_us = 6;  // Firmware microsecond counter when sent
+}
+
+// --- Reliable Streaming (NAK-based retransmission) ---
+
+// Request retransmission of a specific point (host to device)
+message ResultPointNak {
+  uint32 point_index = 1;  // Index of the missing point to retransmit
+}
+
+// Response to NAK - retransmitted point or unavailable notification
+message ResultPointRetransmit {
+  uint32 point_index = 1;  // Index of the retransmitted point
+  bool available = 2;      // False if point aged out of circular buffer
+  float time = 3;          // Only valid if available=true
+  float x = 4;             // Only valid if available=true
+  float y = 5;             // Only valid if available=true
+}
+
+// --- Reliable Bulk Transfer (NAK-based retransmission for results chunks) ---
+
+// Request retransmission of a specific results chunk (host to device)
+message ResultsChunkNak {
+  uint32 chunk_index = 1;  // Index of the missing chunk to retransmit
+}
+
+// Response to NAK - retransmitted chunk or unavailable notification
+message ResultsChunkRetransmit {
+  uint32 chunk_index = 1;
+  repeated float times = 2;
+  repeated float x = 3;
+  repeated float y = 4;
+  bool is_last = 5;
+  bool available = 6;  // False if data no longer available
+}
+
+// --- Firmware Update ---
+
+enum FwUpdateStatus {
+  FW_UPDATE_STATUS_IDLE         = 0;
+  FW_UPDATE_STATUS_RECEIVING    = 1;
+  FW_UPDATE_STATUS_VERIFYING    = 2;
+  FW_UPDATE_STATUS_BOOT_PENDING = 3;
+  FW_UPDATE_STATUS_CONFIRMED    = 4;
+}
+
+enum FwChunkStatus {
+  FW_CHUNK_STATUS_OK           = 0;
+  FW_CHUNK_STATUS_CRC_MISMATCH = 1;
+  FW_CHUNK_STATUS_ABORT        = 2;
+}
+
+message FwUpdateStartRequest {
+  uint32 firmware_size = 1;
+  uint32 firmware_crc  = 2;
+  uint32 chunk_size    = 3;
+  string version       = 4;
+}
+
+message FwUpdateStartResponse {
+  bool   accepted = 1;
+  string error    = 2;
+}
+
+message FwUpdateChunk {
+  uint32 chunk_index = 1;
+  bytes  data        = 2;
+  uint32 chunk_crc   = 3;
+}
+
+message FwUpdateChunkAck {
+  uint32        chunk_index = 1;
+  FwChunkStatus status      = 2;
+}
+
+message FwUpdateFinishRequest {
+}
+
+message FwUpdateFinishResponse {
+  bool           success = 1;
+  FwUpdateStatus status  = 2;
+  string         error   = 3;
+}
+
+message FwUpdateStatusRequest {
+}
+
+message FwUpdateStatusResponse {
+  FwUpdateStatus status          = 1;
+  uint32         chunks_received = 2;
+  uint32         total_chunks    = 3;
+  uint32         bytes_received  = 4;
+}
+
+message FwBootConfirmRequest {
+}
+
+message FwBootConfirmResponse {
+  bool   confirmed = 1;
+  string version   = 2;
+}
+
+// --- Envelope ---
+
+message Envelope {
+  uint32 seq   = 1;
+  MsgType type = 2;
+
+  oneof payload {
+    // Existing
+    Ping ping = 10;
+    Pong pong = 11;
+
+    // Settings
+    SetSettingsRequest set_settings_request = 14;
+    SetSettingsResponse set_settings_response = 15;
+
+    // List upload
+    SetListStartRequest set_list_start_request = 16;
+    SetListStartResponse set_list_start_response = 17;
+    ListChunk list_chunk = 18;
+    SetListCompleteResponse set_list_complete_response = 19;
+
+    // Scan
+    StartScanRequest start_scan_request = 20;
+    StartScanResponse start_scan_response = 21;
+
+    // Results
+    GetResultsRequest get_results_request = 22;
+    ResultsChunk results_chunk = 23;
+
+    // Status
+    GetStatusRequest get_status_request = 24;
+    GetStatusResponse get_status_response = 25;
+
+    // Reboot
+    RebootRequest reboot_request = 30;
+
+    // Transformed list
+    GetTransformedListRequest get_transformed_list_request = 31;
+    TransformedListChunk transformed_list_chunk = 32;
+
+    // Device info
+    GetDeviceInfoRequest get_device_info_request = 33;
+    GetDeviceInfoResponse get_device_info_response = 34;
+
+    // Raw capture
+    RawCaptureRequest raw_capture_request = 35;
+    RawCaptureChunk raw_capture_chunk = 36;
+
+    // Per-point result streaming
+    ResultPoint result_point = 37;
+
+    // Reliable streaming (NAK-based retransmission)
+    ResultPointNak result_point_nak = 38;
+    ResultPointRetransmit result_point_retransmit = 39;
+
+    // Firmware update
+    FwUpdateStartRequest fw_update_start_request = 40;
+    FwUpdateStartResponse fw_update_start_response = 41;
+    FwUpdateChunk fw_update_chunk = 42;
+    FwUpdateChunkAck fw_update_chunk_ack = 43;
+    FwUpdateFinishRequest fw_update_finish_request = 44;
+    FwUpdateFinishResponse fw_update_finish_response = 45;
+    FwUpdateStatusRequest fw_update_status_request = 46;
+    FwUpdateStatusResponse fw_update_status_response = 47;
+    FwBootConfirmRequest fw_boot_confirm_request = 48;
+    FwBootConfirmResponse fw_boot_confirm_response = 49;
+
+    // Reliable bulk transfer (NAK-based retransmission for results chunks)
+    ResultsChunkNak results_chunk_nak = 50;
+    ResultsChunkRetransmit results_chunk_retransmit = 51;
+  }
+}

@@ -16,7 +16,6 @@ def le_device_config() -> LeDeviceConfiguration:
         n_points=100,
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
-        amp_timeout_seconds=7,
     )
 
 

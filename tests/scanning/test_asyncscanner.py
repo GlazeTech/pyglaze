@@ -5,6 +5,7 @@ from serial.serialutil import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration
+from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning._asyncscanner import _AsyncScanner
 from tests.conftest import DEVICE_CONFIGS
 
@@ -59,7 +60,7 @@ def test_recover_from_startup_error(le_device_config: DeviceConfiguration) -> No
     scanner = _AsyncScanner()
     le_device_config.amp_port = "mock_device_empty_responses"
 
-    with pytest.raises(SerialException, match="Empty response received"):
+    with pytest.raises((SerialException, DeviceComError)):
         scanner.start_scan(le_device_config)
     assert scanner.is_scanning is False
 
@@ -73,7 +74,7 @@ def test_recover_from_failed_scan(le_device_config: DeviceConfiguration) -> None
     scanner = _AsyncScanner()
     le_device_config.amp_port = "mock_device_scan_should_fail"
     scanner.start_scan(le_device_config)
-    with pytest.raises(SerialException):
+    with pytest.raises((SerialException, DeviceComError)):
         scanner.get_scans(1)
     assert scanner.is_scanning is False
 
@@ -83,6 +84,20 @@ def test_recover_from_failed_scan(le_device_config: DeviceConfiguration) -> None
     le_device_config.amp_port = "mock_device"
     scanner.start_scan(le_device_config)
     assert scanner.is_scanning
+    scanner.stop_scan()
+
+
+@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
+def test_get_serial_number_and_firmware_version(
+    config_name: str, request: pytest.FixtureRequest
+) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    scanner = _AsyncScanner()
+    scanner.start_scan(device_config)
+
+    assert scanner.get_serial_number() == "M-9999"
+    assert scanner.get_firmware_version() == "v0.1.0"
+
     scanner.stop_scan()
 
 

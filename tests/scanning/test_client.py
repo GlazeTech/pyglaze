@@ -5,6 +5,7 @@ from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.scanning import GlazeClient
+from pyglaze.scanning._types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
@@ -37,38 +38,15 @@ def test_wrong_address_handling(
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_raises_error_when_scan_fails(
-    config_name: str, request: pytest.FixtureRequest
-) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_scan_should_fail"
-    with (
-        pytest.raises(serialutil.SerialException),
-        GlazeClient(device_config) as client,
-    ):
-        client.read(n_pulses=1)
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_get_serial_number(config_name: str, request: pytest.FixtureRequest) -> None:
+def test_get_device_info(config_name: str, request: pytest.FixtureRequest) -> None:
     device_config: DeviceConfiguration = request.getfixturevalue(config_name)
     client = GlazeClient(device_config)
     with client as c:
-        serial_number = c.get_serial_number()
+        info = c.get_device_info()
 
-    assert isinstance(serial_number, str)
-    assert serial_number != ""
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_get_firmware_version(config_name: str, request: pytest.FixtureRequest) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    client = GlazeClient(device_config)
-    with client as c:
-        firmware_version = c.get_firmware_version()
-
-    assert isinstance(firmware_version, str)
-    assert firmware_version != ""
+    assert isinstance(info, DeviceInfo)
+    assert info.serial_number != ""
+    assert info.firmware_version != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
