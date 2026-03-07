@@ -9,6 +9,7 @@ class DeviceInfo:
 
     serial_number: str
     firmware_version: str
+    firmware_target: str
     bsp_name: str
     build_type: str
     transfer_mode: int

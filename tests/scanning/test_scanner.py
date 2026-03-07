@@ -64,6 +64,7 @@ def test_lescanner_get_device_info(
     assert isinstance(info, DeviceInfo)
     assert info.serial_number != ""
     assert info.firmware_version != ""
+    assert info.firmware_target != ""
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
