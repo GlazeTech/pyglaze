@@ -208,6 +208,22 @@ def test_send_expect_timeout_then_retry() -> None:
     client.close()
 
 
+def test_receive_backs_off_on_empty_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    _config, client = _build(config=MockDeviceConfig(empty_responses=True))
+    sleep_calls: list[float] = []
+
+    def _fake_sleep(duration: float) -> None:
+        sleep_calls.append(duration)
+
+    monkeypatch.setattr("pyglaze.device.mimlink_client.time.sleep", _fake_sleep)
+
+    with pytest.raises(DeviceComError, match="Timeout"):
+        client._receive(timeout=0.01)
+
+    assert sleep_calls
+    client.close()
+
+
 def test_send_expect_wrong_type() -> None:
     config, client = _build()
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)

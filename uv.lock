@@ -2109,7 +2109,7 @@ requires-dist = [
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.18.1" },
     { name = "mypy-protobuf", marker = "extra == 'dev'", specifier = ">=3.6.0" },
     { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
-    { name = "protobuf", specifier = ">=6.33.0" },
+    { name = "protobuf", specifier = ">=6.33.4" },
     { name = "pygments", marker = "extra == 'docs'", specifier = ">=2.12.0" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.1" },
