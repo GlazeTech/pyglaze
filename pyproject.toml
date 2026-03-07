@@ -69,6 +69,11 @@ addopts = [
     "--import-mode=importlib",
 ]
 
+[tool.coverage.run]
+omit = [
+    "*/proto/*_pb2.py",
+]
+
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:", # type checking is turned off at runtime
