@@ -476,6 +476,7 @@ class GetDeviceInfoResponse(_message.Message):
     TRANSFER_MODE_FIELD_NUMBER: _builtins.int
     HARDWARE_TYPE_FIELD_NUMBER: _builtins.int
     HARDWARE_REVISION_FIELD_NUMBER: _builtins.int
+    FIRMWARE_TARGET_FIELD_NUMBER: _builtins.int
     serial_number: _builtins.str
     firmware_version: _builtins.str
     bsp_name: _builtins.str
@@ -483,6 +484,7 @@ class GetDeviceInfoResponse(_message.Message):
     transfer_mode: Global___TransferMode.ValueType
     hardware_type: _builtins.str
     hardware_revision: _builtins.int
+    firmware_target: _builtins.str
     def __init__(
         self,
         *,
@@ -493,8 +495,9 @@ class GetDeviceInfoResponse(_message.Message):
         transfer_mode: Global___TransferMode.ValueType = ...,
         hardware_type: _builtins.str = ...,
         hardware_revision: _builtins.int = ...,
+        firmware_target: _builtins.str = ...,
     ) -> None: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["bsp_name", b"bsp_name", "build_type", b"build_type", "firmware_version", b"firmware_version", "hardware_revision", b"hardware_revision", "hardware_type", b"hardware_type", "serial_number", b"serial_number", "transfer_mode", b"transfer_mode"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["bsp_name", b"bsp_name", "build_type", b"build_type", "firmware_target", b"firmware_target", "firmware_version", b"firmware_version", "hardware_revision", b"hardware_revision", "hardware_type", b"hardware_type", "serial_number", b"serial_number", "transfer_mode", b"transfer_mode"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
 
 Global___GetDeviceInfoResponse: _TypeAlias = GetDeviceInfoResponse  # noqa: Y015

@@ -50,14 +50,19 @@ To build and serve the documentation locally
 `pyglaze` vendors the MimLink protobuf schema in
 `src/pyglaze/mimlink/proto/envelope.proto`. Python codegen is handled by
 [buf](https://buf.build/docs/cli/installation/), which must be installed
-separately (e.g. `brew install bufbuild/buf/buf`).
+separately (e.g. `brew install bufbuild/buf/buf`). The Python protobuf code
+generator is pinned in `buf.gen.yaml` to
+`buf.build/protocolbuffers/python:v33.0`, while the type-stub generator comes
+from the project Python dev environment.
 
 When syncing with upstream MimLink:
 
 1. Replace `src/pyglaze/mimlink/proto/envelope.proto` from upstream.
-2. Run `./scripts/generate_mimlink_proto.sh`.
-3. Commit the updated `envelope_pb2.py`.
-4. Run protocol tests: `uv run pytest tests/mimlink/`.
+2. Ensure the project dev environment is installed so `protoc-gen-mypy` is
+   available in `.venv/bin`.
+3. Run `./scripts/generate_mimlink_proto.sh`.
+4. Commit the updated `envelope_pb2.py` and `envelope_pb2.pyi`.
+5. Run protocol tests: `uv run --extra dev pytest tests/mimlink/`.
 
 
 # Bug reporting or feature requests
