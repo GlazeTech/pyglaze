@@ -8,8 +8,6 @@ from scipy.interpolate import CubicSpline
 
 from pyglaze.helpers._lockin import _estimate_IQ_phase, _polar_to_IQ, _rotate_inphase
 
-from .pulse import Pulse
-
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -169,10 +167,6 @@ class UnprocessedWaveform:
             raise ValueError(msg)
 
         return UnprocessedWaveform(time=t, signal=s)
-
-    def as_pulse(self: UnprocessedWaveform) -> Pulse:
-        """Converts the current waveform to a Pulse object."""
-        return Pulse(time=self.time, signal=self.signal)
 
 
 @dataclass

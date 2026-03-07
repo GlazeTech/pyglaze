@@ -2,8 +2,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-
-from tests.conftest import DEVICE_CONFIGS
+from conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import DeviceConfiguration

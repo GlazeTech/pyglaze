@@ -2,12 +2,12 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import pytest
+from conftest import DEVICE_CONFIGS
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.scanning._types import DeviceInfo
 from pyglaze.scanning.scanner import Scanner
-from tests.conftest import DEVICE_CONFIGS
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import DeviceConfiguration
