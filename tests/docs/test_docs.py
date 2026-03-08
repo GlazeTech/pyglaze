@@ -22,20 +22,6 @@ def test_valid_python(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @DOCTEST_DEPS_REGISTRY.register
-class PulseExampleDeps(DoctestDep):
-    PULSE_PATH = Path("my_pulse_data.json")
-
-    def path(self: PulseExampleDeps) -> Path:
-        return Path("docs/API Reference/datamodels/Pulse.md")
-
-    def setup(self: PulseExampleDeps, monkeypatch: pytest.MonkeyPatch) -> None:
-        pass
-
-    def teardown(self: PulseExampleDeps) -> None:
-        self.PULSE_PATH.unlink()
-
-
-@DOCTEST_DEPS_REGISTRY.register
 class IndexDeps(DoctestDep):
     def path(self: IndexDeps) -> Path:
         return Path("docs/index.md")
@@ -48,4 +34,4 @@ class IndexDeps(DoctestDep):
             Path("scan_result_scanner.json"),
             Path("scan_result.json"),
         ]:
-            p.unlink()
+            p.unlink(missing_ok=True)

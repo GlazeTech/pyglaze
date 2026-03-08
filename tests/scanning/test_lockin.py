@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyglaze.datamodels import Pulse
+from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.helpers._lockin import (
     _angular_distance,
     _LockinPhaseEstimator,
@@ -124,7 +124,9 @@ def test_recovered_inphase_has_consistent_sign_across_scans() -> None:
     assert float(np.dot(rec1, rec2)) > 0.0
 
 
-def test_consecutive_scans_keep_same_branch(gaussian_deriv_pulse: Pulse) -> None:
+def test_consecutive_scans_keep_same_branch(
+    gaussian_deriv_pulse: UnprocessedWaveform,
+) -> None:
     rng = np.random.default_rng(2)
     phi = np.pi / 4
     X1, Y1 = _make_iq(gaussian_deriv_pulse.signal, phi=phi, noise_std=0.01, rng=rng)
