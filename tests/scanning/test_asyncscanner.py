@@ -1,13 +1,13 @@
 import time
 
 import pytest
-from conftest import DEVICE_CONFIGS
 from serial.serialutil import SerialException
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.device.mimlink_client import DeviceComError
 from pyglaze.scanning._asyncscanner import _AsyncScanner
+from tests.conftest import DEVICE_CONFIGS
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
