@@ -1,6 +1,6 @@
 [project]
 name = "pyglaze"
-version = "0.5.0"
+version = "0.5.1"
 description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -33,7 +33,6 @@ docs = [
     "mkdocstrings[python]>=0.18.1",
     "mike>=1.1.2",
     "Pygments>=2.12.0",
-    "matplotlib>=3.7.0",
     "bumpver>=2023.1129",
 ]
 dev = [
@@ -103,7 +102,7 @@ convention = "google"
 ]
 
 [tool.bumpver]
-current_version = "0.5.0"
+current_version = "0.5.1"
 version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
 commit_message = "BUMP VERSION {old_version} -> {new_version}"
 tag_message = "v{new_version}"
@@ -131,4 +130,3 @@ unused-ignore-comment = "error"
 
 [tool.ty.terminal]
 error-on-warning = true
-
