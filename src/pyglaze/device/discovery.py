@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import serial.tools.list_ports
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 _GLAZE_MANUFACTURER = "GLAZE Technologies"
-_GLAZE_PRODUCTS = ("THz-CCS",)
+_GLAZE_PRODUCTS = ("Carmen",)
 _SKIP_SUBSTRINGS = ("Bluetooth", "debug")
 
 

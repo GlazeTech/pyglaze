@@ -32,7 +32,7 @@ def _glaze_port(device: str, serial_number: str | None = None) -> FakePortInfo:
         device=device,
         serial_number=serial_number,
         manufacturer="GLAZE Technologies",
-        product="THz-CCS",
+        product="Carmen",
     )
 
 
@@ -185,7 +185,7 @@ def test_connection_factory_auto_resolves_to_discovered_port(
     def fake_serial_for_url(
         *,
         url: str,
-        baudrate: int,
+        baudrate: int,  # noqa: ARG001
         timeout: float | None,  # noqa: ARG001
     ) -> object:
         captured["url"] = url
