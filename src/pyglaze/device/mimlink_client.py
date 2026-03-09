@@ -10,6 +10,7 @@ import numpy as np
 import serial
 
 from pyglaze.device.configuration import AMP_BAUDRATE
+from pyglaze.device.discovery import discover_one
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
@@ -100,10 +101,15 @@ def _connection_factory(
         from pyglaze.devtools.mock_device import _mock_device_factory  # noqa: PLC0415
 
         return _mock_device_factory(config)
+
+    port = config.amp_port
+    if port == "auto":
+        port = discover_one()
+
     return cast(
         "Connection",
         serial.serial_for_url(
-            url=config.amp_port,
+            url=port,
             baudrate=config.amp_baudrate,
             timeout=config.amp_timeout_seconds,
         ),
