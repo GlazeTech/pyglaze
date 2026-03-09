@@ -24,8 +24,9 @@ class MultipleDevicesError(Exception):
 def discover() -> list[str]:
     """Find all connected GLAZE devices.
 
-    Enumerates serial ports and filters for FTDI-based devices by VID
-    or textual metadata. On macOS, deduplicates cu.*/tty.* pairs (keeps cu.*).
+    Enumerates serial ports and filters for devices whose USB metadata
+    (manufacturer and product strings) matches known GLAZE identifiers.
+    On macOS, deduplicates cu.*/tty.* pairs (keeps cu.*).
 
     Returns:
         List of serial port device paths.
