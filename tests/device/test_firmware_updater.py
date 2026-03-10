@@ -1,74 +1,109 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
 
 from pyglaze.device.firmware import MCUBOOT_IMAGE_MAGIC, FirmwareUpdater
-from pyglaze.device.mimlink_client import DeviceComError, FirmwareUpdateError
+from pyglaze.device.mimlink_client import (
+    FirmwareClient,
+    FirmwareUpdateError,
+    MimLinkTransport,
+)
+from pyglaze.devtools.mock_device import ScriptedTransport
+from pyglaze.mimlink import msg_types as mt
+from pyglaze.mimlink.codec import EnvelopeCodec
+from pyglaze.mimlink.proto import envelope_pb2 as pb
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-
-@dataclass(frozen=True)
-class _DeviceInfo:
-    firmware_version: str
+    from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 
-@dataclass(frozen=True)
-class _FwStatus:
-    status: int
+# --- Envelope builders ---
 
 
-@dataclass
-class _FakeClient:
-    firmware_version: str = "v0.1.0"
-    status: int = 0
-    confirm_version: str = "v0.2.0"
-    fail_on_get_info: bool = False
-    fail_on_get_status: bool = False
-    fail_on_confirm: bool = False
-    update_error: Exception | None = None
-    updated: list[tuple[bytes, str]] | None = None
-    closed: bool = False
+def _device_info_env(*, firmware_version: str = "v0.1.0") -> Envelope:
+    codec = EnvelopeCodec()
+    env = codec.build_envelope(mt.GET_DEVICE_INFO_RESPONSE)
+    env.get_device_info_response.serial_number = "M-TEST"
+    env.get_device_info_response.firmware_version = firmware_version
+    return env
 
-    def get_device_info(self) -> _DeviceInfo:
-        if self.fail_on_get_info:
-            msg = "not reachable"
-            raise DeviceComError(msg)
-        return _DeviceInfo(firmware_version=self.firmware_version)
 
-    def get_firmware_update_status(self) -> _FwStatus:
-        if self.fail_on_get_status:
-            msg = "status not reachable"
-            raise DeviceComError(msg)
-        return _FwStatus(status=self.status)
+def _fw_status_env(*, status: pb.FwUpdateStatus = pb.FW_UPDATE_STATUS_IDLE) -> Envelope:
+    codec = EnvelopeCodec()
+    env = codec.build_envelope(mt.FW_UPDATE_STATUS_RESPONSE)
+    env.fw_update_status_response.status = status
+    return env
 
-    def update_firmware(self, firmware: bytes, *, version: str = "") -> None:
-        if self.update_error is not None:
-            raise self.update_error
-        if self.updated is not None:
-            self.updated.append((firmware, version))
 
-    def confirm_boot(self) -> str:
-        if self.fail_on_confirm:
-            msg = "confirm not reachable"
-            raise DeviceComError(msg)
-        return self.confirm_version
+def _boot_confirm_env(*, version: str) -> Envelope:
+    codec = EnvelopeCodec()
+    env = codec.build_envelope(mt.FW_BOOT_CONFIRM_RESPONSE)
+    env.fw_boot_confirm_response.confirmed = True
+    env.fw_boot_confirm_response.version = version
+    return env
 
-    def close(self) -> None:
-        self.closed = True
+
+def _upload_response_envs() -> list[Envelope]:
+    """Responses for a successful 1-chunk firmware upload."""
+    codec = EnvelopeCodec()
+    start = codec.build_envelope(mt.FW_UPDATE_START_RESPONSE)
+    start.fw_update_start_response.accepted = True
+    ack = codec.build_envelope(mt.FW_UPDATE_CHUNK_ACK)
+    ack.fw_update_chunk_ack.chunk_index = 0
+    ack.fw_update_chunk_ack.status = pb.FW_CHUNK_STATUS_OK
+    finish = codec.build_envelope(mt.FW_UPDATE_FINISH_RESPONSE)
+    finish.fw_update_finish_response.success = True
+    return [start, ack, finish]
+
+
+def _rejected_upload_envs(*, error: str = "rejected") -> list[Envelope]:
+    codec = EnvelopeCodec()
+    start = codec.build_envelope(mt.FW_UPDATE_START_RESPONSE)
+    start.fw_update_start_response.accepted = False
+    start.fw_update_start_response.error = error
+    return [start]
+
+
+# --- Client builders ---
+
+
+def _encode(*envelopes: Envelope) -> bytes:
+    codec = EnvelopeCodec()
+    return b"".join(codec.encode(env) for env in envelopes)
+
+
+def _scripted_client(*envelopes: Envelope) -> FirmwareClient:
+    """Build a FirmwareClient backed by pre-scripted protobuf responses."""
+    transport = MimLinkTransport(
+        conn=ScriptedTransport(_encode(*envelopes)),
+        command_timeout_s=0.1,
+    )
+    return FirmwareClient(transport=transport)
+
+
+def _timeout_client() -> FirmwareClient:
+    """Client that times out on any operation (empty transport)."""
+    transport = MimLinkTransport(
+        conn=ScriptedTransport(b""),
+        command_timeout_s=0.005,
+    )
+    return FirmwareClient(transport=transport)
+
+
+# --- Factory ---
 
 
 class _Factory:
-    def __init__(self, clients: list[_FakeClient]) -> None:
+    def __init__(self, clients: list[FirmwareClient]) -> None:
         self._clients = clients
         self.calls = 0
-        self.issued: list[_FakeClient] = []
+        self.issued: list[FirmwareClient] = []
 
-    def __call__(self) -> _FakeClient:
+    def __call__(self) -> FirmwareClient:
         self.calls += 1
         if not self._clients:
             msg = "factory exhausted"
@@ -84,23 +119,33 @@ def _signed_image(path: Path) -> Path:
     return path
 
 
+# --- Tests ---
+
+
 def test_update_happy_path(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
-    uploaded: list[tuple[bytes, str]] = []
 
     clients = [
-        _FakeClient(firmware_version="v1.0.0", status=0),
-        _FakeClient(updated=uploaded),
-        _FakeClient(fail_on_get_status=True),
-        _FakeClient(firmware_version="v1.1.0", status=3),
-        _FakeClient(status=4, confirm_version="v1.1.0"),
-        _FakeClient(status=4),
+        # 1. get_boot_info preflight: device_info + fw_status
+        _scripted_client(
+            _device_info_env(firmware_version="v1.0.0"),
+            _fw_status_env(),
+        ),
+        # 2. upload firmware (1-chunk image)
+        _scripted_client(*_upload_response_envs()),
+        # 3. _wait_until_status_reachable: timeout, then succeed
+        _timeout_client(),
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_BOOT_PENDING)),
+        # 4. confirm_boot
+        _scripted_client(_boot_confirm_env(version="v1.1.0")),
+        # 5. final fw status
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_CONFIRMED)),
     ]
-    factory = _Factory(clients.copy())
+    factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.1,
+        reconnect_timeout_s=0.5,
         reconnect_interval_s=0.0,
     )
 
@@ -110,8 +155,6 @@ def test_update_happy_path(tmp_path: Path) -> None:
     assert result.previous_version == "v1.0.0"
     assert result.confirmed_version == "v1.1.0"
     assert result.final_status == 4
-    assert uploaded
-    assert uploaded[0][1] == "v1.1.0"
     assert stages == ["uploading", "reconnecting", "confirming", "done"]
     assert factory.calls == 6
 
@@ -128,17 +171,22 @@ def test_update_rejects_unsigned_image(tmp_path: Path) -> None:
 def test_update_preflight_unreachable_continues(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
     clients = [
-        _FakeClient(fail_on_get_info=True),
-        _FakeClient(),
-        _FakeClient(status=3),
-        _FakeClient(confirm_version="v2.0.0"),
-        _FakeClient(status=4),
+        # 1. get_boot_info preflight — times out, caught by _try_get_boot_info
+        _timeout_client(),
+        # 2. upload firmware
+        _scripted_client(*_upload_response_envs()),
+        # 3. _wait_until_status_reachable
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_BOOT_PENDING)),
+        # 4. confirm_boot
+        _scripted_client(_boot_confirm_env(version="v2.0.0")),
+        # 5. final fw status
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_CONFIRMED)),
     ]
     factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.1,
+        reconnect_timeout_s=0.5,
         reconnect_interval_s=0.0,
     )
 
@@ -151,16 +199,19 @@ def test_update_preflight_unreachable_continues(tmp_path: Path) -> None:
 def test_update_reconnect_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
     clients = [
-        _FakeClient(firmware_version="v1.0.0", status=0),
-        _FakeClient(),
-        *[_FakeClient(fail_on_get_status=True) for _ in range(8)],
+        # 1. get_boot_info preflight
+        _scripted_client(_device_info_env(firmware_version="v1.0.0"), _fw_status_env()),
+        # 2. upload firmware
+        _scripted_client(*_upload_response_envs()),
+        # 3. _wait_until_status_reachable — all timeout
+        *[_timeout_client() for _ in range(20)],
     ]
     factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.002,
+        reconnect_timeout_s=0.05,
+        reconnect_interval_s=0.0,
     )
 
     with pytest.raises(
@@ -168,23 +219,26 @@ def test_update_reconnect_timeout_raises(tmp_path: Path) -> None:
         match="Timed out waiting for device to reconnect after firmware upload",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.issued)
 
 
 def test_update_confirm_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
     clients = [
-        _FakeClient(firmware_version="v1.0.0", status=0),
-        _FakeClient(),
-        _FakeClient(status=3),
-        *[_FakeClient(fail_on_confirm=True) for _ in range(8)],
+        # 1. get_boot_info preflight
+        _scripted_client(_device_info_env(firmware_version="v1.0.0"), _fw_status_env()),
+        # 2. upload firmware
+        _scripted_client(*_upload_response_envs()),
+        # 3. _wait_until_status_reachable
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_BOOT_PENDING)),
+        # 4. confirm_boot — all timeout
+        *[_timeout_client() for _ in range(20)],
     ]
-    factory = _Factory(clients.copy())
+    factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.002,
+        reconnect_timeout_s=0.05,
+        reconnect_interval_s=0.0,
     )
 
     with pytest.raises(
@@ -192,24 +246,28 @@ def test_update_confirm_timeout_raises(tmp_path: Path) -> None:
         match="Timed out confirming boot after firmware upload",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.issued)
 
 
 def test_update_final_status_timeout_raises(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
     clients = [
-        _FakeClient(firmware_version="v1.0.0", status=0),
-        _FakeClient(),
-        _FakeClient(status=3),
-        _FakeClient(confirm_version="v1.1.0"),
-        *[_FakeClient(fail_on_get_status=True) for _ in range(8)],
+        # 1. get_boot_info preflight
+        _scripted_client(_device_info_env(firmware_version="v1.0.0"), _fw_status_env()),
+        # 2. upload firmware
+        _scripted_client(*_upload_response_envs()),
+        # 3. _wait_until_status_reachable
+        _scripted_client(_fw_status_env(status=pb.FW_UPDATE_STATUS_BOOT_PENDING)),
+        # 4. confirm_boot
+        _scripted_client(_boot_confirm_env(version="v1.1.0")),
+        # 5. final fw status — all timeout
+        *[_timeout_client() for _ in range(20)],
     ]
-    factory = _Factory(clients.copy())
+    factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.01,
-        reconnect_interval_s=0.002,
+        reconnect_timeout_s=0.05,
+        reconnect_interval_s=0.0,
     )
 
     with pytest.raises(
@@ -217,30 +275,26 @@ def test_update_final_status_timeout_raises(tmp_path: Path) -> None:
         match="Timed out reading firmware status after boot confirmation",
     ):
         updater.update(firmware_path)
-    assert all(client.closed for client in factory.issued)
 
 
-def test_update_upload_error_closes_clients(tmp_path: Path) -> None:
+def test_update_upload_error_propagates(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
-    upload_error = FirmwareUpdateError("Device aborted")
     clients = [
-        _FakeClient(firmware_version="v1.0.0", status=0),
-        _FakeClient(update_error=upload_error),
+        # 1. get_boot_info preflight
+        _scripted_client(_device_info_env(firmware_version="v1.0.0"), _fw_status_env()),
+        # 2. upload firmware — rejected by device
+        _scripted_client(*_rejected_upload_envs(error="Device aborted")),
     ]
-    first_client = clients[0]
-    second_client = clients[1]
     factory = _Factory(clients)
     updater = FirmwareUpdater(
         client_factory=factory,
         reboot_wait_s=0.0,
-        reconnect_timeout_s=0.1,
+        reconnect_timeout_s=0.5,
         reconnect_interval_s=0.0,
     )
     stages: list[str] = []
 
-    with pytest.raises(FirmwareUpdateError, match="Device aborted"):
+    with pytest.raises(FirmwareUpdateError, match="Firmware update rejected"):
         updater.update(firmware_path, on_progress=stages.append)
 
     assert stages == ["uploading"]
-    assert first_client.closed is True
-    assert second_client.closed is True

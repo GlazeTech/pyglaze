@@ -7,8 +7,10 @@ import pytest
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.device.mimlink_client import (
     DeviceComError,
+    FirmwareClient,
     FirmwareUpdateError,
-    MimLinkClient,
+    MimLinkTransport,
+    ScanClient,
 )
 from pyglaze.devtools.mock_device import (
     TRANSFER_MODE_PER_POINT,
@@ -31,7 +33,7 @@ def _build(
     *,
     config: MockDeviceConfig | None = None,
     integration_periods: int = 1,
-) -> tuple[LeDeviceConfiguration, MimLinkClient]:
+) -> tuple[LeDeviceConfiguration, ScanClient]:
     dev_config = LeDeviceConfiguration(
         amp_port="mock_device",
         use_ema=False,
@@ -41,8 +43,9 @@ def _build(
     )
     backend = LeMockDevice(config)
     backend.reset_input_buffer()
-    client = MimLinkClient(
-        conn=backend,
+    transport = MimLinkTransport(conn=backend)
+    client = ScanClient(
+        transport=transport,
         n_points=dev_config.n_points,
         sweep_length_ms=dev_config._sweep_length_ms,
     )
@@ -205,7 +208,7 @@ def test_send_expect_timeout_then_retry() -> None:
     # retry, and timeout again → exhaustion.
     config, client = _build(config=MockDeviceConfig(timeout_after_n_responses=1))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client._default_timeout_s = 0.1  # Short timeout to speed up test
+    client._transport.default_timeout_s = 0.1  # Short timeout to speed up test
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
@@ -224,7 +227,7 @@ def test_receive_backs_off_on_empty_reads(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("pyglaze.device.mimlink_client.time.sleep", _fake_sleep)
 
     with pytest.raises(DeviceComError, match="Timeout"):
-        client._receive(timeout=0.01)
+        client._transport.receive(timeout=0.01)
 
     assert sleep_calls
     client.close()
@@ -240,17 +243,17 @@ def test_send_expect_wrong_type() -> None:
     # Inject a wrong-type response: send a start_scan request but have the
     # mock respond. The mock will respond with START_SCAN_RESPONSE. We then
     # call _send_expect expecting a different type.
-    env = client._codec.build_envelope(mt.START_SCAN_REQUEST)
+    env = client._transport.build_envelope(mt.START_SCAN_REQUEST)
     env.start_scan_request.SetInParent()
     with pytest.raises(DeviceComError, match="Unexpected response"):
-        client._send_expect(env, mt.SET_SETTINGS_RESPONSE)
+        client._transport.send_expect(env, mt.SET_SETTINGS_RESPONSE)
     client.close()
 
 
 def test_drain_corrupt_frame() -> None:
     config, client = _build()
-    assert isinstance(client._conn, LeMockDevice)
-    client._conn._tx_buffer.extend(b"\x01\x02\x03\x00")  # invalid frame
+    assert isinstance(client._transport._conn, LeMockDevice)
+    client._transport._conn._tx_buffer.extend(b"\x01\x02\x03\x00")
     # Now send a valid command — the corrupt frame should be skipped.
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
@@ -333,8 +336,9 @@ def test_await_scan_complete_timeout() -> None:
     backend = LeMockDevice()
     # Pass a very short sweep_length_ms so the polling window expires
     # before the mock scan finishes (mock scan takes ~10s).
-    client = MimLinkClient(
-        conn=backend,
+    transport = MimLinkTransport(conn=backend)
+    client = ScanClient(
+        transport=transport,
         n_points=config.n_points,
         sweep_length_ms=1.0,
     )
@@ -373,7 +377,8 @@ def test_inline_retransmit_per_point() -> None:
 
     data = _build_scripted_envelopes(codec, [env0, env_rt, env2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=100.0)
+    transport = MimLinkTransport(conn=conn)
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=100.0)
     times, _Xs, _Ys = client._collect_per_point()
     assert len(times) == 3
     client.close()
@@ -413,7 +418,8 @@ def test_inline_retransmit_bulk() -> None:
 
     data = _build_scripted_envelopes(codec, [status_env, chunk0, rt_chunk, chunk2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=1.0)
+    transport = MimLinkTransport(conn=conn)
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=1.0)
     times, _Xs, _Ys = client._collect_bulk()
     assert len(times) == 3
     client.close()
@@ -486,7 +492,9 @@ def _fw_start_response(
     return env
 
 
-def _fw_chunk_ack(codec: EnvelopeCodec, index: int, status: int) -> pb.Envelope:
+def _fw_chunk_ack(
+    codec: EnvelopeCodec, index: int, status: pb.FwChunkStatus
+) -> pb.Envelope:
     env = codec.build_envelope(mt.FW_UPDATE_CHUNK_ACK)
     ack = env.fw_update_chunk_ack
     ack.chunk_index = index
@@ -517,7 +525,7 @@ def _fw_boot_confirm_response(
 def _fw_status_response(
     codec: EnvelopeCodec,
     *,
-    status: int = 0,
+    status: pb.FwUpdateStatus = pb.FW_UPDATE_STATUS_IDLE,
     chunks_received: int = 0,
     total_chunks: int = 0,
     bytes_received: int = 0,
@@ -529,6 +537,12 @@ def _fw_status_response(
     resp.total_chunks = total_chunks
     resp.bytes_received = bytes_received
     return env
+
+
+def _build_fw_client(data: bytes) -> FirmwareClient:
+    conn = ScriptedTransport(data)
+    transport = MimLinkTransport(conn=conn)
+    return FirmwareClient(transport=transport)
 
 
 def test_update_firmware_success() -> None:
@@ -543,8 +557,7 @@ def test_update_firmware_success() -> None:
         _fw_finish_response(codec, success=True),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     client.update_firmware(firmware, version="v1.0.0")
     client.close()
@@ -557,8 +570,7 @@ def test_update_firmware_rejected() -> None:
         _fw_start_response(codec, accepted=False, error="Firmware size invalid")
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     with pytest.raises(FirmwareUpdateError, match="Firmware update rejected"):
         client.update_firmware(b"\x00" * 256)
@@ -577,8 +589,7 @@ def test_update_firmware_chunk_crc_mismatch_retries() -> None:
         _fw_finish_response(codec, success=True),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     client.update_firmware(firmware)
     client.close()
@@ -596,8 +607,7 @@ def test_update_firmware_chunk_crc_mismatch_retries_exhausted() -> None:
         _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     with pytest.raises(FirmwareUpdateError, match="CRC mismatch after"):
         client.update_firmware(firmware)
@@ -614,8 +624,7 @@ def test_update_firmware_chunk_abort() -> None:
         _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_ABORT),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     with pytest.raises(FirmwareUpdateError, match="aborted"):
         client.update_firmware(firmware)
@@ -633,8 +642,7 @@ def test_update_firmware_finish_failure() -> None:
         _fw_finish_response(codec, success=False, error="CRC mismatch"),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     with pytest.raises(FirmwareUpdateError, match="finish failed"):
         client.update_firmware(firmware)
@@ -645,8 +653,7 @@ def test_confirm_boot() -> None:
     codec = EnvelopeCodec()
     envelopes = [_fw_boot_confirm_response(codec, confirmed=True, version="v1.2.3")]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     version = client.confirm_boot()
     assert version == "v1.2.3"
@@ -665,8 +672,7 @@ def test_get_firmware_update_status() -> None:
         )
     ]
     data = _build_scripted_envelopes(codec, envelopes)
-    conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
+    client = _build_fw_client(data)
 
     status = client.get_firmware_update_status()
     assert status.status == pb.FW_UPDATE_STATUS_RECEIVING

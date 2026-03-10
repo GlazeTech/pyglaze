@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class Connection(Protocol):
-    """Serial-like connection interface used by MimLinkClient."""
+    """Serial-like connection interface used by MimLinkTransport."""
 
     @property
     def in_waiting(self) -> int:
@@ -126,19 +126,12 @@ def _connection_factory(
     )
 
 
-class MimLinkClient:
-    """Synchronous MimLink protocol client."""
+class MimLinkTransport:
+    """Low-level MimLink protocol transport.
 
-    @classmethod
-    def from_config(cls, config: DeviceConfiguration) -> MimLinkClient:
-        """Construct a client from a device configuration."""
-        conn = _connection_factory(config)
-        conn.reset_input_buffer()
-        return cls(
-            conn=conn,
-            n_points=config.n_points,
-            sweep_length_ms=config._sweep_length_ms,  # noqa: SLF001
-        )
+    Owns the serial connection, codec, and envelope send/receive machinery.
+    Domain clients (ScanClient, FirmwareClient) compose over this.
+    """
 
     @classmethod
     def from_port(
@@ -148,8 +141,8 @@ class MimLinkClient:
         baudrate: int = AMP_BAUDRATE,
         timeout_s: float = 0.1,
         command_timeout_s: float | None = None,
-    ) -> MimLinkClient:
-        """Construct a client from a serial port."""
+    ) -> MimLinkTransport:
+        """Construct a transport from a serial port."""
         conn = cast(
             "Connection",
             serial.serial_for_url(
@@ -165,19 +158,12 @@ class MimLinkClient:
         self,
         conn: Connection,
         *,
-        n_points: int | None = None,
-        sweep_length_ms: float | None = None,
         command_timeout_s: float | None = None,
     ) -> None:
         self._conn = conn
-        self._default_n_points = n_points
-        self._default_sweep_length_ms = sweep_length_ms
-        if command_timeout_s is not None:
-            self._default_timeout_s = command_timeout_s
-        elif sweep_length_ms is not None:
-            self._default_timeout_s = self._scan_timeout_s(sweep_length_ms)
-        else:
-            self._default_timeout_s = _PROTOCOL_BASELINE_S
+        self.default_timeout_s = (
+            command_timeout_s if command_timeout_s is not None else _PROTOCOL_BASELINE_S
+        )
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
         self._env_buffer: deque[pb.Envelope] = deque()
@@ -186,7 +172,12 @@ class MimLinkClient:
         """Clean up the connection."""
         self.close()
 
-    def _send(self, envelope: pb.Envelope) -> None:
+    def build_envelope(self, msg_type: MsgType) -> pb.Envelope:
+        """Build a new Envelope with the given message type."""
+        return self._codec.build_envelope(msg_type)
+
+    def send(self, envelope: pb.Envelope) -> None:
+        """Encode and write an envelope to the connection."""
         self._conn.write(self._codec.encode(envelope))
 
     def _feed_rx_bytes(self, data: bytes) -> None:
@@ -221,12 +212,12 @@ class MimLinkClient:
             data += self._conn.read(available)
         return data
 
-    def _envelope_stream(
+    def envelope_stream(
         self, timeout: float | None = None
     ) -> Generator[pb.Envelope, None, None]:
         """Yield envelopes until timeout. Raises DeviceComError when deadline expires."""
         if timeout is None:
-            timeout = self._default_timeout_s
+            timeout = self.default_timeout_s
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._env_buffer:
@@ -238,17 +229,18 @@ class MimLinkClient:
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
-    def _receive(self, timeout: float | None = None) -> pb.Envelope:
+    def receive(self, timeout: float | None = None) -> pb.Envelope:
         """Block until one Envelope is received. Raises DeviceComError on timeout."""
-        return next(self._envelope_stream(timeout))
+        return next(self.envelope_stream(timeout))
 
-    def _send_receive(
+    def send_receive(
         self, envelope: pb.Envelope, timeout: float | None = None
     ) -> pb.Envelope:
-        self._send(envelope)
-        return self._receive(timeout)
+        """Send an envelope and return the next received envelope."""
+        self.send(envelope)
+        return self.receive(timeout)
 
-    def _send_expect(
+    def send_expect(
         self, envelope: pb.Envelope, expected: MsgType, *, timeout: float | None = None
     ) -> pb.Envelope:
         """Send an envelope and verify the response type.
@@ -258,7 +250,7 @@ class MimLinkClient:
         last_err: DeviceComError | None = None
         for _ in range(_MAX_COMMAND_RETRIES + 1):
             try:
-                resp = self._send_receive(envelope, timeout=timeout)
+                resp = self.send_receive(envelope, timeout=timeout)
             except DeviceComError as e:
                 last_err = e
                 continue
@@ -268,16 +260,72 @@ class MimLinkClient:
             return resp
         raise last_err  # type: ignore[misc]
 
+    def get_device_info(self) -> pb.GetDeviceInfoResponse:
+        """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""
+        env = self.build_envelope(mt.GET_DEVICE_INFO_REQUEST)
+        env.get_device_info_request.SetInParent()
+        return self.send_expect(
+            env, mt.GET_DEVICE_INFO_RESPONSE
+        ).get_device_info_response
+
+    def get_status(self) -> pb.GetStatusResponse:
+        """Query device status. Returns the protobuf GetStatusResponse sub-message."""
+        env = self.build_envelope(mt.GET_STATUS_REQUEST)
+        env.get_status_request.SetInParent()
+        return self.send_expect(env, mt.GET_STATUS_RESPONSE).get_status_response
+
+    def reboot(self) -> None:
+        """Request a device reboot. Fire-and-forget — no response expected."""
+        env = self.build_envelope(mt.REBOOT_REQUEST)
+        env.reboot_request.SetInParent()
+        self.send(env)
+
+    def close(self) -> None:
+        """Close the connection."""
+        with contextlib.suppress(AttributeError):
+            self._rx_stream.reset()
+        with contextlib.suppress(AttributeError):
+            self._conn.close()
+
+
+class ScanClient:
+    """MimLink scan client. Wraps a transport with scan-specific parameters and logic."""
+
+    @classmethod
+    def from_config(cls, config: DeviceConfiguration) -> ScanClient:
+        """Construct a scan client from a device configuration."""
+        conn = _connection_factory(config)
+        conn.reset_input_buffer()
+        transport = MimLinkTransport(conn=conn)
+        return cls(
+            transport=transport,
+            n_points=config.n_points,
+            sweep_length_ms=config._sweep_length_ms,  # noqa: SLF001
+        )
+
+    def __init__(
+        self,
+        transport: MimLinkTransport,
+        *,
+        n_points: int | None = None,
+        sweep_length_ms: float | None = None,
+    ) -> None:
+        self._transport = transport
+        self._default_n_points = n_points
+        self._default_sweep_length_ms = sweep_length_ms
+        if sweep_length_ms is not None:
+            self._transport.default_timeout_s = self._scan_timeout_s(sweep_length_ms)
+
     def set_settings(
         self, n_points: int, integration_periods: int, *, use_ema: bool
     ) -> None:
         """Send settings to device."""
-        env = self._codec.build_envelope(mt.SET_SETTINGS_REQUEST)
+        env = self._transport.build_envelope(mt.SET_SETTINGS_REQUEST)
         req = env.set_settings_request
         req.list_length = n_points
         req.integration_periods = integration_periods
         req.use_ema = use_ema
-        resp = self._send_expect(env, mt.SET_SETTINGS_RESPONSE)
+        resp = self._transport.send_expect(env, mt.SET_SETTINGS_RESPONSE)
         if not resp.set_settings_response.success:
             msg = f"Failed to set settings: {resp}"
             raise DeviceComError(msg)
@@ -298,9 +346,9 @@ class MimLinkClient:
         """Execute the list upload sequence once."""
         total = len(scanning_list)
 
-        env = self._codec.build_envelope(mt.SET_LIST_START_REQUEST)
+        env = self._transport.build_envelope(mt.SET_LIST_START_REQUEST)
         env.set_list_start_request.total_floats = total
-        resp = self._send_expect(env, mt.SET_LIST_START_RESPONSE)
+        resp = self._transport.send_expect(env, mt.SET_LIST_START_RESPONSE)
         if not resp.set_list_start_response.ready:
             msg = f"Failed to start list upload: {resp}"
             raise DeviceComError(msg)
@@ -309,14 +357,14 @@ class MimLinkClient:
         for i in range(total_chunks):
             start = i * _LIST_CHUNK_SIZE
             end = min(start + _LIST_CHUNK_SIZE, total)
-            chunk_env = self._codec.build_envelope(mt.LIST_CHUNK)
+            chunk_env = self._transport.build_envelope(mt.LIST_CHUNK)
             chunk = chunk_env.list_chunk
             chunk.chunk_index = i
             chunk.values.extend(scanning_list[start:end])
             chunk.is_last = i == total_chunks - 1
-            self._send(chunk_env)
+            self._transport.send(chunk_env)
 
-        resp = self._receive()
+        resp = self._transport.receive()
         if (
             resp.type != mt.SET_LIST_COMPLETE_RESPONSE
             or not resp.set_list_complete_response.success
@@ -333,9 +381,9 @@ class MimLinkClient:
             sweep_length_ms=sweep_length_ms,
         )
         timeout = self._scan_timeout_s(sweep_length_ms)
-        env = self._codec.build_envelope(mt.START_SCAN_REQUEST)
+        env = self._transport.build_envelope(mt.START_SCAN_REQUEST)
         env.start_scan_request.SetInParent()
-        resp = self._send_expect(env, mt.START_SCAN_RESPONSE, timeout=timeout)
+        resp = self._transport.send_expect(env, mt.START_SCAN_RESPONSE, timeout=timeout)
         if not resp.start_scan_response.started:
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
@@ -371,13 +419,15 @@ class MimLinkClient:
             timeout = self._scan_timeout_s(sweep_length_ms)
         self._await_scan_complete(sweep_length_ms=sweep_length_ms, timeout=timeout)
 
-        env = self._codec.build_envelope(mt.GET_RESULTS_REQUEST)
+        env = self._transport.build_envelope(mt.GET_RESULTS_REQUEST)
         env.get_results_request.SetInParent()
-        self._send(env)
+        self._transport.send(env)
 
         chunks: list[pb.ResultsChunk | pb.ResultsChunkRetransmit] = []
         try:
-            for e in self._envelope_stream(timeout=_transfer_timeout_s(n_points)):
+            for e in self._transport.envelope_stream(
+                timeout=_transfer_timeout_s(n_points)
+            ):
                 if e.type == mt.RESULTS_CHUNK:
                     chunks.append(e.results_chunk)
                     if e.results_chunk.is_last:
@@ -424,7 +474,7 @@ class MimLinkClient:
         next_expected = 0
         stream_timeout = sweep_length_ms * 1e-3 + _transfer_timeout_s(n_points)
         try:
-            for e in self._envelope_stream(timeout=stream_timeout):
+            for e in self._transport.envelope_stream(timeout=stream_timeout):
                 if e.type == mt.RESULT_POINT:
                     p = e.result_point
                     points.append(p)
@@ -456,9 +506,9 @@ class MimLinkClient:
 
     def _nak_point(self, point_index: int) -> None:
         """Fire-and-forget NAK for a missing point. Response arrives in the envelope stream."""
-        env = self._codec.build_envelope(mt.RESULT_POINT_NAK)
+        env = self._transport.build_envelope(mt.RESULT_POINT_NAK)
         env.result_point_nak.point_index = point_index
-        self._send(env)
+        self._transport.send(env)
 
     def _retransmit_missing_chunks(
         self,
@@ -476,9 +526,9 @@ class MimLinkClient:
 
         for idx in sorted(missing):
             for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
-                env = self._codec.build_envelope(mt.RESULTS_CHUNK_NAK)
+                env = self._transport.build_envelope(mt.RESULTS_CHUNK_NAK)
                 env.results_chunk_nak.chunk_index = idx
-                resp = self._send_receive(env, timeout=timeout)
+                resp = self._transport.send_receive(env, timeout=timeout)
                 if (
                     resp.type == mt.RESULTS_CHUNK_RETRANSMIT
                     and resp.results_chunk_retransmit.available
@@ -507,9 +557,9 @@ class MimLinkClient:
 
         for idx in sorted(missing):
             for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
-                env = self._codec.build_envelope(mt.RESULT_POINT_NAK)
+                env = self._transport.build_envelope(mt.RESULT_POINT_NAK)
                 env.result_point_nak.point_index = idx
-                resp = self._send_receive(env, timeout=timeout)
+                resp = self._transport.send_receive(env, timeout=timeout)
                 if (
                     resp.type == mt.RESULT_POINT_RETRANSMIT
                     and resp.result_point_retransmit.available
@@ -560,24 +610,47 @@ class MimLinkClient:
         if resolved_n_points is None or resolved_sweep_ms is None:
             msg = (
                 "Scan context is missing. Pass n_points and sweep_length_ms to "
-                "start_scan(), or provide defaults in MimLinkClient(...)."
+                "start_scan(), or provide defaults in ScanClient(...)."
             )
             raise DeviceComError(msg)
         return resolved_n_points, resolved_sweep_ms
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
-        """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""
-        env = self._codec.build_envelope(mt.GET_DEVICE_INFO_REQUEST)
-        env.get_device_info_request.SetInParent()
-        return self._send_expect(
-            env, mt.GET_DEVICE_INFO_RESPONSE
-        ).get_device_info_response
+        """Query device info. Delegates to transport."""
+        return self._transport.get_device_info()
 
     def get_status(self) -> pb.GetStatusResponse:
-        """Query device status. Returns the protobuf GetStatusResponse sub-message."""
-        env = self._codec.build_envelope(mt.GET_STATUS_REQUEST)
-        env.get_status_request.SetInParent()
-        return self._send_expect(env, mt.GET_STATUS_RESPONSE).get_status_response
+        """Query device status. Delegates to transport."""
+        return self._transport.get_status()
+
+    def close(self) -> None:
+        """Close the connection. Delegates to transport."""
+        self._transport.close()
+
+
+class FirmwareClient:
+    """MimLink firmware client. Wraps a transport for firmware update operations."""
+
+    @classmethod
+    def from_port(
+        cls,
+        port: str,
+        *,
+        baudrate: int = AMP_BAUDRATE,
+        timeout_s: float = 0.1,
+        command_timeout_s: float | None = None,
+    ) -> FirmwareClient:
+        """Construct a firmware client from a serial port."""
+        transport = MimLinkTransport.from_port(
+            port=port,
+            baudrate=baudrate,
+            timeout_s=timeout_s,
+            command_timeout_s=command_timeout_s,
+        )
+        return cls(transport=transport)
+
+    def __init__(self, transport: MimLinkTransport) -> None:
+        self._transport = transport
 
     def update_firmware(
         self,
@@ -597,13 +670,13 @@ class MimLinkClient:
         firmware_crc = zlib.crc32(firmware) & 0xFFFFFFFF
 
         # --- start ---
-        env = self._codec.build_envelope(mt.FW_UPDATE_START_REQUEST)
+        env = self._transport.build_envelope(mt.FW_UPDATE_START_REQUEST)
         req = env.fw_update_start_request
         req.firmware_size = len(firmware)
         req.firmware_crc = firmware_crc
         req.chunk_size = chunk_size
         req.version = version
-        resp = self._send_expect(
+        resp = self._transport.send_expect(
             env, mt.FW_UPDATE_START_RESPONSE, timeout=_FW_START_TIMEOUT_S
         )
         if not resp.fw_update_start_response.accepted:
@@ -618,12 +691,12 @@ class MimLinkClient:
             chunk_crc = zlib.crc32(chunk_data) & 0xFFFFFFFF
 
             for _attempt in range(_MAX_RETRANSMIT_ATTEMPTS):
-                chunk_env = self._codec.build_envelope(mt.FW_UPDATE_CHUNK)
+                chunk_env = self._transport.build_envelope(mt.FW_UPDATE_CHUNK)
                 c = chunk_env.fw_update_chunk
                 c.chunk_index = i
                 c.data = chunk_data
                 c.chunk_crc = chunk_crc
-                ack = self._send_expect(
+                ack = self._transport.send_expect(
                     chunk_env, mt.FW_UPDATE_CHUNK_ACK, timeout=_FW_CHUNK_TIMEOUT_S
                 )
                 status = ack.fw_update_chunk_ack.status
@@ -638,9 +711,9 @@ class MimLinkClient:
                 raise FirmwareUpdateError(msg)
 
         # --- finish ---
-        fin_env = self._codec.build_envelope(mt.FW_UPDATE_FINISH_REQUEST)
+        fin_env = self._transport.build_envelope(mt.FW_UPDATE_FINISH_REQUEST)
         fin_env.fw_update_finish_request.SetInParent()
-        fin_resp = self._send_expect(
+        fin_resp = self._transport.send_expect(
             fin_env, mt.FW_UPDATE_FINISH_RESPONSE, timeout=_FW_FINISH_TIMEOUT_S
         )
         if not fin_resp.fw_update_finish_response.success:
@@ -654,28 +727,27 @@ class MimLinkClient:
         Returns:
             The firmware version string reported by the device.
         """
-        env = self._codec.build_envelope(mt.FW_BOOT_CONFIRM_REQUEST)
+        env = self._transport.build_envelope(mt.FW_BOOT_CONFIRM_REQUEST)
         env.fw_boot_confirm_request.SetInParent()
-        resp = self._send_expect(env, mt.FW_BOOT_CONFIRM_RESPONSE)
+        resp = self._transport.send_expect(env, mt.FW_BOOT_CONFIRM_RESPONSE)
         return resp.fw_boot_confirm_response.version
 
     def get_firmware_update_status(self) -> pb.FwUpdateStatusResponse:
         """Query firmware update progress."""
-        env = self._codec.build_envelope(mt.FW_UPDATE_STATUS_REQUEST)
+        env = self._transport.build_envelope(mt.FW_UPDATE_STATUS_REQUEST)
         env.fw_update_status_request.SetInParent()
-        return self._send_expect(
+        return self._transport.send_expect(
             env, mt.FW_UPDATE_STATUS_RESPONSE
         ).fw_update_status_response
 
+    def get_device_info(self) -> pb.GetDeviceInfoResponse:
+        """Query device info. Delegates to transport."""
+        return self._transport.get_device_info()
+
     def reboot(self) -> None:
-        """Request a device reboot. Fire-and-forget — no response expected."""
-        env = self._codec.build_envelope(mt.REBOOT_REQUEST)
-        env.reboot_request.SetInParent()
-        self._send(env)
+        """Request a device reboot. Delegates to transport."""
+        self._transport.reboot()
 
     def close(self) -> None:
-        """Close the connection."""
-        with contextlib.suppress(AttributeError):
-            self._rx_stream.reset()
-        with contextlib.suppress(AttributeError):
-            self._conn.close()
+        """Close the connection. Delegates to transport."""
+        self._transport.close()

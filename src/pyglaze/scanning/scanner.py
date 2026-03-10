@@ -8,7 +8,7 @@ import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import MimLinkClient
+from pyglaze.device.mimlink_client import ScanClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning._types import DeviceInfo
@@ -171,7 +171,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         initial_phase_estimate: float | None = None,
     ) -> None:
         self._config: LeDeviceConfiguration
-        self._client: MimLinkClient | None = None
+        self._client: ScanClient | None = None
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator(
             initial_phase_estimate=initial_phase_estimate
@@ -197,9 +197,9 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def _create_initialized_client(
         self: LeScanner, new_config: LeDeviceConfiguration
-    ) -> MimLinkClient:
+    ) -> ScanClient:
         """Build and initialize a client for a prospective scanner config."""
-        new_client = MimLinkClient.from_config(new_config)
+        new_client = ScanClient.from_config(new_config)
         try:
             settings_changed, list_changed = self._config_change_flags(new_config)
             self._initialize_client(
@@ -230,7 +230,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def _initialize_client(
         self: LeScanner,
-        client: MimLinkClient,
+        client: ScanClient,
         new_config: LeDeviceConfiguration,
         *,
         settings_changed: bool,

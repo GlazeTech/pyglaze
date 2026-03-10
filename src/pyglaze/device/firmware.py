@@ -3,15 +3,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from serial import SerialException
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.mimlink_client import (
     DeviceComError,
+    FirmwareClient,
     FirmwareUpdateError,
-    MimLinkClient,
 )
 
 if TYPE_CHECKING:
@@ -23,37 +23,6 @@ _FW_STATUS_UNKNOWN = -1
 _OPERATION_ATTEMPTS_PER_CLIENT = 2
 _NO_RESULT = object()
 _T = TypeVar("_T")
-
-
-class FirmwareClient(Protocol):
-    """Protocol for the client surface used by FirmwareUpdater."""
-
-    def get_device_info(self) -> DeviceInfoPayload:
-        """Query device metadata."""
-
-    def get_firmware_update_status(self) -> FirmwareStatusPayload:
-        """Query firmware update state."""
-
-    def update_firmware(self, firmware: bytes, *, version: str = "") -> None:
-        """Upload a firmware image."""
-
-    def confirm_boot(self) -> str:
-        """Confirm a pending boot image and return firmware version."""
-
-    def close(self) -> None:
-        """Close underlying transport resources."""
-
-
-class DeviceInfoPayload(Protocol):
-    """Subset of device info used by firmware updater."""
-
-    firmware_version: str
-
-
-class FirmwareStatusPayload(Protocol):
-    """Subset of firmware status used by firmware updater."""
-
-    status: int
 
 
 @dataclass(frozen=True)
@@ -76,7 +45,7 @@ class FirmwareUpdateResult:
 
 
 class FirmwareUpdater:
-    """High-level firmware update orchestrator built on MimLinkClient."""
+    """High-level firmware update orchestrator built on FirmwareClient."""
 
     def __init__(
         self,
@@ -99,7 +68,7 @@ class FirmwareUpdater:
         baudrate: int = AMP_BAUDRATE,
         timeout_s: float = 0.1,
     ) -> FirmwareUpdater:
-        """Create a firmware updater that opens MimLinkClient on a serial port.
+        """Create a firmware updater that opens FirmwareClient on a serial port.
 
         Args:
             port: Serial port path.
@@ -110,7 +79,7 @@ class FirmwareUpdater:
             FirmwareUpdater configured to open a fresh client per operation.
         """
         return cls(
-            client_factory=lambda: MimLinkClient.from_port(
+            client_factory=lambda: FirmwareClient.from_port(
                 port=port,
                 baudrate=baudrate,
                 timeout_s=timeout_s,

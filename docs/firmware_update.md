@@ -63,4 +63,4 @@ print(info.firmware_version, info.update_status)
 - Unconfirmed test images can roll back depending on MCUboot/device policy.
 - `FirmwareUpdater.update(...)` waits for reconnect and then confirms boot for you.
 
-If you need manual control (for rollback testing), use lower-level `MimLinkClient` methods directly.
+If you need manual control (for rollback testing), use lower-level `FirmwareClient` methods directly.
