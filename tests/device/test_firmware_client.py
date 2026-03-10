@@ -172,6 +172,23 @@ def test_update_firmware_chunk_abort() -> None:
     client.close()
 
 
+def test_update_firmware_unexpected_chunk_status() -> None:
+    """Unknown chunk ACK status raises FirmwareUpdateError."""
+    firmware = b"\x00" * 256
+    codec = EnvelopeCodec()
+
+    envelopes = [
+        _fw_start_response(codec, accepted=True),
+        _fw_chunk_ack(codec, 0, 99),  # type: ignore[arg-type]
+    ]
+    data = _build_scripted_envelopes(codec, envelopes)
+    client = _build_fw_client(data)
+
+    with pytest.raises(FirmwareUpdateError, match="Unexpected chunk status"):
+        client.update_firmware(firmware)
+    client.close()
+
+
 def test_update_firmware_finish_failure() -> None:
     """Device reports finish failure (e.g. CRC mismatch on full image)."""
     firmware = b"\x00" * 256

@@ -154,6 +154,15 @@ def test_update_rejects_unsigned_image(tmp_path: Path) -> None:
         updater.update(firmware_path)
 
 
+def test_update_rejects_too_small_image(tmp_path: Path) -> None:
+    firmware_path = tmp_path / "tiny.bin"
+    firmware_path.write_bytes(b"\x01\x02\x03")
+
+    updater = FirmwareUpdater(client_factory=_Factory([]))
+    with pytest.raises(FirmwareUpdateError, match="too small"):
+        updater.update(firmware_path)
+
+
 def test_update_preflight_unreachable_continues(tmp_path: Path) -> None:
     firmware_path = _signed_image(tmp_path / "firmware.bin")
     clients = [
