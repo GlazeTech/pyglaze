@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import FirmwareUpdateError
+from pyglaze.device.release_catalog import select_release_for_device_info
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.crc import crc32
 from pyglaze.mimlink.proto import envelope_pb2 as pb
+
+if TYPE_CHECKING:
+    from pyglaze.device.release_catalog import (
+        CatalogSelectionResult,
+        ManifestSource,
+    )
 
 _FW_CHUNK_SIZE = 256
 _FW_START_TIMEOUT_S = 10.0  # flash erase is slow
@@ -139,6 +147,16 @@ class FirmwareClient:
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
         """Query device info. Delegates to transport."""
         return self._transport.get_device_info()
+
+    def select_compatible_release(
+        self,
+        manifest: ManifestSource,
+    ) -> CatalogSelectionResult:
+        """Select the compatible release entry for the connected device."""
+        return select_release_for_device_info(
+            manifest,
+            self.get_device_info(),
+        )
 
     def reboot(self) -> None:
         """Request a device reboot. Delegates to transport."""
