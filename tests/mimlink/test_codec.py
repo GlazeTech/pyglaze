@@ -5,6 +5,7 @@ import pytest
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError, encode_frame
+from pyglaze.mimlink.proto.envelope_pb2 import TRANSFER_MODE_BULK
 
 
 def test_roundtrip_settings_response() -> None:
@@ -43,7 +44,7 @@ def test_roundtrip_device_info_response() -> None:
     resp.firmware_target = "le23-r1"
     resp.bsp_name = "test_bsp"
     resp.build_type = "Release"
-    resp.transfer_mode = 0
+    resp.transfer_mode = TRANSFER_MODE_BULK
     resp.hardware_type = "rev_a"
     resp.hardware_revision = 2
     frame = codec.encode(env)

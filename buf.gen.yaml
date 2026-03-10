@@ -3,7 +3,7 @@ version: v2
 plugins:
   - remote: buf.build/protocolbuffers/python:v33.0
     out: src/pyglaze/mimlink/proto
-  - local: protoc-gen-mypy
+  - remote: buf.build/protocolbuffers/pyi:v33.0
     out: src/pyglaze/mimlink/proto
 
 inputs:

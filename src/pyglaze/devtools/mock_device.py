@@ -20,8 +20,11 @@ if TYPE_CHECKING:
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
-TRANSFER_MODE_BULK = 0
-TRANSFER_MODE_PER_POINT = 1
+from pyglaze.mimlink.proto.envelope_pb2 import (
+    TRANSFER_MODE_BULK,
+    TRANSFER_MODE_PER_POINT,
+    TransferMode,
+)
 
 
 class MockDevice(ABC):
@@ -36,7 +39,7 @@ class MockDevice(ABC):
 class MockDeviceConfig:
     """Configuration for LeMockDevice behavior and fault injection."""
 
-    transfer_mode: int = TRANSFER_MODE_BULK
+    transfer_mode: TransferMode = TRANSFER_MODE_BULK
     fail_after: float = np.inf
     n_fails: float = np.inf
     empty_responses: bool = False

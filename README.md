@@ -50,7 +50,9 @@ To build and serve the documentation locally
 `pyglaze` vendors the MimLink protobuf schema in
 `src/pyglaze/mimlink/proto/envelope.proto`. Python codegen is handled by
 [buf](https://buf.build/docs/cli/installation/), which must be installed
-separately (e.g. `brew install bufbuild/buf/buf`).
+separately (e.g. `brew install bufbuild/buf/buf`). Code generation uses
+buf remote plugins (pinned in `buf.gen.yaml`), so no local `protoc`
+install is required.
 
 When syncing with upstream MimLink:
 

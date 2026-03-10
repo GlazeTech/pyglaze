@@ -292,7 +292,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
             firmware_target=str(resp.firmware_target),
             bsp_name=str(resp.bsp_name),
             build_type=str(resp.build_type),
-            transfer_mode=int(resp.transfer_mode),
+            transfer_mode=resp.transfer_mode,
             hardware_type=str(resp.hardware_type),
             hardware_revision=int(resp.hardware_revision),
         )
