@@ -202,9 +202,7 @@ class FirmwareUpdater:
             return BootInfo(firmware_version="", update_status=_FW_STATUS_UNKNOWN)
 
     @staticmethod
-    def _emit_progress(
-        on_progress: Callable[[str], None] | None, stage: str
-    ) -> None:
+    def _emit_progress(on_progress: Callable[[str], None] | None, stage: str) -> None:
         if on_progress is not None:
             on_progress(stage)
 

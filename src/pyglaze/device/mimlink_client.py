@@ -60,6 +60,8 @@ _TRANSFER_BASELINE_S = 0.5  # fixed latency headroom
 # Protocol timeout constants.
 _PROTOCOL_SWEEP_SAFETY_FACTOR = 2
 _PROTOCOL_BASELINE_S = 1.0  # fixed latency headroom
+_IDLE_READ_BACKOFF_S = 0.001
+_MIN_STATUS_POLL_S = 0.005
 
 # Protocol constants.
 _TRANSFER_MODE_PER_POINT = 1
@@ -186,20 +188,37 @@ class MimLinkClient:
     def _send(self, envelope: pb.Envelope) -> None:
         self._conn.write(self._codec.encode(envelope))
 
-    def _drain(self) -> None:
-        """Read available bytes and decode complete frames into the envelope buffer."""
-        available = self._conn.in_waiting
-        if available > 0:
-            data = self._conn.read(available)
-        else:
-            data = self._conn.read(1)
-            if not data:
-                return
+    def _feed_rx_bytes(self, data: bytes) -> None:
+        """Decode complete envelopes from raw connection bytes."""
         for frame in self._rx_stream.push(data):
             try:
                 self._env_buffer.append(self._codec.decode(frame))
             except FrameDecodeError:  # noqa: PERF203
                 continue
+
+    def _try_fill_env_buffer(self) -> bool:
+        """Read and decode one chunk of connection data into the envelope buffer."""
+        data = self._read_some()
+        if not data:
+            return False
+        self._feed_rx_bytes(data)
+        return bool(self._env_buffer)
+
+    def _sleep_until_retry(self, deadline: float) -> None:
+        """Sleep for a short backoff interval without overshooting the deadline."""
+        remaining = max(0.0, deadline - time.monotonic())
+        time.sleep(min(_IDLE_READ_BACKOFF_S, remaining))
+
+    def _read_some(self) -> bytes:
+        """Read one blocking chunk, then drain any immediately buffered bytes."""
+        data = self._conn.read(1)
+        if not data:
+            return b""
+
+        available = self._conn.in_waiting
+        if available > 0:
+            data += self._conn.read(available)
+        return data
 
     def _envelope_stream(
         self, timeout: float | None = None
@@ -212,7 +231,9 @@ class MimLinkClient:
             if self._env_buffer:
                 yield self._env_buffer.popleft()
             else:
-                self._drain()
+                if self._try_fill_env_buffer():
+                    continue
+                self._sleep_until_retry(deadline)
         msg = "Timeout waiting for device response"
         raise DeviceComError(msg)
 
@@ -261,7 +282,7 @@ class MimLinkClient:
             raise DeviceComError(msg)
 
     def upload_list(self, scanning_list: list[float]) -> None:
-        """Upload scanning frequency list to device. Retries the full sequence on failure."""
+        """Upload the scan list to the device. Retries the full sequence on failure."""
         last_err: DeviceComError | None = None
         for _ in range(_MAX_COMMAND_RETRIES + 1):
             try:
@@ -503,15 +524,19 @@ class MimLinkClient:
     def _await_scan_complete(self, *, sweep_length_ms: float, timeout: float) -> None:
         """Poll device status until scan is no longer ongoing."""
         sweep_s = sweep_length_ms * 1e-3
-        time.sleep(sweep_s)
-        deadline = time.monotonic() + sweep_s
+        deadline = time.monotonic() + timeout
+        initial_sleep = min(sweep_s, max(0.0, deadline - time.monotonic()))
+        if initial_sleep > 0:
+            time.sleep(initial_sleep)
+        poll_sleep_s = max(sweep_s * 0.01, _MIN_STATUS_POLL_S)
         while time.monotonic() < deadline:
-            env = self._codec.build_envelope(mt.GET_STATUS_REQUEST)
-            env.get_status_request.SetInParent()
-            resp = self._send_expect(env, mt.GET_STATUS_RESPONSE, timeout=timeout)
-            if not resp.get_status_response.scan_ongoing:
+            status = self.get_status()
+            if not status.scan_ongoing:
                 return
-            time.sleep(sweep_s * 0.01)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(poll_sleep_s, remaining))
         msg = "Timeout waiting for scan to complete"
         raise DeviceComError(msg)
 

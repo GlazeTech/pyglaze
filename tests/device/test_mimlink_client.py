@@ -199,18 +199,34 @@ def test_start_scan_rejected() -> None:
     client.close()
 
 
-def test_send_expect_timeout_then_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_expect_timeout_then_retry() -> None:
     # The mock responds to set_settings (1 response) but then times out.
     # upload_list calls _send_expect for set_list_start which will timeout,
     # retry, and timeout again → exhaustion.
     config, client = _build(config=MockDeviceConfig(timeout_after_n_responses=1))
     scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    monkeypatch.setattr("pyglaze.device.mimlink_client._PROTOCOL_BASELINE_S", 0.1)
+    client._default_timeout_s = 0.1  # Short timeout to speed up test
     client.set_settings(
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     with pytest.raises(DeviceComError, match="Timeout"):
         client.upload_list(scanning_list)
+    client.close()
+
+
+def test_receive_backs_off_on_empty_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    _config, client = _build(config=MockDeviceConfig(empty_responses=True))
+    sleep_calls: list[float] = []
+
+    def _fake_sleep(duration: float) -> None:
+        sleep_calls.append(duration)
+
+    monkeypatch.setattr("pyglaze.device.mimlink_client.time.sleep", _fake_sleep)
+
+    with pytest.raises(DeviceComError, match="Timeout"):
+        client._receive(timeout=0.01)
+
+    assert sleep_calls
     client.close()
 
 
@@ -460,7 +476,9 @@ def test_integration_periods_over_max_rejected() -> None:
 _FW_CHUNK_SIZE = 256
 
 
-def _fw_start_response(codec: EnvelopeCodec, *, accepted: bool, error: str = "") -> pb.Envelope:
+def _fw_start_response(
+    codec: EnvelopeCodec, *, accepted: bool, error: str = ""
+) -> pb.Envelope:
     env = codec.build_envelope(mt.FW_UPDATE_START_RESPONSE)
     resp = env.fw_update_start_response
     resp.accepted = accepted
@@ -535,7 +553,9 @@ def test_update_firmware_success() -> None:
 def test_update_firmware_rejected() -> None:
     """Device rejects the start request."""
     codec = EnvelopeCodec()
-    envelopes = [_fw_start_response(codec, accepted=False, error="Firmware size invalid")]
+    envelopes = [
+        _fw_start_response(codec, accepted=False, error="Firmware size invalid")
+    ]
     data = _build_scripted_envelopes(codec, envelopes)
     conn = ScriptedTransport(data)
     client = MimLinkClient(conn=conn, n_points=1, sweep_length_ms=1.0)
@@ -547,7 +567,7 @@ def test_update_firmware_rejected() -> None:
 
 def test_update_firmware_chunk_crc_mismatch_retries() -> None:
     """Device NAKs chunk 0 with CRC_MISMATCH, then accepts retry."""
-    firmware = b"\xAB" * 256  # 1 chunk
+    firmware = b"\xab" * 256  # 1 chunk
     codec = EnvelopeCodec()
 
     envelopes = [
@@ -566,7 +586,7 @@ def test_update_firmware_chunk_crc_mismatch_retries() -> None:
 
 def test_update_firmware_chunk_crc_mismatch_retries_exhausted() -> None:
     """CRC mismatches beyond retry budget raise FirmwareUpdateError."""
-    firmware = b"\xAB" * 256  # 1 chunk
+    firmware = b"\xab" * 256  # 1 chunk
     codec = EnvelopeCodec()
 
     envelopes = [
@@ -637,8 +657,11 @@ def test_get_firmware_update_status() -> None:
     codec = EnvelopeCodec()
     envelopes = [
         _fw_status_response(
-            codec, status=pb.FW_UPDATE_STATUS_RECEIVING,
-            chunks_received=5, total_chunks=10, bytes_received=1280,
+            codec,
+            status=pb.FW_UPDATE_STATUS_RECEIVING,
+            chunks_received=5,
+            total_chunks=10,
+            bytes_received=1280,
         )
     ]
     data = _build_scripted_envelopes(codec, envelopes)

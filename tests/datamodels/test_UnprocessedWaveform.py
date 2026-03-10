@@ -3,10 +3,10 @@ from typing import Literal  # noqa: N999
 import numpy as np
 import pytest
 
-from pyglaze.datamodels import Pulse, UnprocessedWaveform
+from pyglaze.datamodels import UnprocessedWaveform
 
 
-def test_from_polar_output(gaussian_deriv_pulse_w_errors: Pulse) -> None:
+def test_from_polar_output(gaussian_deriv_pulse_w_errors: UnprocessedWaveform) -> None:
     # Convert a pulse to a raw output
     radius = np.abs(gaussian_deriv_pulse_w_errors.signal)
     sign = np.clip(np.sign(gaussian_deriv_pulse_w_errors.signal), a_min=0, a_max=1)
@@ -39,10 +39,6 @@ def test_reconstruct_unknown_method(
 ) -> None:
     with pytest.raises(ValueError, match=r"Unknown reconstruction*"):
         unprocessed_waveform_nonuniform.reconstruct(method="unknown_method")  # type: ignore[arg-type]
-
-
-def test_as_pulse(unprocessed_waveform_nonuniform: UnprocessedWaveform) -> None:
-    assert isinstance(unprocessed_waveform_nonuniform.as_pulse(), Pulse)
 
 
 def test_waveform_average(unprocessed_waveform_nonuniform: UnprocessedWaveform) -> None:

@@ -21,18 +21,34 @@ def test_valid_python(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         DOCTEST_DEPS_REGISTRY.teardown(path=path)
 
 
+_HARDWARE_ONLY_DOCS = [
+    Path("docs/firmware_update.md"),
+    Path("docs/API Reference/device/FirmwareUpdater.md"),
+]
+
+
 @DOCTEST_DEPS_REGISTRY.register
-class PulseExampleDeps(DoctestDep):
-    PULSE_PATH = Path("my_pulse_data.json")
+class FirmwareUpdateDeps(DoctestDep):
+    def path(self: FirmwareUpdateDeps) -> Path:
+        return _HARDWARE_ONLY_DOCS[0]
 
-    def path(self: PulseExampleDeps) -> Path:
-        return Path("docs/API Reference/datamodels/Pulse.md")
+    def setup(self: FirmwareUpdateDeps, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ARG002
+        pytest.skip("firmware update examples require hardware")
 
-    def setup(self: PulseExampleDeps, monkeypatch: pytest.MonkeyPatch) -> None:
+    def teardown(self: FirmwareUpdateDeps) -> None:
         pass
 
-    def teardown(self: PulseExampleDeps) -> None:
-        self.PULSE_PATH.unlink()
+
+@DOCTEST_DEPS_REGISTRY.register
+class FirmwareUpdaterApiDeps(DoctestDep):
+    def path(self: FirmwareUpdaterApiDeps) -> Path:
+        return _HARDWARE_ONLY_DOCS[1]
+
+    def setup(self: FirmwareUpdaterApiDeps, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ARG002
+        pytest.skip("firmware update examples require hardware")
+
+    def teardown(self: FirmwareUpdaterApiDeps) -> None:
+        pass
 
 
 @DOCTEST_DEPS_REGISTRY.register
@@ -48,4 +64,4 @@ class IndexDeps(DoctestDep):
             Path("scan_result_scanner.json"),
             Path("scan_result.json"),
         ]:
-            p.unlink()
+            p.unlink(missing_ok=True)

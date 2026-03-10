@@ -42,7 +42,7 @@ waveform = scanner.scan()
 ## 2  How it works
 
 * The sentinel string `"mock_device"` instructs Pyglaze to replace the serial driver with a software stub.
-* All higher‑level classes (`Scanner`, `GlazeClient`, `Pulse`, `UnprocessedWaveform`, …) operate unchanged.
+* All higher-level classes (`Scanner`, `GlazeClient`, `UnprocessedWaveform`, ...) operate unchanged.
 
 
 ---

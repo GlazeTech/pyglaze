@@ -188,38 +188,66 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @config.setter
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
-        self._client = MimLinkClient.from_config(new_config)
+        new_client = self._create_initialized_client(new_config)
+        old_client = self._client
+        self._client = new_client
+        self._config = new_config
+        if old_client is not None:
+            old_client.close()
 
-        if getattr(self, "_config", None):
-            settings_changed = (
-                self._config.integration_periods != new_config.integration_periods
-                or self._config.n_points != new_config.n_points
-                or self._config.use_ema != new_config.use_ema
+    def _create_initialized_client(
+        self: LeScanner, new_config: LeDeviceConfiguration
+    ) -> MimLinkClient:
+        """Build and initialize a client for a prospective scanner config."""
+        new_client = MimLinkClient.from_config(new_config)
+        try:
+            settings_changed, list_changed = self._config_change_flags(new_config)
+            self._initialize_client(
+                new_client,
+                new_config,
+                settings_changed=settings_changed,
+                list_changed=list_changed,
             )
-            list_changed = self._config.scan_intervals != new_config.scan_intervals
-            if settings_changed:
-                self._client.set_settings(
-                    new_config.n_points,
-                    new_config.integration_periods,
-                    use_ema=new_config.use_ema,
-                )
-            if list_changed or settings_changed:
-                scanning_list = _compute_scanning_list(
-                    new_config.n_points, new_config.scan_intervals
-                )
-                self._client.upload_list(scanning_list)
-        else:
-            self._client.set_settings(
+        except Exception:
+            new_client.close()
+            raise
+        return new_client
+
+    def _config_change_flags(
+        self: LeScanner, new_config: LeDeviceConfiguration
+    ) -> tuple[bool, bool]:
+        """Report whether device settings or scan-list inputs changed."""
+        if not getattr(self, "_config", None):
+            return True, True
+
+        settings_changed = (
+            self._config.integration_periods != new_config.integration_periods
+            or self._config.n_points != new_config.n_points
+            or self._config.use_ema != new_config.use_ema
+        )
+        list_changed = self._config.scan_intervals != new_config.scan_intervals
+        return settings_changed, list_changed
+
+    def _initialize_client(
+        self: LeScanner,
+        client: MimLinkClient,
+        new_config: LeDeviceConfiguration,
+        *,
+        settings_changed: bool,
+        list_changed: bool,
+    ) -> None:
+        """Apply the required device settings and scan list to a new client."""
+        if settings_changed:
+            client.set_settings(
                 new_config.n_points,
                 new_config.integration_periods,
                 use_ema=new_config.use_ema,
             )
+        if list_changed or settings_changed:
             scanning_list = _compute_scanning_list(
                 new_config.n_points, new_config.scan_intervals
             )
-            self._client.upload_list(scanning_list)
-
-        self._config = new_config
+            client.upload_list(scanning_list)
 
     def scan(self: LeScanner) -> UnprocessedWaveform:
         """Perform a scan.
@@ -230,10 +258,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._client is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        times, Xs, Ys = self._client.start_scan(
-            n_points=self._config.n_points,
-            sweep_length_ms=self._config._sweep_length_ms,  # noqa: SLF001
-        )
+        times, Xs, Ys = self._client.start_scan()
         self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
         return UnprocessedWaveform.from_inphase_quadrature(
             times, Xs, Ys, self._phase_estimator.phase_estimate
