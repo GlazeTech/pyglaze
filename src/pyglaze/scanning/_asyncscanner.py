@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from serial import SerialException, serialutil
 
 from pyglaze.datamodels.waveform import UnprocessedWaveform, _TimestampedWaveform
-from pyglaze.device.mimlink_client import DeviceComError
+from pyglaze.device.exceptions import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 
 if TYPE_CHECKING:

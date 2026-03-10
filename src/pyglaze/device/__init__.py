@@ -6,8 +6,8 @@ from .discovery import (
     discover_one,
     list_serial_ports,
 )
+from .exceptions import FirmwareUpdateError
 from .firmware import BootInfo, FirmwareUpdater, FirmwareUpdateResult
-from .mimlink_client import FirmwareUpdateError
 
 __all__ = [
     "BootInfo",

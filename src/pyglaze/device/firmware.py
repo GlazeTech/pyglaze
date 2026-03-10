@@ -3,16 +3,13 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar
 
 from serial import SerialException
 
 from pyglaze.device.configuration import AMP_BAUDRATE
-from pyglaze.device.mimlink_client import (
-    DeviceComError,
-    FirmwareClient,
-    FirmwareUpdateError,
-)
+from pyglaze.device.exceptions import DeviceComError, FirmwareUpdateError
+from pyglaze.device.firmware_client import FirmwareClient
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,8 +17,6 @@ if TYPE_CHECKING:
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 _MCUBOOT_MAGIC_BYTES = 4
 _FW_STATUS_UNKNOWN = -1
-_OPERATION_ATTEMPTS_PER_CLIENT = 2
-_NO_RESULT = object()
 _T = TypeVar("_T")
 
 
@@ -128,19 +123,37 @@ class FirmwareUpdater:
         self._validate_signed_image(firmware)
 
         previous = self._try_get_boot_info()
-        self._emit_progress(on_progress, "uploading")
 
+        self._emit_progress(on_progress, "uploading")
+        self._upload(firmware, version=version)
+
+        self._emit_progress(on_progress, "reconnecting")
+        self._wait_for_reboot()
+
+        self._emit_progress(on_progress, "confirming")
+        confirmed_version, final_status = self._confirm_update()
+
+        self._emit_progress(on_progress, "done")
+        return FirmwareUpdateResult(
+            firmware_path=path,
+            firmware_size=len(firmware),
+            previous_version=previous.firmware_version,
+            confirmed_version=confirmed_version,
+            final_status=final_status,
+        )
+
+    def _upload(self, firmware: bytes, *, version: str) -> None:
         client = self._client_factory()
         try:
             client.update_firmware(firmware, version=version)
         finally:
             client.close()
 
-        self._emit_progress(on_progress, "reconnecting")
+    def _wait_for_reboot(self) -> None:
         time.sleep(self._reboot_wait_s)
         self._wait_until_status_reachable()
 
-        self._emit_progress(on_progress, "confirming")
+    def _confirm_update(self) -> tuple[str, int]:
         confirmed_version = self._run_with_reconnect_retry(
             lambda client: client.confirm_boot(),
             error_message="Timed out confirming boot after firmware upload",
@@ -153,15 +166,7 @@ class FirmwareUpdater:
                 ),
             ).status
         )
-
-        self._emit_progress(on_progress, "done")
-        return FirmwareUpdateResult(
-            firmware_path=path,
-            firmware_size=len(firmware),
-            previous_version=previous.firmware_version,
-            confirmed_version=confirmed_version,
-            final_status=final_status,
-        )
+        return confirmed_version, final_status
 
     def _try_get_boot_info(self) -> BootInfo:
         """Try to read boot info without failing the update preflight."""
@@ -200,33 +205,18 @@ class FirmwareUpdater:
         *,
         error_message: str,
     ) -> _T:
-        """Run an operation with bounded retries on each connection and across reconnects."""
+        """Open fresh connections in a loop until *operation* succeeds or the deadline expires."""
         deadline = time.monotonic() + self._reconnect_timeout_s
         last_error: Exception | None = None
         while time.monotonic() < deadline:
-            client: FirmwareClient | None = None
             try:
                 client = self._client_factory()
-                for _ in range(_OPERATION_ATTEMPTS_PER_CLIENT):
-                    result, error = self._try_operation(client, operation)
-                    if error is None:
-                        return cast("_T", result)
-                    last_error = error
+                try:
+                    return operation(client)
+                finally:
+                    client.close()
             except (DeviceComError, SerialException, OSError) as e:
                 last_error = e
-            finally:
-                if client is not None:
-                    client.close()
             time.sleep(self._reconnect_interval_s)
 
         raise FirmwareUpdateError(error_message) from last_error
-
-    @staticmethod
-    def _try_operation(
-        client: FirmwareClient,
-        operation: Callable[[FirmwareClient], _T],
-    ) -> tuple[object, Exception | None]:
-        try:
-            return operation(client), None
-        except (DeviceComError, SerialException, OSError) as e:
-            return _NO_RESULT, e

@@ -8,7 +8,7 @@ import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import ScanClient
+from pyglaze.device.scan_client import ScanClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning._types import DeviceInfo

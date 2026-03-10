@@ -5,13 +5,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import (
-    DeviceComError,
-    FirmwareClient,
-    FirmwareUpdateError,
-    MimLinkTransport,
-    ScanClient,
-)
+from pyglaze.device.exceptions import DeviceComError
+from pyglaze.device.scan_client import ScanClient
+from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import (
     TRANSFER_MODE_PER_POINT,
     LeMockDevice,
@@ -21,7 +17,6 @@ from pyglaze.devtools.mock_device import (
 )
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
-from pyglaze.mimlink.proto import envelope_pb2 as pb
 from pyglaze.scanning.scanner import _compute_scanning_list
 
 if TYPE_CHECKING:
@@ -50,6 +45,10 @@ def _build(
         sweep_length_ms=dev_config._sweep_length_ms,
     )
     return dev_config, client
+
+
+def _build_scripted_envelopes(codec: EnvelopeCodec, envelopes: list[Envelope]) -> bytes:
+    return b"".join(codec.encode(env) for env in envelopes)
 
 
 def test_set_settings_and_upload_list() -> None:
@@ -202,65 +201,6 @@ def test_start_scan_rejected() -> None:
     client.close()
 
 
-def test_send_expect_timeout_then_retry() -> None:
-    # The mock responds to set_settings (1 response) but then times out.
-    # upload_list calls _send_expect for set_list_start which will timeout,
-    # retry, and timeout again → exhaustion.
-    config, client = _build(config=MockDeviceConfig(timeout_after_n_responses=1))
-    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client._transport.default_timeout_s = 0.1  # Short timeout to speed up test
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    with pytest.raises(DeviceComError, match="Timeout"):
-        client.upload_list(scanning_list)
-    client.close()
-
-
-def test_receive_backs_off_on_empty_reads(monkeypatch: pytest.MonkeyPatch) -> None:
-    _config, client = _build(config=MockDeviceConfig(empty_responses=True))
-    sleep_calls: list[float] = []
-
-    def _fake_sleep(duration: float) -> None:
-        sleep_calls.append(duration)
-
-    monkeypatch.setattr("pyglaze.device.mimlink_client.time.sleep", _fake_sleep)
-
-    with pytest.raises(DeviceComError, match="Timeout"):
-        client._transport.receive(timeout=0.01)
-
-    assert sleep_calls
-    client.close()
-
-
-def test_send_expect_wrong_type() -> None:
-    config, client = _build()
-    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    client.upload_list(scanning_list)
-    # Inject a wrong-type response: send a start_scan request but have the
-    # mock respond. The mock will respond with START_SCAN_RESPONSE. We then
-    # call _send_expect expecting a different type.
-    env = client._transport.build_envelope(mt.START_SCAN_REQUEST)
-    env.start_scan_request.SetInParent()
-    with pytest.raises(DeviceComError, match="Unexpected response"):
-        client._transport.send_expect(env, mt.SET_SETTINGS_RESPONSE)
-    client.close()
-
-
-def test_drain_corrupt_frame() -> None:
-    config, client = _build()
-    assert isinstance(client._transport._conn, LeMockDevice)
-    client._transport._conn._tx_buffer.extend(b"\x01\x02\x03\x00")
-    # Now send a valid command — the corrupt frame should be skipped.
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    client.close()
-
-
 def test_retransmit_chunk_exhaustion() -> None:
     config, client = _build(
         config=MockDeviceConfig(drop_retransmit_once=True, retransmit_unavailable=True),
@@ -350,10 +290,6 @@ def test_await_scan_complete_timeout() -> None:
     with pytest.raises(DeviceComError, match="Timeout waiting for scan"):
         client.start_scan()
     client.close()
-
-
-def _build_scripted_envelopes(codec: EnvelopeCodec, envelopes: list[Envelope]) -> bytes:
-    return b"".join(codec.encode(env) for env in envelopes)
 
 
 def test_inline_retransmit_per_point() -> None:
@@ -474,209 +410,4 @@ def test_integration_periods_over_max_rejected() -> None:
         client.set_settings(
             config.n_points, config.integration_periods, use_ema=config.use_ema
         )
-    client.close()
-
-
-# --- Firmware update ---
-
-_FW_CHUNK_SIZE = 256
-
-
-def _fw_start_response(
-    codec: EnvelopeCodec, *, accepted: bool, error: str = ""
-) -> pb.Envelope:
-    env = codec.build_envelope(mt.FW_UPDATE_START_RESPONSE)
-    resp = env.fw_update_start_response
-    resp.accepted = accepted
-    resp.error = error
-    return env
-
-
-def _fw_chunk_ack(
-    codec: EnvelopeCodec, index: int, status: pb.FwChunkStatus
-) -> pb.Envelope:
-    env = codec.build_envelope(mt.FW_UPDATE_CHUNK_ACK)
-    ack = env.fw_update_chunk_ack
-    ack.chunk_index = index
-    ack.status = status
-    return env
-
-
-def _fw_finish_response(
-    codec: EnvelopeCodec, *, success: bool, error: str = ""
-) -> pb.Envelope:
-    env = codec.build_envelope(mt.FW_UPDATE_FINISH_RESPONSE)
-    resp = env.fw_update_finish_response
-    resp.success = success
-    resp.error = error
-    return env
-
-
-def _fw_boot_confirm_response(
-    codec: EnvelopeCodec, *, confirmed: bool, version: str
-) -> pb.Envelope:
-    env = codec.build_envelope(mt.FW_BOOT_CONFIRM_RESPONSE)
-    resp = env.fw_boot_confirm_response
-    resp.confirmed = confirmed
-    resp.version = version
-    return env
-
-
-def _fw_status_response(
-    codec: EnvelopeCodec,
-    *,
-    status: pb.FwUpdateStatus = pb.FW_UPDATE_STATUS_IDLE,
-    chunks_received: int = 0,
-    total_chunks: int = 0,
-    bytes_received: int = 0,
-) -> pb.Envelope:
-    env = codec.build_envelope(mt.FW_UPDATE_STATUS_RESPONSE)
-    resp = env.fw_update_status_response
-    resp.status = status
-    resp.chunks_received = chunks_received
-    resp.total_chunks = total_chunks
-    resp.bytes_received = bytes_received
-    return env
-
-
-def _build_fw_client(data: bytes) -> FirmwareClient:
-    conn = ScriptedTransport(data)
-    transport = MimLinkTransport(conn=conn)
-    return FirmwareClient(transport=transport)
-
-
-def test_update_firmware_success() -> None:
-    """Happy path: 512-byte firmware = 2 chunks, all ACK'd OK."""
-    firmware = bytes(range(256)) * 2  # 512 bytes
-    codec = EnvelopeCodec()
-
-    envelopes = [
-        _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_OK),
-        _fw_chunk_ack(codec, 1, pb.FW_CHUNK_STATUS_OK),
-        _fw_finish_response(codec, success=True),
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    client.update_firmware(firmware, version="v1.0.0")
-    client.close()
-
-
-def test_update_firmware_rejected() -> None:
-    """Device rejects the start request."""
-    codec = EnvelopeCodec()
-    envelopes = [
-        _fw_start_response(codec, accepted=False, error="Firmware size invalid")
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    with pytest.raises(FirmwareUpdateError, match="Firmware update rejected"):
-        client.update_firmware(b"\x00" * 256)
-    client.close()
-
-
-def test_update_firmware_chunk_crc_mismatch_retries() -> None:
-    """Device NAKs chunk 0 with CRC_MISMATCH, then accepts retry."""
-    firmware = b"\xab" * 256  # 1 chunk
-    codec = EnvelopeCodec()
-
-    envelopes = [
-        _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),  # first attempt
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_OK),  # retry
-        _fw_finish_response(codec, success=True),
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    client.update_firmware(firmware)
-    client.close()
-
-
-def test_update_firmware_chunk_crc_mismatch_retries_exhausted() -> None:
-    """CRC mismatches beyond retry budget raise FirmwareUpdateError."""
-    firmware = b"\xab" * 256  # 1 chunk
-    codec = EnvelopeCodec()
-
-    envelopes = [
-        _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_CRC_MISMATCH),
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    with pytest.raises(FirmwareUpdateError, match="CRC mismatch after"):
-        client.update_firmware(firmware)
-    client.close()
-
-
-def test_update_firmware_chunk_abort() -> None:
-    """Device aborts during chunk transfer."""
-    firmware = b"\x00" * 256
-    codec = EnvelopeCodec()
-
-    envelopes = [
-        _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_ABORT),
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    with pytest.raises(FirmwareUpdateError, match="aborted"):
-        client.update_firmware(firmware)
-    client.close()
-
-
-def test_update_firmware_finish_failure() -> None:
-    """Device reports finish failure (e.g. CRC mismatch on full image)."""
-    firmware = b"\x00" * 256
-    codec = EnvelopeCodec()
-
-    envelopes = [
-        _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, pb.FW_CHUNK_STATUS_OK),
-        _fw_finish_response(codec, success=False, error="CRC mismatch"),
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    with pytest.raises(FirmwareUpdateError, match="finish failed"):
-        client.update_firmware(firmware)
-    client.close()
-
-
-def test_confirm_boot() -> None:
-    codec = EnvelopeCodec()
-    envelopes = [_fw_boot_confirm_response(codec, confirmed=True, version="v1.2.3")]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    version = client.confirm_boot()
-    assert version == "v1.2.3"
-    client.close()
-
-
-def test_get_firmware_update_status() -> None:
-    codec = EnvelopeCodec()
-    envelopes = [
-        _fw_status_response(
-            codec,
-            status=pb.FW_UPDATE_STATUS_RECEIVING,
-            chunks_received=5,
-            total_chunks=10,
-            bytes_received=1280,
-        )
-    ]
-    data = _build_scripted_envelopes(codec, envelopes)
-    client = _build_fw_client(data)
-
-    status = client.get_firmware_update_status()
-    assert status.status == pb.FW_UPDATE_STATUS_RECEIVING
-    assert status.chunks_received == 5
-    assert status.total_chunks == 10
-    assert status.bytes_received == 1280
     client.close()

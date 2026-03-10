@@ -4,12 +4,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.firmware import MCUBOOT_IMAGE_MAGIC, FirmwareUpdater
-from pyglaze.device.mimlink_client import (
-    FirmwareClient,
-    FirmwareUpdateError,
-    MimLinkTransport,
-)
+from pyglaze.device.firmware_client import FirmwareClient
+from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import ScriptedTransport
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
@@ -19,9 +17,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
-
-
-# --- Envelope builders ---
 
 
 def _device_info_env(*, firmware_version: str = "v0.1.0") -> Envelope:
@@ -68,9 +63,6 @@ def _rejected_upload_envs(*, error: str = "rejected") -> list[Envelope]:
     return [start]
 
 
-# --- Client builders ---
-
-
 def _encode(*envelopes: Envelope) -> bytes:
     codec = EnvelopeCodec()
     return b"".join(codec.encode(env) for env in envelopes)
@@ -94,9 +86,6 @@ def _timeout_client() -> FirmwareClient:
     return FirmwareClient(transport=transport)
 
 
-# --- Factory ---
-
-
 class _Factory:
     def __init__(self, clients: list[FirmwareClient]) -> None:
         self._clients = clients
@@ -117,9 +106,6 @@ def _signed_image(path: Path) -> Path:
     payload = MCUBOOT_IMAGE_MAGIC.to_bytes(4, "little") + b"\x00" * 32
     path.write_bytes(payload)
     return path
-
-
-# --- Tests ---
 
 
 def test_update_happy_path(tmp_path: Path) -> None:
