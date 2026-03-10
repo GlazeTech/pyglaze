@@ -14,6 +14,7 @@ from pyglaze.device.discovery import discover_one
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
+from pyglaze.mimlink.proto.envelope_pb2 import TRANSFER_MODE_PER_POINT
 from pyglaze.mimlink.rx_stream import RxFrameStream
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from pyglaze.device.configuration import DeviceConfiguration
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
+    from pyglaze.mimlink.proto.envelope_pb2 import MsgType
 
 
 @runtime_checkable
@@ -63,7 +65,6 @@ _IDLE_READ_BACKOFF_S = 0.001
 _MIN_STATUS_POLL_S = 0.005
 
 # Protocol constants.
-_TRANSFER_MODE_PER_POINT = 1
 _RESULTS_CHUNK_SIZE = 20
 _MAX_RETRANSMIT_ATTEMPTS = 3
 _MAX_COMMAND_RETRIES = 2
@@ -204,7 +205,7 @@ class MimLinkClient:
         return self._receive(timeout)
 
     def _send_expect(
-        self, envelope: pb.Envelope, expected: int, *, timeout: float | None = None
+        self, envelope: pb.Envelope, expected: MsgType, *, timeout: float | None = None
     ) -> pb.Envelope:
         """Send an envelope and verify the response type.
 
@@ -288,7 +289,7 @@ class MimLinkClient:
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
 
-        if resp.start_scan_response.transfer_mode == _TRANSFER_MODE_PER_POINT:
+        if resp.start_scan_response.transfer_mode == TRANSFER_MODE_PER_POINT:
             return self._collect_per_point()
         return self._collect_bulk()
 
