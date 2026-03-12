@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from pyglaze.device.configuration import DeviceConfiguration
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
+    from pyglaze.mimlink.proto.envelope_pb2 import MsgType
 
 
 _T = TypeVar("_T")
