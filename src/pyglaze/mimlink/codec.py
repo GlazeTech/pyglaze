@@ -3,7 +3,7 @@ from __future__ import annotations
 from google.protobuf.message import DecodeError
 
 from pyglaze.mimlink.framing import FrameDecodeError, decode_frame, encode_frame
-from pyglaze.mimlink.proto.envelope_pb2 import Envelope
+from pyglaze.mimlink.proto.envelope_pb2 import Envelope, MsgType
 
 
 class EnvelopeCodec:
@@ -19,7 +19,7 @@ class EnvelopeCodec:
     def _new_envelope(self) -> Envelope:
         return Envelope()
 
-    def build_envelope(self, env_type: int) -> Envelope:
+    def build_envelope(self, env_type: MsgType) -> Envelope:
         """Create an Envelope with seq and type pre-filled."""
         env = self._new_envelope()
         env.seq = self._tx_seq

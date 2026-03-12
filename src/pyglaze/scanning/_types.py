@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyglaze.mimlink.proto.envelope_pb2 import TransferMode
 
 
 @dataclass(frozen=True)
@@ -11,6 +15,6 @@ class DeviceInfo:
     firmware_version: str
     bsp_name: str
     build_type: str
-    transfer_mode: int
+    transfer_mode: TransferMode
     hardware_type: str
     hardware_revision: int
