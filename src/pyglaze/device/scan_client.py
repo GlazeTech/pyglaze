@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from pyglaze.mimlink.proto import envelope_pb2 as pb
 
 
-
 _T = TypeVar("_T")
 
 _SERIAL_BITS_PER_BYTE = 10  # 8 data + start + stop
