@@ -236,6 +236,7 @@ class GetDeviceInfoResponse(_message.Message):
     TRANSFER_MODE_FIELD_NUMBER: _ClassVar[int]
     HARDWARE_TYPE_FIELD_NUMBER: _ClassVar[int]
     HARDWARE_REVISION_FIELD_NUMBER: _ClassVar[int]
+    FIRMWARE_TARGET_FIELD_NUMBER: _ClassVar[int]
     serial_number: str
     firmware_version: str
     bsp_name: str
@@ -243,7 +244,8 @@ class GetDeviceInfoResponse(_message.Message):
     transfer_mode: TransferMode
     hardware_type: str
     hardware_revision: int
-    def __init__(self, serial_number: _Optional[str] = ..., firmware_version: _Optional[str] = ..., bsp_name: _Optional[str] = ..., build_type: _Optional[str] = ..., transfer_mode: _Optional[_Union[TransferMode, str]] = ..., hardware_type: _Optional[str] = ..., hardware_revision: _Optional[int] = ...) -> None: ...
+    firmware_target: str
+    def __init__(self, serial_number: _Optional[str] = ..., firmware_version: _Optional[str] = ..., bsp_name: _Optional[str] = ..., build_type: _Optional[str] = ..., transfer_mode: _Optional[_Union[TransferMode, str]] = ..., hardware_type: _Optional[str] = ..., hardware_revision: _Optional[int] = ..., firmware_target: _Optional[str] = ...) -> None: ...
 
 class RebootRequest(_message.Message):
     __slots__ = ()

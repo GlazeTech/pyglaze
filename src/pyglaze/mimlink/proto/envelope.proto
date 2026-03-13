@@ -167,6 +167,7 @@ message GetDeviceInfoResponse {
   TransferMode transfer_mode = 5;
   string hardware_type = 6;
   uint32 hardware_revision = 7;
+  string firmware_target = 8;
 }
 
 // --- Reboot ---

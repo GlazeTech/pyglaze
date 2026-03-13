@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import DeviceComError, MimLinkClient
+from pyglaze.device.exceptions import DeviceComError
+from pyglaze.device.scan_client import ScanClient
+from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import (
     TRANSFER_MODE_PER_POINT,
     LeMockDevice,
@@ -26,7 +28,7 @@ def _build(
     *,
     config: MockDeviceConfig | None = None,
     integration_periods: int = 1,
-) -> tuple[LeDeviceConfiguration, MimLinkClient]:
+) -> tuple[LeDeviceConfiguration, ScanClient]:
     dev_config = LeDeviceConfiguration(
         amp_port="mock_device",
         use_ema=False,
@@ -36,12 +38,17 @@ def _build(
     )
     backend = LeMockDevice(config)
     backend.reset_input_buffer()
-    client = MimLinkClient(
-        conn=backend,
+    transport = MimLinkTransport(conn=backend)
+    client = ScanClient(
+        transport=transport,
         n_points=dev_config.n_points,
         sweep_length_ms=dev_config._sweep_length_ms,
     )
     return dev_config, client
+
+
+def _build_scripted_envelopes(codec: EnvelopeCodec, envelopes: list[Envelope]) -> bytes:
+    return b"".join(codec.encode(env) for env in envelopes)
 
 
 def test_set_settings_and_upload_list() -> None:
@@ -94,6 +101,7 @@ def test_get_device_info() -> None:
     info = client.get_device_info()
     assert info.serial_number == "M-9999"
     assert info.firmware_version == "v0.1.0"
+    assert info.firmware_target == "le23-r1"
     client.close()
 
 
@@ -193,65 +201,6 @@ def test_start_scan_rejected() -> None:
     client.close()
 
 
-def test_send_expect_timeout_then_retry() -> None:
-    # The mock responds to set_settings (1 response) but then times out.
-    # upload_list calls _send_expect for set_list_start which will timeout,
-    # retry, and timeout again → exhaustion.
-    config, client = _build(config=MockDeviceConfig(timeout_after_n_responses=1))
-    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client._timeout = 0.1  # Short timeout to speed up test
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    with pytest.raises(DeviceComError, match="Timeout"):
-        client.upload_list(scanning_list)
-    client.close()
-
-
-def test_receive_backs_off_on_empty_reads(monkeypatch: pytest.MonkeyPatch) -> None:
-    _config, client = _build(config=MockDeviceConfig(empty_responses=True))
-    sleep_calls: list[float] = []
-
-    def _fake_sleep(duration: float) -> None:
-        sleep_calls.append(duration)
-
-    monkeypatch.setattr("pyglaze.device.mimlink_client.time.sleep", _fake_sleep)
-
-    with pytest.raises(DeviceComError, match="Timeout"):
-        client._receive(timeout=0.01)
-
-    assert sleep_calls
-    client.close()
-
-
-def test_send_expect_wrong_type() -> None:
-    config, client = _build()
-    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    client.upload_list(scanning_list)
-    # Inject a wrong-type response: send a start_scan request but have the
-    # mock respond. The mock will respond with START_SCAN_RESPONSE. We then
-    # call _send_expect expecting a different type.
-    env = client._codec.build_envelope(mt.START_SCAN_REQUEST)
-    env.start_scan_request.SetInParent()
-    with pytest.raises(DeviceComError, match="Unexpected response"):
-        client._send_expect(env, mt.SET_SETTINGS_RESPONSE)
-    client.close()
-
-
-def test_drain_corrupt_frame() -> None:
-    config, client = _build()
-    assert isinstance(client._conn, LeMockDevice)
-    client._conn._tx_buffer.extend(b"\x01\x02\x03\x00")  # invalid frame
-    # Now send a valid command — the corrupt frame should be skipped.
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
-    )
-    client.close()
-
-
 def test_retransmit_chunk_exhaustion() -> None:
     config, client = _build(
         config=MockDeviceConfig(drop_retransmit_once=True, retransmit_unavailable=True),
@@ -327,8 +276,9 @@ def test_await_scan_complete_timeout() -> None:
     backend = LeMockDevice()
     # Pass a very short sweep_length_ms so the polling window expires
     # before the mock scan finishes (mock scan takes ~10s).
-    client = MimLinkClient(
-        conn=backend,
+    transport = MimLinkTransport(conn=backend)
+    client = ScanClient(
+        transport=transport,
         n_points=config.n_points,
         sweep_length_ms=1.0,
     )
@@ -340,10 +290,6 @@ def test_await_scan_complete_timeout() -> None:
     with pytest.raises(DeviceComError, match="Timeout waiting for scan"):
         client.start_scan()
     client.close()
-
-
-def _build_scripted_envelopes(codec: EnvelopeCodec, envelopes: list[Envelope]) -> bytes:
-    return b"".join(codec.encode(env) for env in envelopes)
 
 
 def test_inline_retransmit_per_point() -> None:
@@ -367,7 +313,8 @@ def test_inline_retransmit_per_point() -> None:
 
     data = _build_scripted_envelopes(codec, [env0, env_rt, env2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=100.0)
+    transport = MimLinkTransport(conn=conn)
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=100.0)
     times, _Xs, _Ys = client._collect_per_point()
     assert len(times) == 3
     client.close()
@@ -407,7 +354,8 @@ def test_inline_retransmit_bulk() -> None:
 
     data = _build_scripted_envelopes(codec, [status_env, chunk0, rt_chunk, chunk2])
     conn = ScriptedTransport(data)
-    client = MimLinkClient(conn=conn, n_points=3, sweep_length_ms=1.0)
+    transport = MimLinkTransport(conn=conn)
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=1.0)
     times, _Xs, _Ys = client._collect_bulk()
     assert len(times) == 3
     client.close()

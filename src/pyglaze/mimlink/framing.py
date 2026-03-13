@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Final
 
 from cobs import cobs as _cobs
-from crccheck.crc import Crc32Mpeg2
+
+from pyglaze.mimlink.crc import crc32_stm32
 
 FRAME_DELIMITER: Final[int] = 0x00
 CRC_SIZE_BYTES: Final[int] = 4
@@ -11,11 +12,6 @@ CRC_SIZE_BYTES: Final[int] = 4
 
 class FrameDecodeError(ValueError):
     """Raised when a frame fails COBS/CRC validation."""
-
-
-def crc32_stm32(data: bytes) -> int:
-    """Compute STM32F4-compatible CRC-32/MPEG-2."""
-    return Crc32Mpeg2.calc(data)
 
 
 def cobs_encode(data: bytes) -> bytes:

@@ -8,7 +8,7 @@ import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
-from pyglaze.device.mimlink_client import MimLinkClient, _connection_factory
+from pyglaze.device.scan_client import ScanClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 from pyglaze.scanning._types import DeviceInfo
@@ -171,7 +171,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         initial_phase_estimate: float | None = None,
     ) -> None:
         self._config: LeDeviceConfiguration
-        self._client: MimLinkClient | None = None
+        self._client: ScanClient | None = None
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator(
             initial_phase_estimate=initial_phase_estimate
@@ -197,15 +197,9 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def _create_initialized_client(
         self: LeScanner, new_config: LeDeviceConfiguration
-    ) -> MimLinkClient:
+    ) -> ScanClient:
         """Build and initialize a client for a prospective scanner config."""
-        conn = _connection_factory(new_config)
-        conn.reset_input_buffer()
-        new_client = MimLinkClient(
-            conn=conn,
-            n_points=new_config.n_points,
-            sweep_length_ms=new_config._sweep_length_ms,  # noqa: SLF001
-        )
+        new_client = ScanClient.from_config(new_config)
         try:
             settings_changed, list_changed = self._config_change_flags(new_config)
             self._initialize_client(
@@ -236,7 +230,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def _initialize_client(
         self: LeScanner,
-        client: MimLinkClient,
+        client: ScanClient,
         new_config: LeDeviceConfiguration,
         *,
         settings_changed: bool,
@@ -295,6 +289,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         return DeviceInfo(
             serial_number=str(resp.serial_number),
             firmware_version=str(resp.firmware_version),
+            firmware_target=str(resp.firmware_target),
             bsp_name=str(resp.bsp_name),
             build_type=str(resp.build_type),
             transfer_mode=resp.transfer_mode,

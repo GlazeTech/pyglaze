@@ -21,6 +21,36 @@ def test_valid_python(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         DOCTEST_DEPS_REGISTRY.teardown(path=path)
 
 
+_HARDWARE_ONLY_DOCS = [
+    Path("docs/firmware_update.md"),
+    Path("docs/API Reference/device/FirmwareUpdater.md"),
+]
+
+
+@DOCTEST_DEPS_REGISTRY.register
+class FirmwareUpdateDeps(DoctestDep):
+    def path(self: FirmwareUpdateDeps) -> Path:
+        return _HARDWARE_ONLY_DOCS[0]
+
+    def setup(self: FirmwareUpdateDeps, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ARG002
+        pytest.skip("firmware update examples require hardware")
+
+    def teardown(self: FirmwareUpdateDeps) -> None:
+        pass
+
+
+@DOCTEST_DEPS_REGISTRY.register
+class FirmwareUpdaterApiDeps(DoctestDep):
+    def path(self: FirmwareUpdaterApiDeps) -> Path:
+        return _HARDWARE_ONLY_DOCS[1]
+
+    def setup(self: FirmwareUpdaterApiDeps, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ARG002
+        pytest.skip("firmware update examples require hardware")
+
+    def teardown(self: FirmwareUpdaterApiDeps) -> None:
+        pass
+
+
 @DOCTEST_DEPS_REGISTRY.register
 class IndexDeps(DoctestDep):
     def path(self: IndexDeps) -> Path:
