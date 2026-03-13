@@ -372,8 +372,7 @@ class ScanClient:
     @staticmethod
     def _scan_timeout_s(sweep_length_ms: float) -> float:
         return (
-            sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR
-            + PROTOCOL_BASELINE_S
+            sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR + PROTOCOL_BASELINE_S
         )
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
