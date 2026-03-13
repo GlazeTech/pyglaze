@@ -11,8 +11,8 @@ from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.discovery import discover_one
 from pyglaze.device.exceptions import DeviceComError
 from pyglaze.device.transport import (
-    _MAX_COMMAND_RETRIES,
-    _PROTOCOL_BASELINE_S,
+    MAX_COMMAND_RETRIES,
+    PROTOCOL_BASELINE_S,
     Connection,
     MimLinkTransport,
 )
@@ -125,7 +125,7 @@ class ScanClient:
     def upload_list(self, scanning_list: list[float]) -> None:
         """Upload the scan list to the device. Retries the full sequence on failure."""
         last_err: DeviceComError | None = None
-        for _ in range(_MAX_COMMAND_RETRIES + 1):
+        for _ in range(MAX_COMMAND_RETRIES + 1):
             try:
                 self._upload_list_sequence(scanning_list)
             except DeviceComError as e:  # noqa: PERF203
@@ -373,7 +373,7 @@ class ScanClient:
     def _scan_timeout_s(sweep_length_ms: float) -> float:
         return (
             sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR
-            + _PROTOCOL_BASELINE_S
+            + PROTOCOL_BASELINE_S
         )
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:

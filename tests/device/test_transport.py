@@ -6,9 +6,23 @@ from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.device.exceptions import DeviceComError
 from pyglaze.device.scan_client import ScanClient
 from pyglaze.device.transport import MimLinkTransport
-from pyglaze.devtools.mock_device import LeMockDevice, MockDeviceConfig
+from pyglaze.devtools.mock_device import (
+    LeMockDevice,
+    MockDeviceConfig,
+    ScriptedTransport,
+)
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.scanning.scanner import _compute_scanning_list
+
+
+class _TrackingScriptedTransport(ScriptedTransport):
+    def __init__(self) -> None:
+        super().__init__(b"")
+        self.reset_calls = 0
+
+    def reset_input_buffer(self) -> None:
+        self.reset_calls += 1
+        super().reset_input_buffer()
 
 
 def _build(
@@ -92,3 +106,23 @@ def test_drain_corrupt_frame() -> None:
         config.n_points, config.integration_periods, use_ema=config.use_ema
     )
     client.close()
+
+
+def test_from_port_preserves_explicit_zero_command_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = _TrackingScriptedTransport()
+    monkeypatch.setattr(
+        "pyglaze.device.transport.serial.serial_for_url",
+        lambda **_kwargs: conn,
+    )
+
+    transport = MimLinkTransport.from_port(
+        "loop://",
+        timeout_s=0.1,
+        command_timeout_s=0.0,
+    )
+
+    assert conn.reset_calls == 1
+    assert transport.default_timeout_s == 0.0
+    transport.close()

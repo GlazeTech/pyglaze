@@ -69,8 +69,9 @@ class ScriptedTransport(Connection):
         del self._buf[:size]
         return chunk
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
         """Accept and discard written bytes."""
+        return len(data)
 
     def close(self) -> None:
         """Close the transport (no-op)."""
@@ -169,16 +170,17 @@ class LeMockDevice(MockDevice):
     def close(self) -> None:
         """Close the mock device."""
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
         """Handle bytes written by host endpoint."""
         if self._config.empty_responses:
-            return
+            return len(data)
         for frame in self._rx_stream.push(data):
             try:
                 env = self._codec.decode(frame)
             except FrameDecodeError:
                 continue
             self._on_envelope(env)
+        return len(data)
 
     def read(self, size: int) -> bytes:
         """Read queued bytes produced by device endpoint."""

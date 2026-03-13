@@ -119,7 +119,11 @@ class FirmwareUpdater:
             FirmwareUpdateError: If validation fails, transfer fails, or reconnect times out.
         """
         path = Path(firmware_path)
-        firmware = path.read_bytes()
+        try:
+            firmware = path.read_bytes()
+        except OSError as e:
+            msg = f"Failed to read firmware image: {path}"
+            raise FirmwareUpdateError(msg) from e
         self._validate_signed_image(firmware)
 
         previous = self._try_get_boot_info()

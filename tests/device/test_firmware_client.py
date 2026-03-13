@@ -218,6 +218,17 @@ def test_confirm_boot() -> None:
     client.close()
 
 
+def test_confirm_boot_rejected() -> None:
+    codec = EnvelopeCodec()
+    envelopes = [_fw_boot_confirm_response(codec, confirmed=False, version="v1.2.3")]
+    data = _build_scripted_envelopes(codec, envelopes)
+    client = _build_fw_client(data)
+
+    with pytest.raises(FirmwareUpdateError, match="Firmware boot confirmation failed"):
+        client.confirm_boot()
+    client.close()
+
+
 def test_get_firmware_update_status() -> None:
     codec = EnvelopeCodec()
     envelopes = [

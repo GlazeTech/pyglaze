@@ -34,7 +34,7 @@ class Connection(Protocol):
         """Read up to *size* bytes."""
         ...
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
         """Write bytes to the connection."""
         ...
 
@@ -47,9 +47,9 @@ class Connection(Protocol):
         ...
 
 
-_PROTOCOL_BASELINE_S = 1.0  # fixed latency headroom
+PROTOCOL_BASELINE_S = 1.0  # fixed latency headroom
 _IDLE_READ_BACKOFF_S = 0.001
-_MAX_COMMAND_RETRIES = 2
+MAX_COMMAND_RETRIES = 2
 
 
 class MimLinkTransport:
@@ -80,7 +80,13 @@ class MimLinkTransport:
             ),
         )
         conn.reset_input_buffer()
-        return cls(conn=conn, command_timeout_s=command_timeout_s or timeout_s)
+        resolved_command_timeout_s = (
+            timeout_s if command_timeout_s is None else command_timeout_s
+        )
+        return cls(
+            conn=conn,
+            command_timeout_s=resolved_command_timeout_s,
+        )
 
     def __init__(
         self,
@@ -90,7 +96,7 @@ class MimLinkTransport:
     ) -> None:
         self._conn = conn
         self.default_timeout_s = (
-            command_timeout_s if command_timeout_s is not None else _PROTOCOL_BASELINE_S
+            command_timeout_s if command_timeout_s is not None else PROTOCOL_BASELINE_S
         )
         self._codec = EnvelopeCodec()
         self._rx_stream = RxFrameStream()
@@ -176,7 +182,7 @@ class MimLinkTransport:
         Retries on timeout. Raises DeviceComError on type mismatch or explicit rejection.
         """
         last_err: DeviceComError | None = None
-        for _ in range(_MAX_COMMAND_RETRIES + 1):
+        for _ in range(MAX_COMMAND_RETRIES + 1):
             try:
                 resp = self.send_receive(envelope, timeout=timeout)
             except DeviceComError as e:

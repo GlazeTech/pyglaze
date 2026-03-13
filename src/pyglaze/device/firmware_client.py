@@ -122,6 +122,10 @@ class FirmwareClient:
         resp = self._transport.send_expect(
             env, mt.FW_BOOT_CONFIRM_RESPONSE
         ).fw_boot_confirm_response
+        if not resp.confirmed:
+            version_hint = f" for version {resp.version}" if resp.version else ""
+            msg = f"Firmware boot confirmation failed{version_hint}"
+            raise FirmwareUpdateError(msg)
         return resp.version
 
     def get_firmware_update_status(self) -> pb.FwUpdateStatusResponse:
