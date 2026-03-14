@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pyglaze.device import CatalogSelectionStatus
 from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.firmware_client import FirmwareClient
 from pyglaze.device.transport import MimLinkTransport
@@ -83,6 +84,23 @@ def _fw_status_response(
     resp.chunks_received = chunks_received
     resp.total_chunks = total_chunks
     resp.bytes_received = bytes_received
+    return env
+
+
+def _device_info_response(
+    codec: EnvelopeCodec,
+    *,
+    firmware_target: str = "le23-r1",
+) -> pb.Envelope:
+    env = codec.build_envelope(mt.GET_DEVICE_INFO_RESPONSE)
+    resp = env.get_device_info_response
+    resp.serial_number = "M-9999"
+    resp.firmware_version = "v0.6.0"
+    resp.bsp_name = "le23"
+    resp.build_type = "Release"
+    resp.hardware_type = "carmen"
+    resp.hardware_revision = 1
+    resp.firmware_target = firmware_target
     return env
 
 
@@ -248,4 +266,37 @@ def test_get_firmware_update_status() -> None:
     assert status.chunks_received == 5
     assert status.total_chunks == 10
     assert status.bytes_received == 1280
+    client.close()
+
+
+def test_select_compatible_release() -> None:
+    codec = EnvelopeCodec()
+    data = _build_scripted_envelopes(codec, [_device_info_response(codec)])
+    client = _build_fw_client(data)
+
+    result = client.select_compatible_release(
+        {
+            "schema_version": 1,
+            "product": "mimos",
+            "release_version": "1.0.0",
+            "channel": "stable",
+            "published_at": "2026-03-08T11:00:00Z",
+            "targets": [
+                {
+                    "firmware_target": "le23-r1",
+                    "display_name": "Le 2.3.0",
+                    "artifact_name": "mimos-le23-r1-v1.0.0.signed.bin",
+                    "artifact_url": "https://example.invalid/le23.bin",
+                    "sha256": "a" * 64,
+                    "size_bytes": 262144,
+                    "format": "mcuboot-signed-bin",
+                    "minimum_consumer_versions": {"pyglaze": "0.6.0"},
+                }
+            ],
+        }
+    )
+
+    assert result.status is CatalogSelectionStatus.SELECTED
+    assert result.target is not None
+    assert result.target.firmware_target == "le23-r1"
     client.close()
