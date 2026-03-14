@@ -300,3 +300,39 @@ def test_select_compatible_release() -> None:
     assert result.target is not None
     assert result.target.firmware_target == "le23-r1"
     client.close()
+
+
+def test_select_compatible_release_reports_unmet_extra_consumer_version() -> None:
+    codec = EnvelopeCodec()
+    data = _build_scripted_envelopes(codec, [_device_info_response(codec)])
+    client = _build_fw_client(data)
+
+    result = client.select_compatible_release(
+        {
+            "schema_version": 1,
+            "product": "mimos",
+            "release_version": "1.0.0",
+            "channel": "stable",
+            "published_at": "2026-03-08T11:00:00Z",
+            "targets": [
+                {
+                    "firmware_target": "le23-r1",
+                    "display_name": "Le 2.3.0",
+                    "artifact_name": "mimos-le23-r1-v1.0.0.signed.bin",
+                    "artifact_url": "https://example.invalid/le23.bin",
+                    "sha256": "a" * 64,
+                    "size_bytes": 262144,
+                    "format": "mcuboot-signed-bin",
+                    "minimum_consumer_versions": {
+                        "pyglaze": "0.6.0",
+                        "glaze-desktop": "1.2.0",
+                    },
+                }
+            ],
+        },
+        consumer_versions={"glaze-desktop": "1.1.0"},
+    )
+
+    assert result.status is CatalogSelectionStatus.CONSUMER_UPGRADE_REQUIRED
+    assert result.unmet_consumers == {"glaze-desktop": "1.2.0"}
+    client.close()

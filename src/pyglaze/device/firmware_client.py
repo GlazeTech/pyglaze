@@ -12,6 +12,8 @@ from pyglaze.mimlink.crc import crc32
 from pyglaze.mimlink.proto import envelope_pb2 as pb
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from pyglaze.device.release_catalog import (
         CatalogSelectionResult,
         ManifestSource,
@@ -151,11 +153,21 @@ class FirmwareClient:
     def select_compatible_release(
         self,
         manifest: ManifestSource,
+        *,
+        consumer_versions: Mapping[str, str] | None = None,
     ) -> CatalogSelectionResult:
-        """Select the compatible release entry for the connected device."""
+        """Select the compatible release entry for the connected device.
+
+        Args:
+            manifest: Parsed manifest object or raw manifest payload.
+            consumer_versions: Optional extra consumer versions to gate against in
+                ``minimum_consumer_versions``. ``pyglaze`` is always checked using
+                the installed library version.
+        """
         return select_release_for_device_info(
             manifest,
             self.get_device_info(),
+            consumer_versions=consumer_versions,
         )
 
     def reboot(self) -> None:

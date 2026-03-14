@@ -68,9 +68,21 @@ print(result.status.value)
 print(result.target.artifact_url if result.target is not None else "no match")
 ```
 
+If the manifest includes `minimum_consumer_versions` for tools beyond `pyglaze`,
+pass those versions explicitly:
+
+```py
+result = select_release_for_target(
+    manifest,
+    "le23-r1",
+    consumer_versions={"glaze-desktop": "1.2.0"},
+)
+```
+
 ## Select for a Connected Device
 
 For a live device, use `FirmwareClient.select_compatible_release(...)`. The
 caller still provides the already-fetched manifest, and `pyglaze` reads the
 device's `firmware_target` over MimLink before applying the same exact-match
-selection logic.
+selection logic. If you need host-tool gating beyond `pyglaze`, pass
+`consumer_versions={...}` there as well.
