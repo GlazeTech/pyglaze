@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol, Union
+from typing import Union, cast
 
 import semver
 
@@ -18,15 +16,8 @@ __all__ = [
     "FirmwareReleaseManifest",
     "FirmwareReleaseTarget",
     "parse_release_manifest",
-    "select_release_for_device_info",
     "select_release_for_target",
 ]
-
-
-class DeviceTargetInfo(Protocol):
-    """Object exposing a canonical firmware target."""
-
-    firmware_target: str
 
 
 class CatalogSelectionStatus(str, Enum):
@@ -48,32 +39,17 @@ class FirmwareReleaseTarget:
     artifact_url: str
     sha256: str
     size_bytes: int
-    artifact_format: str
-    product_models: tuple[str, ...] = ()
-    support_status: str | None = None
-    release_profile: str | None = None
-    feature_flags: dict[str, object] = field(default_factory=dict)
-    hardware_type: str | None = None
-    hardware_revision: int | None = None
-    bootloader: str | None = None
-    signing: str | None = None
-    minimum_consumer_versions: dict[str, str] = field(default_factory=dict)
-    notes: str | None = None
+    min_pyglaze_version: str | None = None
 
 
 @dataclass(frozen=True)
 class FirmwareReleaseManifest:
     """Validated firmware release catalog."""
 
-    schema_version: int
-    product: str
     release_version: str
     channel: str
     published_at: str
     targets: tuple[FirmwareReleaseTarget, ...]
-    commit: str | None = None
-    source_tag: str | None = None
-    notes_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -83,19 +59,13 @@ class CatalogSelectionResult:
     status: CatalogSelectionStatus
     target: FirmwareReleaseTarget | None
     device_firmware_target: str
-    required_consumer_versions: dict[str, str] = field(default_factory=dict)
-    unmet_consumers: dict[str, str] = field(default_factory=dict)
-    warning_legacy_support: bool = False
 
 
 ManifestSource = Union[
     FirmwareReleaseManifest,
     str,
-    bytes,
     Mapping[str, object],
 ]
-
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def parse_release_manifest(source: ManifestSource) -> FirmwareReleaseManifest:
@@ -104,13 +74,12 @@ def parse_release_manifest(source: ManifestSource) -> FirmwareReleaseManifest:
         return source
 
     payload = _load_manifest_payload(source)
-    schema_version = _expect_int(payload, "schema_version")
-    if schema_version != 1:
+
+    if payload.get("schema_version") != 1:
         msg = "manifest schema_version must be 1"
         raise ValueError(msg)
 
-    product = _expect_str(payload, "product")
-    if product != "mimos":
+    if payload.get("product") != "mimos":
         msg = "manifest product must be 'mimos'"
         raise ValueError(msg)
 
@@ -124,45 +93,30 @@ def parse_release_manifest(source: ManifestSource) -> FirmwareReleaseManifest:
         msg = "manifest targets must be a list"
         raise TypeError(msg)
 
-    release_version = _expect_str(payload, "release_version")
-    targets = tuple(
-        _parse_target(entry, release_version=release_version)
-        for entry in targets_payload
-    )
+    targets = tuple(_parse_target(entry) for entry in targets_payload)
     _validate_unique_targets(targets)
 
     return FirmwareReleaseManifest(
-        schema_version=schema_version,
-        product=product,
-        release_version=release_version,
+        release_version=_expect_str(payload, "release_version"),
         channel=channel,
-        published_at=_expect_utc_timestamp(payload, "published_at"),
+        published_at=_expect_str(payload, "published_at"),
         targets=targets,
-        commit=_optional_str(payload, "commit"),
-        source_tag=_optional_str(payload, "source_tag"),
-        notes_url=_optional_str(payload, "notes_url"),
     )
 
 
 def select_release_for_target(
     manifest: ManifestSource,
     firmware_target: str,
-    *,
-    consumer_versions: Mapping[str, str] | None = None,
 ) -> CatalogSelectionResult:
     """Select the compatible release entry for a canonical firmware target.
 
     Args:
         manifest: Parsed manifest object or raw manifest payload.
         firmware_target: Canonical device firmware target to match.
-        consumer_versions: Optional extra consumer versions to gate against in
-            ``minimum_consumer_versions``. ``pyglaze`` is always checked using
-            the installed library version.
     """
     parsed_manifest = parse_release_manifest(manifest)
-    normalized_target = _normalize_non_empty_string(
-        firmware_target, field_name="firmware_target"
-    )
+    normalized_target = firmware_target.strip()
+
     if normalized_target.startswith("dev-"):
         return CatalogSelectionResult(
             status=CatalogSelectionStatus.NON_RELEASE_MANAGED_TARGET,
@@ -185,53 +139,26 @@ def select_release_for_target(
             device_firmware_target=normalized_target,
         )
 
-    unmet_consumers = _compute_unmet_consumers(
-        target.minimum_consumer_versions,
-        _current_consumer_versions(consumer_versions),
-    )
-    if unmet_consumers:
-        return CatalogSelectionResult(
-            status=CatalogSelectionStatus.CONSUMER_UPGRADE_REQUIRED,
-            target=target,
-            device_firmware_target=normalized_target,
-            required_consumer_versions=target.minimum_consumer_versions,
-            unmet_consumers=unmet_consumers,
-            warning_legacy_support=target.support_status == "legacy",
-        )
+    if target.min_pyglaze_version is not None:
+        current = semver.Version.parse(__version__)
+        required = semver.Version.parse(target.min_pyglaze_version.removeprefix("v"))
+        if current < required:
+            return CatalogSelectionResult(
+                status=CatalogSelectionStatus.CONSUMER_UPGRADE_REQUIRED,
+                target=target,
+                device_firmware_target=normalized_target,
+            )
 
     return CatalogSelectionResult(
         status=CatalogSelectionStatus.SELECTED,
         target=target,
         device_firmware_target=normalized_target,
-        required_consumer_versions=target.minimum_consumer_versions,
-        warning_legacy_support=target.support_status == "legacy",
-    )
-
-
-def select_release_for_device_info(
-    manifest: ManifestSource,
-    device_info: DeviceTargetInfo,
-    *,
-    consumer_versions: Mapping[str, str] | None = None,
-) -> CatalogSelectionResult:
-    """Select the compatible release entry for a device-info object."""
-    return select_release_for_target(
-        manifest,
-        device_info.firmware_target,
-        consumer_versions=consumer_versions,
     )
 
 
 def _load_manifest_payload(
-    source: str | bytes | Mapping[str, object],
+    source: str | Mapping[str, object],
 ) -> dict[str, object]:
-    if isinstance(source, bytes):
-        try:
-            source = source.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            msg = "manifest bytes must be valid UTF-8"
-            raise ValueError(msg) from exc
-
     if isinstance(source, str):
         try:
             payload = json.loads(source)
@@ -241,73 +168,60 @@ def _load_manifest_payload(
     else:
         payload = dict(source)
 
-    return _expect_object_mapping(
-        payload,
-        field_name="manifest root",
-        object_message="manifest root must be a JSON object",
-    )
+    if not isinstance(payload, dict):
+        msg = "manifest root must be a JSON object"
+        raise TypeError(msg)
+    return payload
 
 
-def _parse_target(
-    payload: object,
-    *,
-    release_version: str,
-) -> FirmwareReleaseTarget:
-    payload = _expect_object_mapping(
-        payload,
-        field_name="manifest target entry",
-        object_message="manifest target entries must be objects",
-    )
+def _parse_target(payload: object) -> FirmwareReleaseTarget:
+    if not isinstance(payload, dict):
+        msg = "manifest target entries must be objects"
+        raise TypeError(msg)
 
-    support_status = _optional_str(payload, "support_status")
-    if support_status is not None and support_status not in {"active", "legacy"}:
-        msg = "target support_status must be active or legacy"
-        raise ValueError(msg)
-
-    format_name = _expect_str(payload, "format")
-    if format_name != "mcuboot-signed-bin":
-        msg = "target format must be 'mcuboot-signed-bin'"
-        raise ValueError(msg)
-
-    minimum_consumer_versions = _optional_str_mapping(
-        payload,
-        "minimum_consumer_versions",
-    )
-    for consumer_name, version in minimum_consumer_versions.items():
-        _parse_version(version, field_name=f"minimum_consumer_versions.{consumer_name}")
-
-    firmware_target = _expect_str(payload, "firmware_target")
+    target = cast("dict[str, object]", payload)
+    firmware_target = _expect_str(target, "firmware_target")
     if firmware_target.startswith("dev-"):
         msg = "manifest targets must not include internal-only dev-* firmware_target values"
         raise ValueError(msg)
 
-    artifact_name = _expect_str(payload, "artifact_name")
-    expected_artifact_name = f"mimos-{firmware_target}-v{release_version}.signed.bin"
-    if artifact_name != expected_artifact_name:
-        msg = (
-            "target artifact_name must match "
-            f"{expected_artifact_name!r} for firmware_target {firmware_target!r}"
-        )
+    format_name = _expect_str(target, "format")
+    if format_name != "mcuboot-signed-bin":
+        msg = "format must be 'mcuboot-signed-bin'"
         raise ValueError(msg)
+
+    size_bytes = target.get("size_bytes")
+    if (
+        not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes <= 0
+    ):
+        msg = "size_bytes must be a positive integer"
+        raise ValueError(msg)
+
+    raw_mcv = target.get("minimum_consumer_versions")
+    min_pyglaze = None
+    if raw_mcv is not None:
+        if not isinstance(raw_mcv, Mapping):
+            msg = "minimum_consumer_versions must be an object"
+            raise TypeError(msg)
+        min_versions = cast("Mapping[str, object]", raw_mcv)
+        raw_min_pyglaze = min_versions.get("pyglaze")
+        if raw_min_pyglaze is not None:
+            min_pyglaze = _expect_semver_str(
+                {"pyglaze": raw_min_pyglaze},
+                "pyglaze",
+                field_name="minimum_consumer_versions.pyglaze",
+            )
 
     return FirmwareReleaseTarget(
         firmware_target=firmware_target,
-        display_name=_expect_str(payload, "display_name"),
-        artifact_name=artifact_name,
-        artifact_url=_expect_str(payload, "artifact_url"),
-        sha256=_expect_sha256(payload, "sha256"),
-        size_bytes=_expect_int(payload, "size_bytes"),
-        artifact_format=format_name,
-        product_models=_optional_str_sequence(payload, "product_models"),
-        support_status=support_status,
-        release_profile=_optional_str(payload, "release_profile"),
-        feature_flags=_optional_object_mapping(payload, "feature_flags"),
-        hardware_type=_optional_str(payload, "hardware_type"),
-        hardware_revision=_optional_int(payload, "hardware_revision"),
-        bootloader=_optional_str(payload, "bootloader"),
-        signing=_optional_str(payload, "signing"),
-        minimum_consumer_versions=minimum_consumer_versions,
-        notes=_optional_str(payload, "notes"),
+        display_name=_expect_str(target, "display_name"),
+        artifact_name=_expect_str(target, "artifact_name"),
+        artifact_url=_expect_str(target, "artifact_url"),
+        sha256=_expect_str(target, "sha256"),
+        size_bytes=size_bytes,
+        min_pyglaze_version=min_pyglaze if isinstance(min_pyglaze, str) else None,
     )
 
 
@@ -323,180 +237,28 @@ def _validate_unique_targets(targets: tuple[FirmwareReleaseTarget, ...]) -> None
 
 
 def _expect_str(payload: Mapping[str, object], key: str) -> str:
-    if key not in payload:
-        msg = f"{key} is required"
-        raise ValueError(msg)
-    return _normalize_non_empty_string(payload[key], field_name=key)
-
-
-def _optional_str(payload: Mapping[str, object], key: str) -> str | None:
     value = payload.get(key)
-    if value is None:
-        return None
-    return _normalize_non_empty_string(value, field_name=key)
-
-
-def _expect_int(payload: Mapping[str, object], key: str) -> int:
-    if key not in payload:
-        msg = f"{key} is required"
-        raise ValueError(msg)
-    value = payload[key]
-    if isinstance(value, bool):
-        msg = f"{key} must be an integer"
-        raise TypeError(msg)
-    if not isinstance(value, int):
-        msg = f"{key} must be an integer"
-        raise TypeError(msg)
-    return value
-
-
-def _optional_int(payload: Mapping[str, object], key: str) -> int | None:
-    value = payload.get(key)
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        msg = f"{key} must be an integer"
-        raise TypeError(msg)
-    if not isinstance(value, int):
-        msg = f"{key} must be an integer"
-        raise TypeError(msg)
-    return value
-
-
-def _optional_str_sequence(payload: Mapping[str, object], key: str) -> tuple[str, ...]:
-    value = payload.get(key)
-    if value is None:
-        return ()
-    if not isinstance(value, list):
-        msg = f"{key} must be a list of strings"
-        raise TypeError(msg)
-    return tuple(_normalize_non_empty_string(item, field_name=key) for item in value)
-
-
-def _optional_str_mapping(payload: Mapping[str, object], key: str) -> dict[str, str]:
-    value = payload.get(key)
-    if value is None:
-        return {}
-    value = _expect_object_mapping(
-        value,
-        field_name=key,
-        object_message=f"{key} must be an object mapping strings to strings",
-    )
-
-    normalized: dict[str, str] = {}
-    for raw_key, raw_value in value.items():
-        normalized_key = _normalize_non_empty_string(raw_key, field_name=key)
-        normalized_value = _normalize_non_empty_string(raw_value, field_name=key)
-        normalized[normalized_key] = normalized_value
-    return normalized
-
-
-def _optional_object_mapping(
-    payload: Mapping[str, object], key: str
-) -> dict[str, object]:
-    value = payload.get(key)
-    if value is None:
-        return {}
-    return _expect_object_mapping(
-        value,
-        field_name=key,
-        object_message=f"{key} must be an object",
-    )
-
-
-def _expect_object_mapping(
-    payload: object,
-    *,
-    field_name: str,
-    object_message: str,
-) -> dict[str, object]:
-    if not isinstance(payload, Mapping):
-        raise TypeError(object_message)
-
-    normalized: dict[str, object] = {}
-    for raw_key, raw_value in payload.items():
-        if not isinstance(raw_key, str):
-            msg = f"{field_name} keys must be strings"
-            raise TypeError(msg)
-        normalized[raw_key] = raw_value
-    return normalized
-
-
-def _normalize_non_empty_string(value: object, *, field_name: str) -> str:
     if not isinstance(value, str):
-        msg = f"{field_name} must be a string"
+        msg = f"{key} is required and must be a string"
         raise TypeError(msg)
-    normalized = value.strip()
-    if normalized == "":
-        msg = f"{field_name} must be a non-empty string"
+    stripped = value.strip()
+    if not stripped:
+        msg = f"{key} must be a non-empty string"
         raise ValueError(msg)
-    return normalized
+    return stripped
 
 
-def _compute_unmet_consumers(
-    minimum_consumer_versions: Mapping[str, str],
-    current_consumer_versions: Mapping[str, str],
-) -> dict[str, str]:
-    unmet: dict[str, str] = {}
-    for consumer_name, minimum_version in minimum_consumer_versions.items():
-        current_version = current_consumer_versions.get(consumer_name)
-        if current_version is None:
-            continue
-
-        current = _parse_version(current_version, field_name=consumer_name)
-        required = _parse_version(
-            minimum_version,
-            field_name=f"minimum_consumer_versions.{consumer_name}",
-        )
-        if current < required:
-            unmet[consumer_name] = minimum_version
-    return unmet
-
-
-def _current_consumer_versions(
-    consumer_versions: Mapping[str, str] | None,
-) -> dict[str, str]:
-    current_versions = {"pyglaze": __version__}
-    if consumer_versions is None:
-        return current_versions
-    for consumer_name, version in consumer_versions.items():
-        current_versions[
-            _normalize_non_empty_string(consumer_name, field_name="consumer_versions")
-        ] = _normalize_non_empty_string(
-            version,
-            field_name=f"consumer_versions.{consumer_name}",
-        )
-    current_versions["pyglaze"] = __version__
-    return current_versions
-
-
-def _expect_utc_timestamp(payload: Mapping[str, object], key: str) -> str:
+def _expect_semver_str(
+    payload: Mapping[str, object],
+    key: str,
+    *,
+    field_name: str | None = None,
+) -> str:
     value = _expect_str(payload, key)
-    normalized = value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value
+    field_label = field_name or key
     try:
-        timestamp = datetime.fromisoformat(normalized)
+        semver.Version.parse(value.removeprefix("v"))
     except ValueError as exc:
-        msg = f"{key} must be an RFC 3339 / ISO 8601 UTC timestamp"
+        msg = f"{field_label} must be a valid semantic version"
         raise ValueError(msg) from exc
-
-    if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
-        msg = f"{key} must be an RFC 3339 / ISO 8601 UTC timestamp"
-        raise ValueError(msg)
     return value
-
-
-def _expect_sha256(payload: Mapping[str, object], key: str) -> str:
-    value = _expect_str(payload, key)
-    if _SHA256_RE.fullmatch(value) is None:
-        msg = f"{key} must be a 64-character lowercase hexadecimal SHA-256 string"
-        raise ValueError(msg)
-    return value
-
-
-def _parse_version(version: str, *, field_name: str) -> semver.Version:
-    normalized = version.strip().removeprefix("v")
-    try:
-        return semver.Version.parse(normalized)
-    except ValueError as exc:
-        msg = f"{field_name} must be a valid semantic version"
-        raise ValueError(msg) from exc

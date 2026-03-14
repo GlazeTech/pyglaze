@@ -15,7 +15,6 @@ from .release_catalog import (
     FirmwareReleaseManifest,
     FirmwareReleaseTarget,
     parse_release_manifest,
-    select_release_for_device_info,
     select_release_for_target,
 )
 
@@ -37,6 +36,5 @@ __all__ = [
     "discover_one",
     "list_serial_ports",
     "parse_release_manifest",
-    "select_release_for_device_info",
     "select_release_for_target",
 ]

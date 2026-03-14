@@ -5,15 +5,13 @@ from typing import TYPE_CHECKING
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import FirmwareUpdateError
-from pyglaze.device.release_catalog import select_release_for_device_info
+from pyglaze.device.release_catalog import select_release_for_target
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.crc import crc32
 from pyglaze.mimlink.proto import envelope_pb2 as pb
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from pyglaze.device.release_catalog import (
         CatalogSelectionResult,
         ManifestSource,
@@ -153,22 +151,10 @@ class FirmwareClient:
     def select_compatible_release(
         self,
         manifest: ManifestSource,
-        *,
-        consumer_versions: Mapping[str, str] | None = None,
     ) -> CatalogSelectionResult:
-        """Select the compatible release entry for the connected device.
-
-        Args:
-            manifest: Parsed manifest object or raw manifest payload.
-            consumer_versions: Optional extra consumer versions to gate against in
-                ``minimum_consumer_versions``. ``pyglaze`` is always checked using
-                the installed library version.
-        """
-        return select_release_for_device_info(
-            manifest,
-            self.get_device_info(),
-            consumer_versions=consumer_versions,
-        )
+        """Select the compatible release entry for the connected device."""
+        device_info = self.get_device_info()
+        return select_release_for_target(manifest, device_info.firmware_target)
 
     def reboot(self) -> None:
         """Request a device reboot. Delegates to transport."""
