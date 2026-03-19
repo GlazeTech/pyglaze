@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pyglaze.device import ConfigStatusReason, OperationalState
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.exceptions import DeviceComError
+from pyglaze.device.exceptions import DeviceComError, DeviceStateError
 from pyglaze.device.scan_client import ScanClient
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import (
@@ -17,6 +18,7 @@ from pyglaze.devtools.mock_device import (
 )
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
+from pyglaze.mimlink.proto import envelope_pb2 as pb
 from pyglaze.scanning.scanner import _compute_scanning_list
 
 if TYPE_CHECKING:
@@ -102,6 +104,8 @@ def test_get_device_info() -> None:
     assert info.serial_number == "M-9999"
     assert info.firmware_version == "v0.1.0"
     assert info.firmware_target == "le-2-3-0"
+    assert info.operational_state is OperationalState.NORMAL
+    assert info.config_status_reason is ConfigStatusReason.NONE
     client.close()
 
 
@@ -115,6 +119,41 @@ def test_get_status() -> None:
     status = client.get_status()
     assert status.scan_ongoing is False
     assert status.list_length == config.n_points
+    assert status.operational_state is OperationalState.NORMAL
+    assert status.config_status_reason is ConfigStatusReason.NONE
+    client.close()
+
+
+def test_normal_scan_workflow_blocked_in_recovery_idle() -> None:
+    config, client = _build(
+        config=MockDeviceConfig(
+            operational_state=pb.OPERATIONAL_STATE_COMMISSIONING_IDLE,
+            config_status_reason=pb.CONFIG_STATUS_REASON_INVALID_CONFIG,
+        ),
+    )
+    with pytest.raises(DeviceStateError) as excinfo:
+        client.set_settings(
+            config.n_points, config.integration_periods, use_ema=config.use_ema
+        )
+    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
+    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    client.close()
+
+
+def test_legacy_unspecified_state_does_not_block_scan_workflow() -> None:
+    config, client = _build(
+        config=MockDeviceConfig(
+            operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
+            config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
+        ),
+    )
+    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
+    client.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
+    client.upload_list(scanning_list)
+    times, _Xs, _Ys = client.start_scan()
+    assert len(times) == config.n_points
     client.close()
 
 

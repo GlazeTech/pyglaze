@@ -21,8 +21,14 @@ if TYPE_CHECKING:
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 from pyglaze.mimlink.proto.envelope_pb2 import (
+    CONFIG_STATUS_REASON_NONE,
+    OPERATIONAL_STATE_COMMISSIONING_IDLE,
+    OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE,
+    OPERATIONAL_STATE_NORMAL,
     TRANSFER_MODE_BULK,
     TRANSFER_MODE_PER_POINT,
+    ConfigStatusReason,
+    OperationalState,
     TransferMode,
 )
 
@@ -40,6 +46,8 @@ class MockDeviceConfig:
     """Configuration for LeMockDevice behavior and fault injection."""
 
     transfer_mode: TransferMode = TRANSFER_MODE_BULK
+    operational_state: OperationalState = OPERATIONAL_STATE_NORMAL
+    config_status_reason: ConfigStatusReason = CONFIG_STATUS_REASON_NONE
     fail_after: float = np.inf
     n_fails: float = np.inf
     empty_responses: bool = False
@@ -309,10 +317,18 @@ class LeMockDevice(MockDevice):
         if handler is not None:
             handler(env)
 
+    @property
+    def _normal_scan_blocked(self) -> bool:
+        return self._config.operational_state in {
+            OPERATIONAL_STATE_COMMISSIONING_IDLE,
+            OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE,
+        }
+
     def _handle_set_settings(self, env: Envelope) -> None:
         req = env.set_settings_request
         valid = (
             not self._config.reject_settings
+            and not self._normal_scan_blocked
             and 1 <= req.list_length <= self.MAX_LIST_LENGTH
             and 1 <= req.integration_periods <= self.MAX_INTEGRATION_PERIODS
         )
@@ -330,6 +346,7 @@ class LeMockDevice(MockDevice):
         total = env.set_list_start_request.total_floats
         ready = (
             not self._config.reject_list_start
+            and not self._normal_scan_blocked
             and not self._is_scanning
             and self._list_length is not None
             and 0 < total <= self.MAX_LIST_LENGTH
@@ -358,11 +375,16 @@ class LeMockDevice(MockDevice):
             self._list_length is not None and self._integration_periods is not None
         )
         list_valid = len(self._scanning_list) > 0
-        started = not self._config.reject_scan_start and settings_valid and list_valid
+        started = (
+            not self._config.reject_scan_start
+            and not self._normal_scan_blocked
+            and settings_valid
+            and list_valid
+        )
         resp = self._codec.build_envelope(mt.START_SCAN_RESPONSE)
         r = resp.start_scan_response
         r.started = started
-        r.error = "" if started else "Settings/list missing"
+        r.error = "" if started else "Settings/list missing or operational state blocked"
         r.transfer_mode = self._config.transfer_mode
         self._queue_tx(resp)
         if not started:
@@ -385,6 +407,8 @@ class LeMockDevice(MockDevice):
             self._list_length is not None and self._integration_periods is not None
         )
         r.list_valid = bool(self._scanning_list)
+        r.operational_state = self._config.operational_state
+        r.config_status_reason = self._config.config_status_reason
         self._queue_tx(resp)
 
     def _handle_get_results(self, _env: Envelope) -> None:
@@ -401,6 +425,8 @@ class LeMockDevice(MockDevice):
         r.transfer_mode = self._config.transfer_mode
         r.hardware_type = "mock"
         r.hardware_revision = 0
+        r.operational_state = self._config.operational_state
+        r.config_status_reason = self._config.config_status_reason
         self._queue_tx(resp)
 
     def _handle_result_point_nak(self, env: Envelope) -> None:

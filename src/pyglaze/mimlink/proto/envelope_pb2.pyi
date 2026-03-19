@@ -46,11 +46,31 @@ class MsgType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     MSG_TYPE_FW_BOOT_CONFIRM_RESPONSE: _ClassVar[MsgType]
     MSG_TYPE_RESULTS_CHUNK_NAK: _ClassVar[MsgType]
     MSG_TYPE_RESULTS_CHUNK_RETRANSMIT: _ClassVar[MsgType]
+    MSG_TYPE_ENTER_TRIM_MODE_REQUEST: _ClassVar[MsgType]
+    MSG_TYPE_ENTER_TRIM_MODE_RESPONSE: _ClassVar[MsgType]
+    MSG_TYPE_EXIT_TRIM_MODE_REQUEST: _ClassVar[MsgType]
+    MSG_TYPE_EXIT_TRIM_MODE_RESPONSE: _ClassVar[MsgType]
+    MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_REQUEST: _ClassVar[MsgType]
+    MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_RESPONSE: _ClassVar[MsgType]
 
 class TransferMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     TRANSFER_MODE_BULK: _ClassVar[TransferMode]
     TRANSFER_MODE_PER_POINT: _ClassVar[TransferMode]
+
+class OperationalState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OPERATIONAL_STATE_UNSPECIFIED: _ClassVar[OperationalState]
+    OPERATIONAL_STATE_NORMAL: _ClassVar[OperationalState]
+    OPERATIONAL_STATE_COMMISSIONING_IDLE: _ClassVar[OperationalState]
+    OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE: _ClassVar[OperationalState]
+
+class ConfigStatusReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    CONFIG_STATUS_REASON_UNSPECIFIED: _ClassVar[ConfigStatusReason]
+    CONFIG_STATUS_REASON_NONE: _ClassVar[ConfigStatusReason]
+    CONFIG_STATUS_REASON_UNCONFIGURED: _ClassVar[ConfigStatusReason]
+    CONFIG_STATUS_REASON_INVALID_CONFIG: _ClassVar[ConfigStatusReason]
 
 class FwUpdateStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -102,8 +122,22 @@ MSG_TYPE_FW_BOOT_CONFIRM_REQUEST: MsgType
 MSG_TYPE_FW_BOOT_CONFIRM_RESPONSE: MsgType
 MSG_TYPE_RESULTS_CHUNK_NAK: MsgType
 MSG_TYPE_RESULTS_CHUNK_RETRANSMIT: MsgType
+MSG_TYPE_ENTER_TRIM_MODE_REQUEST: MsgType
+MSG_TYPE_ENTER_TRIM_MODE_RESPONSE: MsgType
+MSG_TYPE_EXIT_TRIM_MODE_REQUEST: MsgType
+MSG_TYPE_EXIT_TRIM_MODE_RESPONSE: MsgType
+MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_REQUEST: MsgType
+MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_RESPONSE: MsgType
 TRANSFER_MODE_BULK: TransferMode
 TRANSFER_MODE_PER_POINT: TransferMode
+OPERATIONAL_STATE_UNSPECIFIED: OperationalState
+OPERATIONAL_STATE_NORMAL: OperationalState
+OPERATIONAL_STATE_COMMISSIONING_IDLE: OperationalState
+OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE: OperationalState
+CONFIG_STATUS_REASON_UNSPECIFIED: ConfigStatusReason
+CONFIG_STATUS_REASON_NONE: ConfigStatusReason
+CONFIG_STATUS_REASON_UNCONFIGURED: ConfigStatusReason
+CONFIG_STATUS_REASON_INVALID_CONFIG: ConfigStatusReason
 FW_UPDATE_STATUS_IDLE: FwUpdateStatus
 FW_UPDATE_STATUS_RECEIVING: FwUpdateStatus
 FW_UPDATE_STATUS_VERIFYING: FwUpdateStatus
@@ -215,13 +249,17 @@ class GetStatusResponse(_message.Message):
     MODULATION_FREQUENCY_HZ_FIELD_NUMBER: _ClassVar[int]
     SETTINGS_VALID_FIELD_NUMBER: _ClassVar[int]
     LIST_VALID_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONAL_STATE_FIELD_NUMBER: _ClassVar[int]
+    CONFIG_STATUS_REASON_FIELD_NUMBER: _ClassVar[int]
     scan_ongoing: bool
     list_length: int
     max_list_length: int
     modulation_frequency_hz: int
     settings_valid: bool
     list_valid: bool
-    def __init__(self, scan_ongoing: _Optional[bool] = ..., list_length: _Optional[int] = ..., max_list_length: _Optional[int] = ..., modulation_frequency_hz: _Optional[int] = ..., settings_valid: _Optional[bool] = ..., list_valid: _Optional[bool] = ...) -> None: ...
+    operational_state: OperationalState
+    config_status_reason: ConfigStatusReason
+    def __init__(self, scan_ongoing: _Optional[bool] = ..., list_length: _Optional[int] = ..., max_list_length: _Optional[int] = ..., modulation_frequency_hz: _Optional[int] = ..., settings_valid: _Optional[bool] = ..., list_valid: _Optional[bool] = ..., operational_state: _Optional[_Union[OperationalState, str]] = ..., config_status_reason: _Optional[_Union[ConfigStatusReason, str]] = ...) -> None: ...
 
 class GetDeviceInfoRequest(_message.Message):
     __slots__ = ()
@@ -237,6 +275,8 @@ class GetDeviceInfoResponse(_message.Message):
     HARDWARE_TYPE_FIELD_NUMBER: _ClassVar[int]
     HARDWARE_REVISION_FIELD_NUMBER: _ClassVar[int]
     FIRMWARE_TARGET_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONAL_STATE_FIELD_NUMBER: _ClassVar[int]
+    CONFIG_STATUS_REASON_FIELD_NUMBER: _ClassVar[int]
     serial_number: str
     firmware_version: str
     bsp_name: str
@@ -245,7 +285,69 @@ class GetDeviceInfoResponse(_message.Message):
     hardware_type: str
     hardware_revision: int
     firmware_target: str
-    def __init__(self, serial_number: _Optional[str] = ..., firmware_version: _Optional[str] = ..., bsp_name: _Optional[str] = ..., build_type: _Optional[str] = ..., transfer_mode: _Optional[_Union[TransferMode, str]] = ..., hardware_type: _Optional[str] = ..., hardware_revision: _Optional[int] = ..., firmware_target: _Optional[str] = ...) -> None: ...
+    operational_state: OperationalState
+    config_status_reason: ConfigStatusReason
+    def __init__(self, serial_number: _Optional[str] = ..., firmware_version: _Optional[str] = ..., bsp_name: _Optional[str] = ..., build_type: _Optional[str] = ..., transfer_mode: _Optional[_Union[TransferMode, str]] = ..., hardware_type: _Optional[str] = ..., hardware_revision: _Optional[int] = ..., firmware_target: _Optional[str] = ..., operational_state: _Optional[_Union[OperationalState, str]] = ..., config_status_reason: _Optional[_Union[ConfigStatusReason, str]] = ...) -> None: ...
+
+class EnterTrimModeRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class EnterTrimModeResponse(_message.Message):
+    __slots__ = ()
+    ENTERED_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONAL_STATE_FIELD_NUMBER: _ClassVar[int]
+    CONFIG_STATUS_REASON_FIELD_NUMBER: _ClassVar[int]
+    entered: bool
+    error: str
+    operational_state: OperationalState
+    config_status_reason: ConfigStatusReason
+    def __init__(self, entered: _Optional[bool] = ..., error: _Optional[str] = ..., operational_state: _Optional[_Union[OperationalState, str]] = ..., config_status_reason: _Optional[_Union[ConfigStatusReason, str]] = ...) -> None: ...
+
+class ExitTrimModeRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ExitTrimModeResponse(_message.Message):
+    __slots__ = ()
+    EXITED_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONAL_STATE_FIELD_NUMBER: _ClassVar[int]
+    CONFIG_STATUS_REASON_FIELD_NUMBER: _ClassVar[int]
+    exited: bool
+    error: str
+    operational_state: OperationalState
+    config_status_reason: ConfigStatusReason
+    def __init__(self, exited: _Optional[bool] = ..., error: _Optional[str] = ..., operational_state: _Optional[_Union[OperationalState, str]] = ..., config_status_reason: _Optional[_Union[ConfigStatusReason, str]] = ...) -> None: ...
+
+class ApplyFsTrimCandidateRequest(_message.Message):
+    __slots__ = ()
+    FS_MIN_FIELD_NUMBER: _ClassVar[int]
+    FS_ZERO_POINT_FIELD_NUMBER: _ClassVar[int]
+    FS_MAX_FIELD_NUMBER: _ClassVar[int]
+    fs_min: int
+    fs_zero_point: int
+    fs_max: int
+    def __init__(self, fs_min: _Optional[int] = ..., fs_zero_point: _Optional[int] = ..., fs_max: _Optional[int] = ...) -> None: ...
+
+class ApplyFsTrimCandidateResponse(_message.Message):
+    __slots__ = ()
+    APPLIED_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONAL_STATE_FIELD_NUMBER: _ClassVar[int]
+    CONFIG_STATUS_REASON_FIELD_NUMBER: _ClassVar[int]
+    FS_MIN_FIELD_NUMBER: _ClassVar[int]
+    FS_ZERO_POINT_FIELD_NUMBER: _ClassVar[int]
+    FS_MAX_FIELD_NUMBER: _ClassVar[int]
+    applied: bool
+    error: str
+    operational_state: OperationalState
+    config_status_reason: ConfigStatusReason
+    fs_min: int
+    fs_zero_point: int
+    fs_max: int
+    def __init__(self, applied: _Optional[bool] = ..., error: _Optional[str] = ..., operational_state: _Optional[_Union[OperationalState, str]] = ..., config_status_reason: _Optional[_Union[ConfigStatusReason, str]] = ..., fs_min: _Optional[int] = ..., fs_zero_point: _Optional[int] = ..., fs_max: _Optional[int] = ...) -> None: ...
 
 class RebootRequest(_message.Message):
     __slots__ = ()
@@ -442,6 +544,12 @@ class Envelope(_message.Message):
     TRANSFORMED_LIST_CHUNK_FIELD_NUMBER: _ClassVar[int]
     GET_DEVICE_INFO_REQUEST_FIELD_NUMBER: _ClassVar[int]
     GET_DEVICE_INFO_RESPONSE_FIELD_NUMBER: _ClassVar[int]
+    ENTER_TRIM_MODE_REQUEST_FIELD_NUMBER: _ClassVar[int]
+    ENTER_TRIM_MODE_RESPONSE_FIELD_NUMBER: _ClassVar[int]
+    EXIT_TRIM_MODE_REQUEST_FIELD_NUMBER: _ClassVar[int]
+    EXIT_TRIM_MODE_RESPONSE_FIELD_NUMBER: _ClassVar[int]
+    APPLY_FS_TRIM_CANDIDATE_REQUEST_FIELD_NUMBER: _ClassVar[int]
+    APPLY_FS_TRIM_CANDIDATE_RESPONSE_FIELD_NUMBER: _ClassVar[int]
     RAW_CAPTURE_REQUEST_FIELD_NUMBER: _ClassVar[int]
     RAW_CAPTURE_CHUNK_FIELD_NUMBER: _ClassVar[int]
     RESULT_POINT_FIELD_NUMBER: _ClassVar[int]
@@ -480,6 +588,12 @@ class Envelope(_message.Message):
     transformed_list_chunk: TransformedListChunk
     get_device_info_request: GetDeviceInfoRequest
     get_device_info_response: GetDeviceInfoResponse
+    enter_trim_mode_request: EnterTrimModeRequest
+    enter_trim_mode_response: EnterTrimModeResponse
+    exit_trim_mode_request: ExitTrimModeRequest
+    exit_trim_mode_response: ExitTrimModeResponse
+    apply_fs_trim_candidate_request: ApplyFsTrimCandidateRequest
+    apply_fs_trim_candidate_response: ApplyFsTrimCandidateResponse
     raw_capture_request: RawCaptureRequest
     raw_capture_chunk: RawCaptureChunk
     result_point: ResultPoint
@@ -497,4 +611,4 @@ class Envelope(_message.Message):
     fw_boot_confirm_response: FwBootConfirmResponse
     results_chunk_nak: ResultsChunkNak
     results_chunk_retransmit: ResultsChunkRetransmit
-    def __init__(self, seq: _Optional[int] = ..., type: _Optional[_Union[MsgType, str]] = ..., ping: _Optional[_Union[Ping, _Mapping]] = ..., pong: _Optional[_Union[Pong, _Mapping]] = ..., set_settings_request: _Optional[_Union[SetSettingsRequest, _Mapping]] = ..., set_settings_response: _Optional[_Union[SetSettingsResponse, _Mapping]] = ..., set_list_start_request: _Optional[_Union[SetListStartRequest, _Mapping]] = ..., set_list_start_response: _Optional[_Union[SetListStartResponse, _Mapping]] = ..., list_chunk: _Optional[_Union[ListChunk, _Mapping]] = ..., set_list_complete_response: _Optional[_Union[SetListCompleteResponse, _Mapping]] = ..., start_scan_request: _Optional[_Union[StartScanRequest, _Mapping]] = ..., start_scan_response: _Optional[_Union[StartScanResponse, _Mapping]] = ..., get_results_request: _Optional[_Union[GetResultsRequest, _Mapping]] = ..., results_chunk: _Optional[_Union[ResultsChunk, _Mapping]] = ..., get_status_request: _Optional[_Union[GetStatusRequest, _Mapping]] = ..., get_status_response: _Optional[_Union[GetStatusResponse, _Mapping]] = ..., reboot_request: _Optional[_Union[RebootRequest, _Mapping]] = ..., get_transformed_list_request: _Optional[_Union[GetTransformedListRequest, _Mapping]] = ..., transformed_list_chunk: _Optional[_Union[TransformedListChunk, _Mapping]] = ..., get_device_info_request: _Optional[_Union[GetDeviceInfoRequest, _Mapping]] = ..., get_device_info_response: _Optional[_Union[GetDeviceInfoResponse, _Mapping]] = ..., raw_capture_request: _Optional[_Union[RawCaptureRequest, _Mapping]] = ..., raw_capture_chunk: _Optional[_Union[RawCaptureChunk, _Mapping]] = ..., result_point: _Optional[_Union[ResultPoint, _Mapping]] = ..., result_point_nak: _Optional[_Union[ResultPointNak, _Mapping]] = ..., result_point_retransmit: _Optional[_Union[ResultPointRetransmit, _Mapping]] = ..., fw_update_start_request: _Optional[_Union[FwUpdateStartRequest, _Mapping]] = ..., fw_update_start_response: _Optional[_Union[FwUpdateStartResponse, _Mapping]] = ..., fw_update_chunk: _Optional[_Union[FwUpdateChunk, _Mapping]] = ..., fw_update_chunk_ack: _Optional[_Union[FwUpdateChunkAck, _Mapping]] = ..., fw_update_finish_request: _Optional[_Union[FwUpdateFinishRequest, _Mapping]] = ..., fw_update_finish_response: _Optional[_Union[FwUpdateFinishResponse, _Mapping]] = ..., fw_update_status_request: _Optional[_Union[FwUpdateStatusRequest, _Mapping]] = ..., fw_update_status_response: _Optional[_Union[FwUpdateStatusResponse, _Mapping]] = ..., fw_boot_confirm_request: _Optional[_Union[FwBootConfirmRequest, _Mapping]] = ..., fw_boot_confirm_response: _Optional[_Union[FwBootConfirmResponse, _Mapping]] = ..., results_chunk_nak: _Optional[_Union[ResultsChunkNak, _Mapping]] = ..., results_chunk_retransmit: _Optional[_Union[ResultsChunkRetransmit, _Mapping]] = ...) -> None: ...
+    def __init__(self, seq: _Optional[int] = ..., type: _Optional[_Union[MsgType, str]] = ..., ping: _Optional[_Union[Ping, _Mapping]] = ..., pong: _Optional[_Union[Pong, _Mapping]] = ..., set_settings_request: _Optional[_Union[SetSettingsRequest, _Mapping]] = ..., set_settings_response: _Optional[_Union[SetSettingsResponse, _Mapping]] = ..., set_list_start_request: _Optional[_Union[SetListStartRequest, _Mapping]] = ..., set_list_start_response: _Optional[_Union[SetListStartResponse, _Mapping]] = ..., list_chunk: _Optional[_Union[ListChunk, _Mapping]] = ..., set_list_complete_response: _Optional[_Union[SetListCompleteResponse, _Mapping]] = ..., start_scan_request: _Optional[_Union[StartScanRequest, _Mapping]] = ..., start_scan_response: _Optional[_Union[StartScanResponse, _Mapping]] = ..., get_results_request: _Optional[_Union[GetResultsRequest, _Mapping]] = ..., results_chunk: _Optional[_Union[ResultsChunk, _Mapping]] = ..., get_status_request: _Optional[_Union[GetStatusRequest, _Mapping]] = ..., get_status_response: _Optional[_Union[GetStatusResponse, _Mapping]] = ..., reboot_request: _Optional[_Union[RebootRequest, _Mapping]] = ..., get_transformed_list_request: _Optional[_Union[GetTransformedListRequest, _Mapping]] = ..., transformed_list_chunk: _Optional[_Union[TransformedListChunk, _Mapping]] = ..., get_device_info_request: _Optional[_Union[GetDeviceInfoRequest, _Mapping]] = ..., get_device_info_response: _Optional[_Union[GetDeviceInfoResponse, _Mapping]] = ..., enter_trim_mode_request: _Optional[_Union[EnterTrimModeRequest, _Mapping]] = ..., enter_trim_mode_response: _Optional[_Union[EnterTrimModeResponse, _Mapping]] = ..., exit_trim_mode_request: _Optional[_Union[ExitTrimModeRequest, _Mapping]] = ..., exit_trim_mode_response: _Optional[_Union[ExitTrimModeResponse, _Mapping]] = ..., apply_fs_trim_candidate_request: _Optional[_Union[ApplyFsTrimCandidateRequest, _Mapping]] = ..., apply_fs_trim_candidate_response: _Optional[_Union[ApplyFsTrimCandidateResponse, _Mapping]] = ..., raw_capture_request: _Optional[_Union[RawCaptureRequest, _Mapping]] = ..., raw_capture_chunk: _Optional[_Union[RawCaptureChunk, _Mapping]] = ..., result_point: _Optional[_Union[ResultPoint, _Mapping]] = ..., result_point_nak: _Optional[_Union[ResultPointNak, _Mapping]] = ..., result_point_retransmit: _Optional[_Union[ResultPointRetransmit, _Mapping]] = ..., fw_update_start_request: _Optional[_Union[FwUpdateStartRequest, _Mapping]] = ..., fw_update_start_response: _Optional[_Union[FwUpdateStartResponse, _Mapping]] = ..., fw_update_chunk: _Optional[_Union[FwUpdateChunk, _Mapping]] = ..., fw_update_chunk_ack: _Optional[_Union[FwUpdateChunkAck, _Mapping]] = ..., fw_update_finish_request: _Optional[_Union[FwUpdateFinishRequest, _Mapping]] = ..., fw_update_finish_response: _Optional[_Union[FwUpdateFinishResponse, _Mapping]] = ..., fw_update_status_request: _Optional[_Union[FwUpdateStatusRequest, _Mapping]] = ..., fw_update_status_response: _Optional[_Union[FwUpdateStatusResponse, _Mapping]] = ..., fw_boot_confirm_request: _Optional[_Union[FwBootConfirmRequest, _Mapping]] = ..., fw_boot_confirm_response: _Optional[_Union[FwBootConfirmResponse, _Mapping]] = ..., results_chunk_nak: _Optional[_Union[ResultsChunkNak, _Mapping]] = ..., results_chunk_retransmit: _Optional[_Union[ResultsChunkRetransmit, _Mapping]] = ...) -> None: ...
