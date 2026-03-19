@@ -384,7 +384,9 @@ class LeMockDevice(MockDevice):
         resp = self._codec.build_envelope(mt.START_SCAN_RESPONSE)
         r = resp.start_scan_response
         r.started = started
-        r.error = "" if started else "Settings/list missing or operational state blocked"
+        r.error = (
+            "" if started else "Settings/list missing or operational state blocked"
+        )
         r.transfer_mode = self._config.transfer_mode
         self._queue_tx(resp)
         if not started:
