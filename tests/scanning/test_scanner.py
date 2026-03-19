@@ -5,6 +5,7 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.device import ConfigStatusReason, OperationalState
 from pyglaze.scanning._types import DeviceInfo
 from pyglaze.scanning.scanner import Scanner
 from tests.conftest import DEVICE_CONFIGS
@@ -65,6 +66,8 @@ def test_lescanner_get_device_info(
     assert info.serial_number != ""
     assert info.firmware_version != ""
     assert info.firmware_target != ""
+    assert info.operational_state is OperationalState.NORMAL
+    assert info.config_status_reason is ConfigStatusReason.NONE
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

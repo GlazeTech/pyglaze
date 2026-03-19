@@ -66,6 +66,14 @@ enum MsgType {
   // Reliable bulk transfer (NAK-based retransmission for results chunks)
   MSG_TYPE_RESULTS_CHUNK_NAK        = 39;
   MSG_TYPE_RESULTS_CHUNK_RETRANSMIT = 40;
+
+  // Commissioning trim control
+  MSG_TYPE_ENTER_TRIM_MODE_REQUEST = 41;
+  MSG_TYPE_ENTER_TRIM_MODE_RESPONSE = 42;
+  MSG_TYPE_EXIT_TRIM_MODE_REQUEST = 43;
+  MSG_TYPE_EXIT_TRIM_MODE_RESPONSE = 44;
+  MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_REQUEST = 45;
+  MSG_TYPE_APPLY_FS_TRIM_CANDIDATE_RESPONSE = 46;
 }
 
 // --- Existing messages ---
@@ -118,6 +126,20 @@ enum TransferMode {
   TRANSFER_MODE_PER_POINT = 1;
 }
 
+enum OperationalState {
+  OPERATIONAL_STATE_UNSPECIFIED = 0;
+  OPERATIONAL_STATE_NORMAL = 1;
+  OPERATIONAL_STATE_COMMISSIONING_IDLE = 2;
+  OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE = 3;
+}
+
+enum ConfigStatusReason {
+  CONFIG_STATUS_REASON_UNSPECIFIED = 0;
+  CONFIG_STATUS_REASON_NONE = 1;
+  CONFIG_STATUS_REASON_UNCONFIGURED = 2;
+  CONFIG_STATUS_REASON_INVALID_CONFIG = 3;
+}
+
 message StartScanRequest {
 }
 
@@ -152,6 +174,8 @@ message GetStatusResponse {
   uint32 modulation_frequency_hz = 4;
   bool settings_valid = 5;
   bool list_valid = 6;
+  OperationalState operational_state = 7;
+  ConfigStatusReason config_status_reason = 8;
 }
 
 // --- Device Info ---
@@ -168,6 +192,46 @@ message GetDeviceInfoResponse {
   string hardware_type = 6;
   uint32 hardware_revision = 7;
   string firmware_target = 8;
+  OperationalState operational_state = 9;
+  ConfigStatusReason config_status_reason = 10;
+}
+
+// --- Commissioning Trim Control ---
+
+message EnterTrimModeRequest {
+}
+
+message EnterTrimModeResponse {
+  bool entered = 1;
+  string error = 2;
+  OperationalState operational_state = 3;
+  ConfigStatusReason config_status_reason = 4;
+}
+
+message ExitTrimModeRequest {
+}
+
+message ExitTrimModeResponse {
+  bool exited = 1;
+  string error = 2;
+  OperationalState operational_state = 3;
+  ConfigStatusReason config_status_reason = 4;
+}
+
+message ApplyFsTrimCandidateRequest {
+  uint32 fs_min = 1;
+  uint32 fs_zero_point = 2;
+  uint32 fs_max = 3;
+}
+
+message ApplyFsTrimCandidateResponse {
+  bool applied = 1;
+  string error = 2;
+  OperationalState operational_state = 3;
+  ConfigStatusReason config_status_reason = 4;
+  uint32 fs_min = 5;
+  uint32 fs_zero_point = 6;
+  uint32 fs_max = 7;
 }
 
 // --- Reboot ---
@@ -351,6 +415,14 @@ message Envelope {
     // Device info
     GetDeviceInfoRequest get_device_info_request = 33;
     GetDeviceInfoResponse get_device_info_response = 34;
+
+    // Commissioning trim control
+    EnterTrimModeRequest enter_trim_mode_request = 52;
+    EnterTrimModeResponse enter_trim_mode_response = 53;
+    ExitTrimModeRequest exit_trim_mode_request = 54;
+    ExitTrimModeResponse exit_trim_mode_response = 55;
+    ApplyFsTrimCandidateRequest apply_fs_trim_candidate_request = 56;
+    ApplyFsTrimCandidateResponse apply_fs_trim_candidate_response = 57;
 
     // Raw capture
     RawCaptureRequest raw_capture_request = 35;

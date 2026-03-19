@@ -6,7 +6,7 @@ from .discovery import (
     discover_one,
     list_serial_ports,
 )
-from .exceptions import FirmwareUpdateError
+from .exceptions import DeviceStateError, FirmwareUpdateError
 from .firmware import BootInfo, FirmwareUpdater, FirmwareUpdateResult
 from .firmware_client import FirmwareClient
 from .release_catalog import (
@@ -18,12 +18,24 @@ from .release_catalog import (
     select_release_for_device_info,
     select_release_for_target,
 )
+from .status import (
+    ConfigStatusReason,
+    DeviceInfo,
+    DeviceState,
+    DeviceStatus,
+    OperationalState,
+)
 
 __all__ = [
     "BootInfo",
     "CatalogSelectionResult",
     "CatalogSelectionStatus",
+    "ConfigStatusReason",
+    "DeviceInfo",
     "DeviceNotFoundError",
+    "DeviceState",
+    "DeviceStateError",
+    "DeviceStatus",
     "FirmwareClient",
     "FirmwareReleaseManifest",
     "FirmwareReleaseTarget",
@@ -33,6 +45,7 @@ __all__ = [
     "Interval",
     "LeDeviceConfiguration",
     "MultipleDevicesError",
+    "OperationalState",
     "discover",
     "discover_one",
     "list_serial_ports",

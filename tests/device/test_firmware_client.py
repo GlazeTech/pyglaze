@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pyglaze.device import CatalogSelectionStatus
+from pyglaze.device import (
+    CatalogSelectionStatus,
+    ConfigStatusReason,
+    OperationalState,
+)
 from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.firmware_client import FirmwareClient
 from pyglaze.device.transport import MimLinkTransport
@@ -91,6 +95,8 @@ def _device_info_response(
     codec: EnvelopeCodec,
     *,
     firmware_target: str = "le-2-3-0",
+    operational_state: pb.OperationalState = pb.OPERATIONAL_STATE_NORMAL,
+    config_status_reason: pb.ConfigStatusReason = pb.CONFIG_STATUS_REASON_NONE,
 ) -> pb.Envelope:
     env = codec.build_envelope(mt.GET_DEVICE_INFO_RESPONSE)
     resp = env.get_device_info_response
@@ -101,7 +107,22 @@ def _device_info_response(
     resp.hardware_type = "carmen"
     resp.hardware_revision = 1
     resp.firmware_target = firmware_target
+    resp.operational_state = operational_state
+    resp.config_status_reason = config_status_reason
     return env
+
+
+def test_get_device_info() -> None:
+    codec = EnvelopeCodec()
+    data = _build_scripted_envelopes(codec, [_device_info_response(codec)])
+    client = _build_fw_client(data)
+
+    info = client.get_device_info()
+    assert info.serial_number == "M-9999"
+    assert info.firmware_target == "le-2-3-0"
+    assert info.operational_state is OperationalState.NORMAL
+    assert info.config_status_reason is ConfigStatusReason.NONE
+    client.close()
 
 
 def test_update_firmware_success() -> None:
