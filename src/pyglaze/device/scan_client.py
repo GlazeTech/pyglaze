@@ -10,13 +10,7 @@ import serial
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.discovery import discover_one
 from pyglaze.device.exceptions import DeviceComError, DeviceStateError
-from pyglaze.device.status import (
-    DeviceInfo,
-    DeviceState,
-    DeviceStatus,
-    device_info_from_proto,
-    device_status_from_proto,
-)
+from pyglaze.device.status import device_info_from_proto, device_status_from_proto
 from pyglaze.device.transport import (
     MAX_COMMAND_RETRIES,
     PROTOCOL_BASELINE_S,
@@ -30,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.device.status import DeviceInfo, DeviceState, DeviceStatus
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
 
