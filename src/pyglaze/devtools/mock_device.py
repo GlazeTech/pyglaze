@@ -395,7 +395,7 @@ class LeMockDevice(MockDevice):
         r = resp.get_device_info_response
         r.serial_number = "M-9999"
         r.firmware_version = "v0.1.0"
-        r.firmware_target = "le23-r1"
+        r.firmware_target = "le-2-3-0"
         r.bsp_name = "mock"
         r.build_type = "Release"
         r.transfer_mode = self._config.transfer_mode

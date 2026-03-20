@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import FirmwareUpdateError
-from pyglaze.device.release_catalog import select_release_for_target
+from pyglaze.device.release_catalog import select_release_for_device_info
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.crc import crc32
@@ -154,7 +154,7 @@ class FirmwareClient:
     ) -> CatalogSelectionResult:
         """Select the compatible release entry for the connected device."""
         device_info = self.get_device_info()
-        return select_release_for_target(manifest, device_info.firmware_target)
+        return select_release_for_device_info(manifest, device_info)
 
     def reboot(self) -> None:
         """Request a device reboot. Delegates to transport."""

@@ -90,7 +90,7 @@ def _fw_status_response(
 def _device_info_response(
     codec: EnvelopeCodec,
     *,
-    firmware_target: str = "le23-r1",
+    firmware_target: str = "le-2-3-0",
 ) -> pb.Envelope:
     env = codec.build_envelope(mt.GET_DEVICE_INFO_RESPONSE)
     resp = env.get_device_info_response
@@ -283,9 +283,9 @@ def test_select_compatible_release() -> None:
             "published_at": "2026-03-08T11:00:00Z",
             "targets": [
                 {
-                    "firmware_target": "le23-r1",
+                    "firmware_target": "le-2-3-0",
                     "display_name": "Le 2.3.0",
-                    "artifact_name": "mimos-le23-r1-v1.0.0.signed.bin",
+                    "artifact_name": "mimos-le-2-3-0-v1.0.0.signed.bin",
                     "artifact_url": "https://example.invalid/le23.bin",
                     "sha256": "a" * 64,
                     "size_bytes": 262144,
@@ -298,5 +298,7 @@ def test_select_compatible_release() -> None:
 
     assert result.status is CatalogSelectionStatus.SELECTED
     assert result.target is not None
-    assert result.target.firmware_target == "le23-r1"
+    assert result.target.firmware_target == "le-2-3-0"
+    assert result.required_consumer_versions == {"pyglaze": "0.6.0"}
+    assert result.unmet_consumers == {}
     client.close()

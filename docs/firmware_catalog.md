@@ -22,13 +22,15 @@ manifest = parse_release_manifest(
         "published_at": "2026-03-08T11:00:00Z",
         "targets": [
             {
-                "firmware_target": "le23-r1",
+                "firmware_target": "le-2-3-0",
                 "display_name": "Le 2.3.0",
-                "artifact_name": "mimos-le23-r1-v1.0.0.signed.bin",
+                "artifact_name": "mimos-le-2-3-0-v1.0.0.signed.bin",
                 "artifact_url": "https://example.invalid/le23.bin",
                 "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "size_bytes": 262144,
                 "format": "mcuboot-signed-bin",
+                "support_status": "legacy",
+                "release_profile": "stable",
             }
         ],
     }
@@ -43,9 +45,10 @@ print(manifest.targets[0].artifact_name)
 ```py
 from pyglaze.device import select_release_for_target
 
-result = select_release_for_target(manifest, "le23-r1")
+result = select_release_for_target(manifest, "le-2-3-0")
 print(result.status.value)
 print(result.target.artifact_url if result.target is not None else "no match")
+print(result.warning_legacy_support)
 ```
 
 ## Select for a Connected Device
@@ -53,4 +56,4 @@ print(result.target.artifact_url if result.target is not None else "no match")
 For a live device, use `FirmwareClient.select_compatible_release(...)`. The
 caller still provides the already-fetched manifest, and `pyglaze` reads the
 device's `firmware_target` over MimLink before applying the same exact-match
-selection logic.
+selection logic and consumer-version checks.

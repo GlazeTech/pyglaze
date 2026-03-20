@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from pyglaze.device import (
     CatalogSelectionStatus,
     parse_release_manifest,
+    select_release_for_device_info,
     select_release_for_target,
 )
 
@@ -20,23 +22,26 @@ def _manifest_dict() -> dict[str, object]:
         "published_at": "2026-03-08T11:00:00Z",
         "targets": [
             {
-                "firmware_target": "le23-r1",
+                "firmware_target": "le-2-3-0",
                 "display_name": "Le 2.3.0",
-                "artifact_name": "mimos-le23-r1-v1.0.0.signed.bin",
+                "artifact_name": "mimos-le-2-3-0-v1.0.0.signed.bin",
                 "artifact_url": "https://example.invalid/le23.bin",
                 "sha256": "a" * 64,
                 "size_bytes": 262144,
                 "format": "mcuboot-signed-bin",
+                "support_status": "legacy",
+                "release_profile": "stable",
                 "minimum_consumer_versions": {"pyglaze": "0.6.0"},
             },
             {
-                "firmware_target": "le30-r1",
+                "firmware_target": "le-3-0-0",
                 "display_name": "Le 3.0.0",
-                "artifact_name": "mimos-le30-r1-v1.0.0.signed.bin",
+                "artifact_name": "mimos-le-3-0-0-v1.0.0.signed.bin",
                 "artifact_url": "https://example.invalid/le30.bin",
                 "sha256": "b" * 64,
                 "size_bytes": 278528,
                 "format": "mcuboot-signed-bin",
+                "support_status": "active",
             },
         ],
     }
@@ -48,6 +53,9 @@ def test_parse_release_manifest_from_string() -> None:
     assert manifest.release_version == "1.0.0"
     assert manifest.channel == "stable"
     assert len(manifest.targets) == 2
+    assert manifest.targets[0].artifact_format == "mcuboot-signed-bin"
+    assert manifest.targets[0].support_status == "legacy"
+    assert manifest.targets[0].release_profile == "stable"
 
 
 def test_parse_release_manifest_passes_through_already_parsed() -> None:
@@ -174,16 +182,20 @@ def test_parse_release_manifest_rejects_non_release_managed_target() -> None:
     payload = _manifest_dict()
     payload["targets"][0]["firmware_target"] = "dev-nucleo-f446re"  # type: ignore[index]
 
-    with pytest.raises(ValueError, match="dev-\\*"):
+    with pytest.raises(ValueError, match="non-release-managed"):
         parse_release_manifest(payload)
 
 
 def test_select_release_for_target_exact_match() -> None:
-    result = select_release_for_target(_manifest_dict(), "le23-r1")
+    result = select_release_for_target(_manifest_dict(), "le-2-3-0")
 
     assert result.status is CatalogSelectionStatus.SELECTED
     assert result.target is not None
-    assert result.target.firmware_target == "le23-r1"
+    assert result.target.firmware_target == "le-2-3-0"
+    assert result.target.artifact_format == "mcuboot-signed-bin"
+    assert result.required_consumer_versions == {"pyglaze": "0.6.0"}
+    assert result.unmet_consumers == {}
+    assert result.warning_legacy_support is True
 
 
 def test_select_release_for_target_returns_no_compatible_release() -> None:
@@ -204,20 +216,40 @@ def test_select_release_for_target_reports_unmet_pyglaze_version() -> None:
     payload = _manifest_dict()
     payload["targets"][0]["minimum_consumer_versions"] = {"pyglaze": "9.9.9"}  # type: ignore[index]
 
-    result = select_release_for_target(payload, "le23-r1")
+    result = select_release_for_target(payload, "le-2-3-0")
 
     assert result.status is CatalogSelectionStatus.CONSUMER_UPGRADE_REQUIRED
     assert result.target is not None
     assert result.target.min_pyglaze_version == "9.9.9"
+    assert result.required_consumer_versions == {"pyglaze": "9.9.9"}
+    assert result.unmet_consumers == {"pyglaze": "9.9.9"}
 
 
 def test_select_release_for_target_passes_when_pyglaze_version_satisfied() -> None:
-    result = select_release_for_target(_manifest_dict(), "le23-r1")
+    result = select_release_for_target(_manifest_dict(), "le-2-3-0")
 
     assert result.status is CatalogSelectionStatus.SELECTED
 
 
 def test_select_release_for_target_passes_when_no_version_constraint() -> None:
-    result = select_release_for_target(_manifest_dict(), "le30-r1")
+    result = select_release_for_target(_manifest_dict(), "le-3-0-0")
 
     assert result.status is CatalogSelectionStatus.SELECTED
+
+
+def test_select_release_for_device_info_uses_reported_firmware_target() -> None:
+    result = select_release_for_device_info(
+        _manifest_dict(),
+        SimpleNamespace(firmware_target="le-2-3-0"),
+    )
+
+    assert result.status is CatalogSelectionStatus.SELECTED
+
+
+def test_select_release_for_device_info_reports_known_non_release_managed_target() -> None:
+    result = select_release_for_device_info(
+        _manifest_dict(),
+        SimpleNamespace(firmware_target="dev-nucleo-f446re"),
+    )
+
+    assert result.status is CatalogSelectionStatus.NON_RELEASE_MANAGED_TARGET
