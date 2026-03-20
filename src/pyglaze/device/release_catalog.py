@@ -329,7 +329,8 @@ def _expect_semver_str(
 
 def _extract_device_firmware_target(device_info: object) -> str:
     if isinstance(device_info, Mapping):
-        return _expect_str(device_info, "firmware_target")
+        mapping_device_info = cast("Mapping[str, object]", device_info)
+        return _expect_str(mapping_device_info, "firmware_target")
 
     raw_firmware_target = getattr(device_info, "firmware_target", None)
     if not isinstance(raw_firmware_target, str):
