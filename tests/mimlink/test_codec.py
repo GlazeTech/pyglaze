@@ -41,7 +41,7 @@ def test_roundtrip_device_info_response() -> None:
     resp = env.get_device_info_response
     resp.serial_number = "M-1234"
     resp.firmware_version = "v1.0.0"
-    resp.firmware_target = "le23-r1"
+    resp.firmware_target = "le-2-3-0"
     resp.bsp_name = "test_bsp"
     resp.build_type = "Release"
     resp.transfer_mode = TRANSFER_MODE_BULK
@@ -51,7 +51,7 @@ def test_roundtrip_device_info_response() -> None:
 
     decoded = codec.decode(frame)
     assert decoded.get_device_info_response.serial_number == "M-1234"
-    assert decoded.get_device_info_response.firmware_target == "le23-r1"
+    assert decoded.get_device_info_response.firmware_target == "le-2-3-0"
     assert decoded.get_device_info_response.hardware_revision == 2
 
 

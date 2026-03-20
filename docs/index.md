@@ -22,6 +22,7 @@ Pyglaze provides two main interfaces for operating Glaze devices: The [`Scanner`
 For firmware updates over MimLink, use [`FirmwareUpdater`](API%20Reference/device/FirmwareUpdater.md).
 
 - Full workflow guide: [Firmware Updates](firmware_update.md)
+- Catalog selection guide: [Firmware Catalogs](firmware_catalog.md)
 - Data models: [`BootInfo`](API%20Reference/device/BootInfo.md), [`FirmwareUpdateResult`](API%20Reference/device/FirmwareUpdateResult.md)
 
 ### GlazeClient
