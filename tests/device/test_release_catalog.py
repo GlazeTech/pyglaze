@@ -255,7 +255,9 @@ def test_select_release_for_device_info_accepts_mapping_payload() -> None:
     assert result.status is CatalogSelectionStatus.SELECTED
 
 
-def test_select_release_for_device_info_reports_known_non_release_managed_target() -> None:
+def test_select_release_for_device_info_reports_known_non_release_managed_target() -> (
+    None
+):
     result = select_release_for_device_info(
         _manifest_dict(),
         SimpleNamespace(firmware_target="dev-nucleo-f446re"),
