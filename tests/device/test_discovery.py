@@ -12,7 +12,7 @@ from pyglaze.device.discovery import (
     discover_one,
     list_serial_ports,
 )
-from pyglaze.device.mimlink_client import _connection_factory
+from pyglaze.device.scan_client import _connection_factory
 
 _COMPORTS = "pyglaze.device.discovery.serial.tools.list_ports.comports"
 _PLATFORM = "pyglaze.device.discovery.sys.platform"
@@ -192,15 +192,12 @@ def test_connection_factory_auto_resolves_to_discovered_port(
         return object()
 
     monkeypatch.setattr(
-        "pyglaze.device.mimlink_client.serial.serial_for_url", fake_serial_for_url
+        "pyglaze.device.scan_client.serial.serial_for_url", fake_serial_for_url
     )
 
     _connection_factory(LeDeviceConfiguration(amp_port="auto"))
 
     assert captured["url"] == "COM9"
-
-
-# --- list_serial_ports ---
 
 
 def test_list_serial_ports_returns_non_junk_ports(

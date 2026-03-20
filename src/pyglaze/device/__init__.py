@@ -6,9 +6,15 @@ from .discovery import (
     discover_one,
     list_serial_ports,
 )
+from .exceptions import FirmwareUpdateError
+from .firmware import BootInfo, FirmwareUpdater, FirmwareUpdateResult
 
 __all__ = [
+    "BootInfo",
     "DeviceNotFoundError",
+    "FirmwareUpdateError",
+    "FirmwareUpdateResult",
+    "FirmwareUpdater",
     "Interval",
     "LeDeviceConfiguration",
     "MultipleDevicesError",

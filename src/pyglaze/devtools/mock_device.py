@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pyglaze.device.mimlink_client import Connection
+from pyglaze.device.transport import Connection
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
 from pyglaze.mimlink.framing import FrameDecodeError
@@ -69,8 +69,9 @@ class ScriptedTransport(Connection):
         del self._buf[:size]
         return chunk
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
         """Accept and discard written bytes."""
+        return len(data)
 
     def close(self) -> None:
         """Close the transport (no-op)."""
@@ -169,16 +170,17 @@ class LeMockDevice(MockDevice):
     def close(self) -> None:
         """Close the mock device."""
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
         """Handle bytes written by host endpoint."""
         if self._config.empty_responses:
-            return
+            return len(data)
         for frame in self._rx_stream.push(data):
             try:
                 env = self._codec.decode(frame)
             except FrameDecodeError:
                 continue
             self._on_envelope(env)
+        return len(data)
 
     def read(self, size: int) -> bytes:
         """Read queued bytes produced by device endpoint."""
@@ -393,6 +395,7 @@ class LeMockDevice(MockDevice):
         r = resp.get_device_info_response
         r.serial_number = "M-9999"
         r.firmware_version = "v0.1.0"
+        r.firmware_target = "le23-r1"
         r.bsp_name = "mock"
         r.build_type = "Release"
         r.transfer_mode = self._config.transfer_mode
