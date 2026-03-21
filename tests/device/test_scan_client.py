@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pyglaze.device import ConfigStatusReason, OperationalState
+from pyglaze.device import ConfigStatusReason, DeviceState, OperationalState
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.device.exceptions import DeviceComError, DeviceStateError
 from pyglaze.device.scan_client import ScanClient
@@ -137,6 +137,57 @@ def test_normal_scan_workflow_blocked_in_recovery_idle() -> None:
         )
     assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
     assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    client.close()
+
+
+def test_start_scan_checks_blocked_state_after_start_rejection() -> None:
+    codec = EnvelopeCodec()
+
+    start_env = codec.build_envelope(mt.START_SCAN_RESPONSE)
+    start_env.start_scan_response.started = False
+    start_env.start_scan_response.error = "normal scanning unavailable"
+
+    status_env = codec.build_envelope(mt.GET_STATUS_RESPONSE)
+    status_env.get_status_response.operational_state = (
+        pb.OPERATIONAL_STATE_COMMISSIONING_IDLE
+    )
+    status_env.get_status_response.config_status_reason = (
+        pb.CONFIG_STATUS_REASON_INVALID_CONFIG
+    )
+
+    data = _build_scripted_envelopes(codec, [start_env, status_env])
+    transport = MimLinkTransport(conn=ScriptedTransport(data))
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=100.0)
+
+    with pytest.raises(DeviceStateError) as excinfo:
+        client.start_scan()
+
+    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
+    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    client.close()
+
+
+def test_try_get_device_state_reraises_device_state_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config, client = _build()
+    state_error = DeviceStateError(
+        DeviceState(
+            operational_state=OperationalState.COMMISSIONING_IDLE,
+            config_status_reason=ConfigStatusReason.UNCONFIGURED,
+        ),
+        action="start a normal scan",
+    )
+
+    def _raise_state_error() -> None:
+        raise state_error
+
+    monkeypatch.setattr(client, "get_status", _raise_state_error)
+
+    with pytest.raises(DeviceStateError) as excinfo:
+        client._try_get_device_state()
+
+    assert excinfo.value is state_error
     client.close()
 
 
