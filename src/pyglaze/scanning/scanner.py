@@ -11,10 +11,10 @@ from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfigurat
 from pyglaze.device.scan_client import ScanClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
-from pyglaze.scanning._types import DeviceInfo
 
 if TYPE_CHECKING:
     from pyglaze.device.configuration import Interval
+    from pyglaze.scanning._types import DeviceInfo
 
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
 
@@ -285,17 +285,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         if self._client is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        resp = self._client.get_device_info()
-        return DeviceInfo(
-            serial_number=str(resp.serial_number),
-            firmware_version=str(resp.firmware_version),
-            firmware_target=str(resp.firmware_target),
-            bsp_name=str(resp.bsp_name),
-            build_type=str(resp.build_type),
-            transfer_mode=resp.transfer_mode,
-            hardware_type=str(resp.hardware_type),
-            hardware_revision=int(resp.hardware_revision),
-        )
+        return self._client.get_device_info()
 
     def get_phase_estimate(self: LeScanner) -> float | None:
         """Get the current phase estimate from the lock-in phase estimator.

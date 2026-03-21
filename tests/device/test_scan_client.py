@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pyglaze.device import ConfigStatusReason, DeviceState, OperationalState
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
-from pyglaze.device.exceptions import DeviceComError
+from pyglaze.device.exceptions import DeviceComError, DeviceStateError
 from pyglaze.device.scan_client import ScanClient
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import (
@@ -17,6 +18,7 @@ from pyglaze.devtools.mock_device import (
 )
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.codec import EnvelopeCodec
+from pyglaze.mimlink.proto import envelope_pb2 as pb
 from pyglaze.scanning.scanner import _compute_scanning_list
 
 if TYPE_CHECKING:
@@ -102,6 +104,8 @@ def test_get_device_info() -> None:
     assert info.serial_number == "M-9999"
     assert info.firmware_version == "v0.1.0"
     assert info.firmware_target == "le-2-3-0"
+    assert info.operational_state is OperationalState.NORMAL
+    assert info.config_status_reason is ConfigStatusReason.NONE
     client.close()
 
 
@@ -115,6 +119,92 @@ def test_get_status() -> None:
     status = client.get_status()
     assert status.scan_ongoing is False
     assert status.list_length == config.n_points
+    assert status.operational_state is OperationalState.NORMAL
+    assert status.config_status_reason is ConfigStatusReason.NONE
+    client.close()
+
+
+def test_normal_scan_workflow_blocked_in_recovery_idle() -> None:
+    config, client = _build(
+        config=MockDeviceConfig(
+            operational_state=pb.OPERATIONAL_STATE_COMMISSIONING_IDLE,
+            config_status_reason=pb.CONFIG_STATUS_REASON_INVALID_CONFIG,
+        ),
+    )
+    with pytest.raises(DeviceStateError) as excinfo:
+        client.set_settings(
+            config.n_points, config.integration_periods, use_ema=config.use_ema
+        )
+    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
+    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    client.close()
+
+
+def test_start_scan_checks_blocked_state_after_start_rejection() -> None:
+    codec = EnvelopeCodec()
+
+    start_env = codec.build_envelope(mt.START_SCAN_RESPONSE)
+    start_env.start_scan_response.started = False
+    start_env.start_scan_response.error = "normal scanning unavailable"
+
+    status_env = codec.build_envelope(mt.GET_STATUS_RESPONSE)
+    status_env.get_status_response.operational_state = (
+        pb.OPERATIONAL_STATE_COMMISSIONING_IDLE
+    )
+    status_env.get_status_response.config_status_reason = (
+        pb.CONFIG_STATUS_REASON_INVALID_CONFIG
+    )
+
+    data = _build_scripted_envelopes(codec, [start_env, status_env])
+    transport = MimLinkTransport(conn=ScriptedTransport(data))
+    client = ScanClient(transport=transport, n_points=3, sweep_length_ms=100.0)
+
+    with pytest.raises(DeviceStateError) as excinfo:
+        client.start_scan()
+
+    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
+    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    client.close()
+
+
+def test_try_get_device_state_reraises_device_state_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config, client = _build()
+    state_error = DeviceStateError(
+        DeviceState(
+            operational_state=OperationalState.COMMISSIONING_IDLE,
+            config_status_reason=ConfigStatusReason.UNCONFIGURED,
+        ),
+        action="start a normal scan",
+    )
+
+    def _raise_state_error() -> None:
+        raise state_error
+
+    monkeypatch.setattr(client, "get_status", _raise_state_error)
+
+    with pytest.raises(DeviceStateError) as excinfo:
+        client._try_get_device_state()
+
+    assert excinfo.value is state_error
+    client.close()
+
+
+def test_legacy_unspecified_state_does_not_block_scan_workflow() -> None:
+    config, client = _build(
+        config=MockDeviceConfig(
+            operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
+            config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
+        ),
+    )
+    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
+    client.set_settings(
+        config.n_points, config.integration_periods, use_ema=config.use_ema
+    )
+    client.upload_list(scanning_list)
+    times, _Xs, _Ys = client.start_scan()
+    assert len(times) == config.n_points
     client.close()
 
 
@@ -247,7 +337,10 @@ def test_start_scan_without_list() -> None:
 def test_list_mock_devices() -> None:
     devices = list_mock_devices()
     assert "mock_device" in devices
-    assert len(devices) >= 3
+    assert "mock_device_commissioning_idle" in devices
+    assert "mock_device_unconfigured" in devices
+    assert "mock_device_invalid_config" in devices
+    assert len(devices) >= 6
 
 
 def test_scan_failure_per_point() -> None:
