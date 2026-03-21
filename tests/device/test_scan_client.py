@@ -286,7 +286,10 @@ def test_start_scan_without_list() -> None:
 def test_list_mock_devices() -> None:
     devices = list_mock_devices()
     assert "mock_device" in devices
-    assert len(devices) >= 3
+    assert "mock_device_commissioning_idle" in devices
+    assert "mock_device_unconfigured" in devices
+    assert "mock_device_invalid_config" in devices
+    assert len(devices) >= 6
 
 
 def test_scan_failure_per_point() -> None:

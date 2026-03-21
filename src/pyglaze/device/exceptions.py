@@ -13,10 +13,14 @@ class DeviceComError(Exception):
 class DeviceStateError(DeviceComError):
     """Raised when a normal scan workflow is attempted in a blocked device state."""
 
-    def __init__(self, state: DeviceState, *, action: str) -> None:
+    def __init__(self, state: DeviceState, action: str) -> None:
         self.state = state
         self.action = action
-        super().__init__(_format_device_state_error(state, action=action))
+        super().__init__(state, action)
+
+    def __str__(self) -> str:
+        """Return a stable human-readable message for local and pickled instances."""
+        return _format_device_state_error(self.state, action=self.action)
 
 
 class FirmwareUpdateError(DeviceComError):

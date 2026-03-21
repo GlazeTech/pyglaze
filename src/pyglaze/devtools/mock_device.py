@@ -21,7 +21,9 @@ if TYPE_CHECKING:
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 from pyglaze.mimlink.proto.envelope_pb2 import (
+    CONFIG_STATUS_REASON_INVALID_CONFIG,
     CONFIG_STATUS_REASON_NONE,
+    CONFIG_STATUS_REASON_UNCONFIGURED,
     OPERATIONAL_STATE_COMMISSIONING_IDLE,
     OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE,
     OPERATIONAL_STATE_NORMAL,
@@ -93,6 +95,9 @@ def list_mock_devices() -> list[str]:
     """List all available mock devices."""
     return [
         "mock_device",
+        "mock_device_commissioning_idle",
+        "mock_device_unconfigured",
+        "mock_device_invalid_config",
         "mock_device_per_point",
         "mock_device_scan_should_fail",
         "mock_device_empty_responses",
@@ -104,17 +109,43 @@ def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
 
     Sentinel values:
         ``"mock_device"`` — default mock (bulk transfer)
+        ``"mock_device_commissioning_idle"`` — commissioning idle with no config fault
+        ``"mock_device_unconfigured"`` — commissioning idle with missing config
+        ``"mock_device_invalid_config"`` — commissioning idle with invalid config
         ``"mock_device_per_point"`` — per-point transfer mode
         ``"mock_device_scan_should_fail"`` — scan fails immediately
         ``"mock_device_empty_responses"`` — silently ignores writes, returns empty reads
     """
     port = config.amp_port
-    if "mock_device_per_point" in port:
-        return LeMockDevice(MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT))
-    if "mock_device_scan_should_fail" in port:
-        return LeMockDevice(MockDeviceConfig(fail_after=0))
-    if "mock_device_empty_responses" in port:
-        return LeMockDevice(MockDeviceConfig(empty_responses=True))
+    overrides = (
+        (
+            "mock_device_commissioning_idle",
+            MockDeviceConfig(operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE),
+        ),
+        (
+            "mock_device_unconfigured",
+            MockDeviceConfig(
+                operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE,
+                config_status_reason=CONFIG_STATUS_REASON_UNCONFIGURED,
+            ),
+        ),
+        (
+            "mock_device_invalid_config",
+            MockDeviceConfig(
+                operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE,
+                config_status_reason=CONFIG_STATUS_REASON_INVALID_CONFIG,
+            ),
+        ),
+        (
+            "mock_device_per_point",
+            MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT),
+        ),
+        ("mock_device_scan_should_fail", MockDeviceConfig(fail_after=0)),
+        ("mock_device_empty_responses", MockDeviceConfig(empty_responses=True)),
+    )
+    for sentinel, override in overrides:
+        if sentinel in port:
+            return LeMockDevice(override)
     return LeMockDevice()
 
 
