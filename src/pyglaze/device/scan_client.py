@@ -173,7 +173,6 @@ class ScanClient:
 
     def start_scan(self) -> tuple[FloatArray, FloatArray, FloatArray]:
         """Start scan and collect results. Returns (times, Xs, Ys)."""
-        self._raise_if_normal_scan_blocked(action="start a normal scan")
         timeout = self._scan_timeout_s(self._sweep_length_ms)
         env = self._transport.build_envelope(mt.START_SCAN_REQUEST)
         env.start_scan_request.SetInParent()
@@ -402,5 +401,7 @@ class ScanClient:
     def _try_get_device_state(self) -> DeviceState | None:
         try:
             return self.get_status().state
+        except DeviceStateError:
+            raise
         except DeviceComError:
             return None
