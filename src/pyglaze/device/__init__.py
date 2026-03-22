@@ -9,6 +9,7 @@ from .discovery import (
 from .exceptions import DeviceStateError, FirmwareUpdateError
 from .firmware import BootInfo, FirmwareUpdater, FirmwareUpdateResult
 from .firmware_client import FirmwareClient
+from .firmware_status import FirmwareUpdateState, FirmwareUpdateStatus
 from .release_catalog import (
     CatalogSelectionResult,
     CatalogSelectionStatus,
@@ -41,6 +42,8 @@ __all__ = [
     "FirmwareReleaseTarget",
     "FirmwareUpdateError",
     "FirmwareUpdateResult",
+    "FirmwareUpdateState",
+    "FirmwareUpdateStatus",
     "FirmwareUpdater",
     "Interval",
     "LeDeviceConfiguration",

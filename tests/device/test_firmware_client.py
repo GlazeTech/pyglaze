@@ -7,6 +7,7 @@ import pytest
 from pyglaze.device import (
     CatalogSelectionStatus,
     ConfigStatusReason,
+    FirmwareUpdateState,
     OperationalState,
 )
 from pyglaze.device.exceptions import FirmwareUpdateError
@@ -283,7 +284,7 @@ def test_get_firmware_update_status() -> None:
     client = _build_fw_client(data)
 
     status = client.get_firmware_update_status()
-    assert status.status == pb.FW_UPDATE_STATUS_RECEIVING
+    assert status.status is FirmwareUpdateState.RECEIVING
     assert status.chunks_received == 5
     assert status.total_chunks == 10
     assert status.bytes_received == 1280

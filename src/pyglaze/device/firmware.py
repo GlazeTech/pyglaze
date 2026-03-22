@@ -10,13 +10,13 @@ from serial import SerialException
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import DeviceComError, FirmwareUpdateError
 from pyglaze.device.firmware_client import FirmwareClient
+from pyglaze.device.firmware_status import FirmwareUpdateState
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 _MCUBOOT_MAGIC_BYTES = 4
-_FW_STATUS_UNKNOWN = -1
 _T = TypeVar("_T")
 
 
@@ -25,7 +25,7 @@ class BootInfo:
     """Minimal firmware state reported by the device."""
 
     firmware_version: str
-    update_status: int
+    update_status: FirmwareUpdateState
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class FirmwareUpdateResult:
     firmware_size: int
     previous_version: str
     confirmed_version: str
-    final_status: int
+    final_status: FirmwareUpdateState
 
 
 class FirmwareUpdater:
@@ -93,7 +93,7 @@ class FirmwareUpdater:
             status = client.get_firmware_update_status()
             return BootInfo(
                 firmware_version=str(info.firmware_version),
-                update_status=int(status.status),
+                update_status=status.status,
             )
         finally:
             client.close()
@@ -157,27 +157,26 @@ class FirmwareUpdater:
         time.sleep(self._reboot_wait_s)
         self._wait_until_status_reachable()
 
-    def _confirm_update(self) -> tuple[str, int]:
+    def _confirm_update(self) -> tuple[str, FirmwareUpdateState]:
         confirmed_version = self._run_with_reconnect_retry(
             lambda client: client.confirm_boot(),
             error_message="Timed out confirming boot after firmware upload",
         )
-        final_status = int(
-            self._run_with_reconnect_retry(
-                lambda client: client.get_firmware_update_status(),
-                error_message=(
-                    "Timed out reading firmware status after boot confirmation"
-                ),
-            ).status
+        final_status = self._run_with_reconnect_retry(
+            lambda client: client.get_firmware_update_status(),
+            error_message="Timed out reading firmware status after boot confirmation",
         )
-        return confirmed_version, final_status
+        return confirmed_version, final_status.status
 
     def _try_get_boot_info(self) -> BootInfo:
         """Try to read boot info without failing the update preflight."""
         try:
             return self.get_boot_info()
         except (DeviceComError, SerialException, OSError):
-            return BootInfo(firmware_version="", update_status=_FW_STATUS_UNKNOWN)
+            return BootInfo(
+                firmware_version="",
+                update_status=FirmwareUpdateState.UNKNOWN,
+            )
 
     @staticmethod
     def _emit_progress(on_progress: Callable[[str], None] | None, stage: str) -> None:

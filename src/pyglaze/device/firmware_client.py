@@ -5,6 +5,10 @@ from typing import TYPE_CHECKING
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import FirmwareUpdateError
+from pyglaze.device.firmware_status import (
+    FirmwareUpdateStatus,
+    firmware_update_status_from_proto,
+)
 from pyglaze.device.release_catalog import select_release_for_device_info
 from pyglaze.device.status import device_info_from_proto
 from pyglaze.device.transport import MimLinkTransport
@@ -138,13 +142,15 @@ class FirmwareClient:
             raise FirmwareUpdateError(msg)
         return resp.version
 
-    def get_firmware_update_status(self) -> pb.FwUpdateStatusResponse:
-        """Query firmware update progress."""
+    def get_firmware_update_status(self) -> FirmwareUpdateStatus:
+        """Query firmware update progress as a pyglaze-facing model."""
         env = self._transport.build_envelope(mt.FW_UPDATE_STATUS_REQUEST)
         env.fw_update_status_request.SetInParent()
-        return self._transport.send_expect(
-            env, mt.FW_UPDATE_STATUS_RESPONSE
-        ).fw_update_status_response
+        return firmware_update_status_from_proto(
+            self._transport.send_expect(
+                env, mt.FW_UPDATE_STATUS_RESPONSE
+            ).fw_update_status_response
+        )
 
     def get_device_info(self) -> DeviceInfo:
         """Query device info and return a pyglaze-facing model."""

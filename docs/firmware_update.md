@@ -30,7 +30,7 @@ result = updater.update(
     on_progress=on_progress,
 )
 
-print(result.confirmed_version, result.final_status)
+print(result.confirmed_version, result.final_status.name.lower())
 ```
 
 Progress stages emitted by `on_progress`:
@@ -47,7 +47,7 @@ from pyglaze.device import FirmwareUpdater
 
 updater = FirmwareUpdater.from_port("/dev/cu.usbserial-XXXX")
 info = updater.get_boot_info()
-print(info.firmware_version, info.update_status)
+print(info.firmware_version, info.update_status.name.lower())
 ```
 
 ## Error Handling
@@ -67,3 +67,11 @@ print(info.firmware_version, info.update_status)
 - `FirmwareUpdater.update(...)` waits for reconnect and then confirms boot for you.
 
 If you need manual control (for rollback testing), use lower-level `FirmwareClient` methods directly.
+
+`FirmwareClient.get_firmware_update_status()` returns a `FirmwareUpdateStatus`
+model with:
+
+- `status`: `FirmwareUpdateState`
+- `chunks_received`: `int`
+- `total_chunks`: `int`
+- `bytes_received`: `int`

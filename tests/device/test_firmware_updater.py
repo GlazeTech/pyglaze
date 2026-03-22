@@ -7,6 +7,7 @@ import pytest
 from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.firmware import MCUBOOT_IMAGE_MAGIC, FirmwareUpdater
 from pyglaze.device.firmware_client import FirmwareClient
+from pyglaze.device.firmware_status import FirmwareUpdateState
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import ScriptedTransport
 from pyglaze.mimlink import msg_types as mt
@@ -140,7 +141,7 @@ def test_update_happy_path(tmp_path: Path) -> None:
 
     assert result.previous_version == "v1.0.0"
     assert result.confirmed_version == "v1.1.0"
-    assert result.final_status == 4
+    assert result.final_status is FirmwareUpdateState.CONFIRMED
     assert stages == ["uploading", "reconnecting", "confirming", "done"]
     assert factory.calls == 6
 
@@ -195,7 +196,7 @@ def test_update_preflight_unreachable_continues(tmp_path: Path) -> None:
     result = updater.update(firmware_path, version="v2.0.0")
     assert result.previous_version == ""
     assert result.confirmed_version == "v2.0.0"
-    assert result.final_status == 4
+    assert result.final_status is FirmwareUpdateState.CONFIRMED
 
 
 def test_update_reconnect_timeout_raises(tmp_path: Path) -> None:
