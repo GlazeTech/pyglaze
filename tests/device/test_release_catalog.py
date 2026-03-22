@@ -178,12 +178,13 @@ def test_parse_release_manifest_rejects_non_string_pyglaze_version_constraint() 
         parse_release_manifest(payload)
 
 
-def test_parse_release_manifest_rejects_non_release_managed_target() -> None:
+def test_parse_release_manifest_accepts_dev_nucleo_target_when_present() -> None:
     payload = _manifest_dict()
     payload["targets"][0]["firmware_target"] = "dev-nucleo-f446re"  # type: ignore[index]
 
-    with pytest.raises(ValueError, match="non-release-managed"):
-        parse_release_manifest(payload)
+    manifest = parse_release_manifest(payload)
+
+    assert manifest.targets[0].firmware_target == "dev-nucleo-f446re"
 
 
 def test_select_release_for_target_exact_match() -> None:
@@ -205,11 +206,15 @@ def test_select_release_for_target_returns_no_compatible_release() -> None:
     assert result.target is None
 
 
-def test_select_release_for_target_returns_non_release_managed_target() -> None:
-    result = select_release_for_target(_manifest_dict(), "dev-nucleo-f446re")
+def test_select_release_for_target_selects_manifest_defined_dev_nucleo() -> None:
+    payload = _manifest_dict()
+    payload["targets"][0]["firmware_target"] = "dev-nucleo-f446re"  # type: ignore[index]
 
-    assert result.status is CatalogSelectionStatus.NON_RELEASE_MANAGED_TARGET
-    assert result.target is None
+    result = select_release_for_target(payload, "dev-nucleo-f446re")
+
+    assert result.status is CatalogSelectionStatus.SELECTED
+    assert result.target is not None
+    assert result.target.firmware_target == "dev-nucleo-f446re"
 
 
 def test_select_release_for_target_reports_unmet_pyglaze_version() -> None:
@@ -255,7 +260,7 @@ def test_select_release_for_device_info_accepts_mapping_payload() -> None:
     assert result.status is CatalogSelectionStatus.SELECTED
 
 
-def test_select_release_for_device_info_reports_known_non_release_managed_target() -> (
+def test_select_release_for_device_info_reports_no_compatible_release_for_missing_target() -> (
     None
 ):
     result = select_release_for_device_info(
@@ -263,4 +268,4 @@ def test_select_release_for_device_info_reports_known_non_release_managed_target
         SimpleNamespace(firmware_target="dev-nucleo-f446re"),
     )
 
-    assert result.status is CatalogSelectionStatus.NON_RELEASE_MANAGED_TARGET
+    assert result.status is CatalogSelectionStatus.NO_COMPATIBLE_RELEASE
