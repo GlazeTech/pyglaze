@@ -2,6 +2,9 @@
 
 `pyglaze` supports firmware updates over MimLink via `FirmwareUpdater`.
 
+If you need to decide which release artifact to flash, use the firmware catalog
+helpers first. See [Firmware Catalogs](firmware_catalog.md).
+
 ## Prerequisites
 
 - Device running MimLink firmware update handlers.
