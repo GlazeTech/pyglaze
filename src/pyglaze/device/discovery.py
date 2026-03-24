@@ -8,8 +8,7 @@ import serial.tools.list_ports
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_GLAZE_MANUFACTURER = "GLAZE Technologies"
-_GLAZE_PRODUCTS = ("Carmen",)
+_GLAZE_SERIAL_PREFIXES = ("GLAZE_",)
 _SKIP_SUBSTRINGS = ("Bluetooth", "debug")
 
 
@@ -24,8 +23,8 @@ class MultipleDevicesError(Exception):
 def discover() -> list[str]:
     """Find all connected GLAZE devices.
 
-    Enumerates serial ports and filters for devices whose USB metadata
-    (manufacturer and product strings) matches known GLAZE identifiers.
+    Enumerates serial ports and filters for devices whose EEPROM serial number
+    matches a known GLAZE prefix.
     On macOS, deduplicates cu.*/tty.* pairs (keeps cu.*).
 
     Returns:
@@ -83,9 +82,9 @@ def _enumerate_ports(
 
 
 def _is_glaze_device(port_info: object) -> bool:
-    manufacturer = getattr(port_info, "manufacturer", None) or ""
-    product = getattr(port_info, "product", None) or ""
-    return manufacturer == _GLAZE_MANUFACTURER and product in _GLAZE_PRODUCTS
+    serial_number = getattr(port_info, "serial_number", None) or ""
+    normalized = serial_number.upper()
+    return any(normalized.startswith(prefix) for prefix in _GLAZE_SERIAL_PREFIXES)
 
 
 def _deduplicate_macos(

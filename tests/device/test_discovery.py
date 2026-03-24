@@ -23,7 +23,7 @@ class FakePortInfo:
     device: str
     serial_number: str | None = None
     manufacturer: str = ""
-    product: str = ""
+    product: str | None = None
 
 
 def _glaze_port(device: str, serial_number: str | None = None) -> FakePortInfo:
@@ -31,17 +31,17 @@ def _glaze_port(device: str, serial_number: str | None = None) -> FakePortInfo:
     return FakePortInfo(
         device=device,
         serial_number=serial_number,
-        manufacturer="GLAZE Technologies",
-        product="Carmen",
+        manufacturer="FTDI",
+        product=None,
     )
 
 
 def test_discover_finds_glaze_device(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A port with matching manufacturer + product is returned; others are ignored."""
+    """A port with a matching serial prefix is returned; others are ignored."""
     monkeypatch.setattr(
         _COMPORTS,
         lambda: [
-            _glaze_port("/dev/ttyUSB0", serial_number="C-0005"),
+            _glaze_port("/dev/ttyUSB0", serial_number="GLAZE_C_00005A"),
             FakePortInfo("/dev/ttyUSB1"),
         ],
     )
@@ -50,27 +50,43 @@ def test_discover_finds_glaze_device(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_discover_ignores_non_glaze_ports(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A generic FTDI device is not a GLAZE device."""
+    """A generic FTDI device without a Glaze serial prefix is ignored."""
     monkeypatch.setattr(
         _COMPORTS,
-        lambda: [FakePortInfo("/dev/ttyUSB0", manufacturer="FTDI", product="FT232R")],
+        lambda: [FakePortInfo("/dev/ttyUSB0", manufacturer="FTDI", serial_number="A1")],
     )
 
     assert discover() == []
 
 
-def test_discover_ignores_partial_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both manufacturer AND product must match — one alone is not enough."""
+def test_discover_ignores_manufacturer_and_product_without_serial_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy-looking metadata alone is not enough without a matching serial."""
     monkeypatch.setattr(
         _COMPORTS,
         lambda: [
             FakePortInfo(
-                "/dev/ttyUSB0", manufacturer="GLAZE Technologies", product="Other"
+                "/dev/ttyUSB0",
+                manufacturer="GLAZE Technologies",
+                product="Carmen",
+                serial_number="C0005",
             ),
         ],
     )
 
     assert discover() == []
+
+
+def test_discover_matches_serial_prefix_case_insensitively(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _COMPORTS,
+        lambda: [FakePortInfo("COM23", serial_number="glaze_c_00001a")],
+    )
+
+    assert discover() == ["COM23"]
 
 
 def test_discover_returns_empty_when_no_ports(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,8 +104,8 @@ def test_discover_macos_keeps_cu_drops_tty(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         _COMPORTS,
         lambda: [
-            _glaze_port("/dev/cu.usbserial-C0005", serial_number="C-0005"),
-            _glaze_port("/dev/tty.usbserial-C0005", serial_number="C-0005"),
+            _glaze_port("/dev/cu.usbserial-C0005", serial_number="GLAZE_C_00005A"),
+            _glaze_port("/dev/tty.usbserial-C0005", serial_number="GLAZE_C_00005A"),
         ],
     )
     monkeypatch.setattr(_PLATFORM, "darwin")
@@ -104,10 +120,10 @@ def test_discover_macos_deduplicates_multiple_devices(
     monkeypatch.setattr(
         _COMPORTS,
         lambda: [
-            _glaze_port("/dev/cu.usbserial-C0005", serial_number="C-0005"),
-            _glaze_port("/dev/tty.usbserial-C0005", serial_number="C-0005"),
-            _glaze_port("/dev/cu.usbserial-C0006", serial_number="C-0006"),
-            _glaze_port("/dev/tty.usbserial-C0006", serial_number="C-0006"),
+            _glaze_port("/dev/cu.usbserial-C0005", serial_number="GLAZE_C_00005A"),
+            _glaze_port("/dev/tty.usbserial-C0005", serial_number="GLAZE_C_00005A"),
+            _glaze_port("/dev/cu.usbserial-C0006", serial_number="GLAZE_C_00006A"),
+            _glaze_port("/dev/tty.usbserial-C0006", serial_number="GLAZE_C_00006A"),
         ],
     )
     monkeypatch.setattr(_PLATFORM, "darwin")
@@ -141,7 +157,7 @@ def test_discover_macos_keeps_both_when_no_serial_number(
 def test_discover_one_returns_single_device(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         _COMPORTS,
-        lambda: [_glaze_port("COM3", serial_number="C-0005")],
+        lambda: [_glaze_port("COM3", serial_number="GLAZE_C_00005A")],
     )
 
     assert discover_one() == "COM3"
@@ -160,8 +176,8 @@ def test_discover_one_raises_when_multiple_devices(
     monkeypatch.setattr(
         _COMPORTS,
         lambda: [
-            _glaze_port("COM3", serial_number="C-0005"),
-            _glaze_port("COM4", serial_number="C-0006"),
+            _glaze_port("COM3", serial_number="GLAZE_C_00005A"),
+            _glaze_port("COM4", serial_number="GLAZE_C_00006A"),
         ],
     )
 
@@ -177,7 +193,7 @@ def test_connection_factory_auto_resolves_to_discovered_port(
     """
     monkeypatch.setattr(
         _COMPORTS,
-        lambda: [_glaze_port("COM9", serial_number="C-0005")],
+        lambda: [_glaze_port("COM9", serial_number="GLAZE_C_00005A")],
     )
 
     captured: dict[str, object] = {}
