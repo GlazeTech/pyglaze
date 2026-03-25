@@ -404,4 +404,7 @@ class ScanClient:
         except DeviceStateError:
             raise
         except DeviceComError:
+            # This is a best-effort follow-up probe after a failed command. If the
+            # transport is already desynchronized, fall back to the original
+            # DeviceComError path rather than masking it with another failure.
             return None

@@ -28,6 +28,8 @@ class FirmwareUpdateError(DeviceComError):
 
 
 def _format_device_state_error(state: DeviceState, *, action: str) -> str:
+    # Check from most-specific to least-specific because recovery idle is a
+    # commissioning-idle subtype.
     if state.is_trim_active:
         detail = "device is in commissioning trim mode"
     elif state.is_recovery_idle:
