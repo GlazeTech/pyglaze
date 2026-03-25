@@ -191,20 +191,31 @@ def test_try_get_device_state_reraises_device_state_errors(
     client.close()
 
 
-def test_legacy_unspecified_state_does_not_block_scan_workflow() -> None:
-    config, client = _build(
+def test_get_status_rejects_missing_state_reporting() -> None:
+    _config, client = _build(
         config=MockDeviceConfig(
             operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
             config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
         ),
     )
-    scanning_list = _compute_scanning_list(config.n_points, config.scan_intervals)
-    client.set_settings(
-        config.n_points, config.integration_periods, use_ema=config.use_ema
+
+    with pytest.raises(DeviceComError, match="config-status support"):
+        client.get_status()
+
+    client.close()
+
+
+def test_get_device_info_rejects_missing_state_reporting() -> None:
+    _config, client = _build(
+        config=MockDeviceConfig(
+            operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
+            config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
+        ),
     )
-    client.upload_list(scanning_list)
-    times, _Xs, _Ys = client.start_scan()
-    assert len(times) == config.n_points
+
+    with pytest.raises(DeviceComError, match="config-status support"):
+        client.get_device_info()
+
     client.close()
 
 
@@ -419,6 +430,8 @@ def test_inline_retransmit_bulk() -> None:
     # GET_STATUS_RESPONSE for _await_scan_complete
     status_env = codec.build_envelope(mt.GET_STATUS_RESPONSE)
     status_env.get_status_response.scan_ongoing = False
+    status_env.get_status_response.operational_state = pb.OPERATIONAL_STATE_NORMAL
+    status_env.get_status_response.config_status_reason = pb.CONFIG_STATUS_REASON_NONE
 
     chunk0 = codec.build_envelope(mt.RESULTS_CHUNK)
     c0 = chunk0.results_chunk

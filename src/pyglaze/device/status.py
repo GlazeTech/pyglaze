@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from pyglaze.device.exceptions import DeviceComError
 from pyglaze.mimlink.proto import envelope_pb2 as pb
 
 if TYPE_CHECKING:
@@ -13,7 +14,6 @@ if TYPE_CHECKING:
 class OperationalState(str, Enum):
     """Pyglaze-facing operational-state enum."""
 
-    UNSPECIFIED = "unspecified"
     NORMAL = "normal"
     COMMISSIONING_IDLE = "commissioning_idle"
     COMMISSIONING_TRIM_ACTIVE = "commissioning_trim_active"
@@ -22,14 +22,12 @@ class OperationalState(str, Enum):
 class ConfigStatusReason(str, Enum):
     """Pyglaze-facing config-status enum."""
 
-    UNSPECIFIED = "unspecified"
     NONE = "none"
     UNCONFIGURED = "unconfigured"
     INVALID_CONFIG = "invalid_config"
 
 
 _OPERATIONAL_STATE_MAP: dict[int, OperationalState] = {
-    pb.OPERATIONAL_STATE_UNSPECIFIED: OperationalState.UNSPECIFIED,
     pb.OPERATIONAL_STATE_NORMAL: OperationalState.NORMAL,
     pb.OPERATIONAL_STATE_COMMISSIONING_IDLE: OperationalState.COMMISSIONING_IDLE,
     pb.OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE: (
@@ -38,11 +36,15 @@ _OPERATIONAL_STATE_MAP: dict[int, OperationalState] = {
 }
 
 _CONFIG_STATUS_REASON_MAP: dict[int, ConfigStatusReason] = {
-    pb.CONFIG_STATUS_REASON_UNSPECIFIED: ConfigStatusReason.UNSPECIFIED,
     pb.CONFIG_STATUS_REASON_NONE: ConfigStatusReason.NONE,
     pb.CONFIG_STATUS_REASON_UNCONFIGURED: ConfigStatusReason.UNCONFIGURED,
     pb.CONFIG_STATUS_REASON_INVALID_CONFIG: ConfigStatusReason.INVALID_CONFIG,
 }
+
+_STATE_REPORTING_REQUIRED_MSG = (
+    "Device firmware does not report operational/config status; "
+    "pyglaze requires firmware with config-status support."
+)
 
 
 @dataclass(frozen=True)
@@ -51,14 +53,6 @@ class DeviceState:
 
     operational_state: OperationalState
     config_status_reason: ConfigStatusReason
-
-    @property
-    def supports_state_reporting(self) -> bool:
-        """Whether the firmware exposes explicit operational/config-state fields."""
-        return not (
-            self.operational_state is OperationalState.UNSPECIFIED
-            and self.config_status_reason is ConfigStatusReason.UNSPECIFIED
-        )
 
     @property
     def is_commissioning_idle(self) -> bool:
@@ -87,13 +81,6 @@ class DeviceState:
         }
 
 
-def _default_device_state() -> DeviceState:
-    return DeviceState(
-        operational_state=OperationalState.UNSPECIFIED,
-        config_status_reason=ConfigStatusReason.UNSPECIFIED,
-    )
-
-
 @dataclass(frozen=True)
 class DeviceInfo:
     """Device identification, capabilities, and operational state."""
@@ -106,7 +93,7 @@ class DeviceInfo:
     transfer_mode: TransferMode
     hardware_type: str
     hardware_revision: int
-    state: DeviceState = field(default_factory=_default_device_state)
+    state: DeviceState
 
     @property
     def operational_state(self) -> OperationalState:
@@ -129,7 +116,7 @@ class DeviceStatus:
     modulation_frequency_hz: int
     settings_valid: bool
     list_valid: bool
-    state: DeviceState = field(default_factory=_default_device_state)
+    state: DeviceState
 
     @property
     def operational_state(self) -> OperationalState:
@@ -146,13 +133,29 @@ def device_state_from_proto(
     operational_state: int, config_status_reason: int
 ) -> DeviceState:
     """Convert MimLink proto enum values into pyglaze enums."""
+    if (
+        int(operational_state) == pb.OPERATIONAL_STATE_UNSPECIFIED
+        or int(config_status_reason) == pb.CONFIG_STATUS_REASON_UNSPECIFIED
+    ):
+        raise DeviceComError(_STATE_REPORTING_REQUIRED_MSG)
+
+    try:
+        pyglaze_operational_state = _OPERATIONAL_STATE_MAP[int(operational_state)]
+    except KeyError as exc:
+        msg = f"Unsupported operational_state value {int(operational_state)}"
+        raise DeviceComError(msg) from exc
+
+    try:
+        pyglaze_config_status_reason = _CONFIG_STATUS_REASON_MAP[
+            int(config_status_reason)
+        ]
+    except KeyError as exc:
+        msg = f"Unsupported config_status_reason value {int(config_status_reason)}"
+        raise DeviceComError(msg) from exc
+
     return DeviceState(
-        operational_state=_OPERATIONAL_STATE_MAP.get(
-            int(operational_state), OperationalState.UNSPECIFIED
-        ),
-        config_status_reason=_CONFIG_STATUS_REASON_MAP.get(
-            int(config_status_reason), ConfigStatusReason.UNSPECIFIED
-        ),
+        operational_state=pyglaze_operational_state,
+        config_status_reason=pyglaze_config_status_reason,
     )
 
 

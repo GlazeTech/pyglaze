@@ -57,3 +57,7 @@ For a live device, use `FirmwareClient.select_compatible_release(...)`. The
 caller still provides the already-fetched manifest, and `pyglaze` reads the
 device's `firmware_target` over MimLink before applying the same exact-match
 selection logic and consumer-version checks.
+
+Connected-device selection requires firmware that reports MimLink
+`operational_state` and `config_status_reason`. Devices that omit those fields
+are unsupported by `pyglaze`.

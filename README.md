@@ -14,6 +14,10 @@ pip install pyglaze
 # Usage 
 See [our documentation](https://glazetech.github.io/pyglaze/latest/) for usage.
 
+`pyglaze` expects device firmware that reports MimLink
+`operational_state` and `config_status_reason`. Devices that omit those
+fields are unsupported.
+
 ## Firmware Updates
 
 Pyglaze supports firmware updates over MimLink via `FirmwareUpdater`.

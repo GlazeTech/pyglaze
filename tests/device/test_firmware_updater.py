@@ -22,8 +22,11 @@ if TYPE_CHECKING:
 def _device_info_env(*, firmware_version: str = "v0.1.0") -> Envelope:
     codec = EnvelopeCodec()
     env = codec.build_envelope(mt.GET_DEVICE_INFO_RESPONSE)
-    env.get_device_info_response.serial_number = "M-TEST"
-    env.get_device_info_response.firmware_version = firmware_version
+    resp = env.get_device_info_response
+    resp.serial_number = "M-TEST"
+    resp.firmware_version = firmware_version
+    resp.operational_state = pb.OPERATIONAL_STATE_NORMAL
+    resp.config_status_reason = pb.CONFIG_STATUS_REASON_NONE
     return env
 
 
