@@ -28,7 +28,7 @@ class ConfigStatusReason(str, Enum):
     INVALID_CONFIG = "invalid_config"
 
 
-_OPERATIONAL_STATE_MAP = {
+_OPERATIONAL_STATE_MAP: dict[int, OperationalState] = {
     pb.OPERATIONAL_STATE_UNSPECIFIED: OperationalState.UNSPECIFIED,
     pb.OPERATIONAL_STATE_NORMAL: OperationalState.NORMAL,
     pb.OPERATIONAL_STATE_COMMISSIONING_IDLE: OperationalState.COMMISSIONING_IDLE,
@@ -37,7 +37,7 @@ _OPERATIONAL_STATE_MAP = {
     ),
 }
 
-_CONFIG_STATUS_REASON_MAP = {
+_CONFIG_STATUS_REASON_MAP: dict[int, ConfigStatusReason] = {
     pb.CONFIG_STATUS_REASON_UNSPECIFIED: ConfigStatusReason.UNSPECIFIED,
     pb.CONFIG_STATUS_REASON_NONE: ConfigStatusReason.NONE,
     pb.CONFIG_STATUS_REASON_UNCONFIGURED: ConfigStatusReason.UNCONFIGURED,
