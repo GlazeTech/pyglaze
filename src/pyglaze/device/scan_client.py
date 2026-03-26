@@ -401,8 +401,6 @@ class ScanClient:
     def _try_get_device_state(self) -> DeviceState | None:
         try:
             return self.get_status().state
-        except DeviceStateError:
-            raise
         except DeviceComError:
             # This is a best-effort follow-up probe after a failed command. If the
             # transport is already desynchronized, fall back to the original

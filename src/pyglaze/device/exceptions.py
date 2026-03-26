@@ -41,6 +41,6 @@ def _format_device_state_error(state: DeviceState, *, action: str) -> str:
 
     return (
         f"Cannot {action}: {detail} "
-        f"(operational_state={state.operational_state.value}, "
-        f"config_status_reason={state.config_status_reason.value})"
+        f"(operational_state={state.operational_state}, "
+        f"config_status_reason={state.config_status_reason})"
     )

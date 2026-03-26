@@ -4,12 +4,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pyglaze.device import (
-    CatalogSelectionStatus,
-    ConfigStatusReason,
-    OperationalState,
-)
-from pyglaze.device.exceptions import DeviceComError, FirmwareUpdateError
+from pyglaze.device import CatalogSelectionStatus
+from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.firmware_client import FirmwareClient
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.devtools.mock_device import ScriptedTransport
@@ -120,28 +116,8 @@ def test_get_device_info() -> None:
     info = client.get_device_info()
     assert info.serial_number == "M-9999"
     assert info.firmware_target == "le-2-3-0"
-    assert info.operational_state is OperationalState.NORMAL
-    assert info.config_status_reason is ConfigStatusReason.NONE
-    client.close()
-
-
-def test_get_device_info_rejects_missing_state_reporting() -> None:
-    codec = EnvelopeCodec()
-    data = _build_scripted_envelopes(
-        codec,
-        [
-            _device_info_response(
-                codec,
-                operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
-                config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
-            )
-        ],
-    )
-    client = _build_fw_client(data)
-
-    with pytest.raises(DeviceComError, match="config-status support"):
-        client.get_device_info()
-
+    assert info.operational_state == "normal"
+    assert info.config_status_reason == "none"
     client.close()
 
 

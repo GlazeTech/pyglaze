@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pyglaze.device.exceptions import DeviceComError
 from pyglaze.mimlink.proto import envelope_pb2 as pb
@@ -10,41 +9,29 @@ from pyglaze.mimlink.proto import envelope_pb2 as pb
 if TYPE_CHECKING:
     from pyglaze.mimlink.proto.envelope_pb2 import TransferMode
 
+OperationalState = Literal[
+    "normal",
+    "commissioning_idle",
+    "commissioning_trim_active",
+]
 
-class OperationalState(str, Enum):
-    """Pyglaze-facing operational-state enum."""
-
-    NORMAL = "normal"
-    COMMISSIONING_IDLE = "commissioning_idle"
-    COMMISSIONING_TRIM_ACTIVE = "commissioning_trim_active"
-
-
-class ConfigStatusReason(str, Enum):
-    """Pyglaze-facing config-status enum."""
-
-    NONE = "none"
-    UNCONFIGURED = "unconfigured"
-    INVALID_CONFIG = "invalid_config"
-
+ConfigStatusReason = Literal[
+    "none",
+    "unconfigured",
+    "invalid_config",
+]
 
 _OPERATIONAL_STATE_MAP: dict[int, OperationalState] = {
-    pb.OPERATIONAL_STATE_NORMAL: OperationalState.NORMAL,
-    pb.OPERATIONAL_STATE_COMMISSIONING_IDLE: OperationalState.COMMISSIONING_IDLE,
-    pb.OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE: (
-        OperationalState.COMMISSIONING_TRIM_ACTIVE
-    ),
+    pb.OPERATIONAL_STATE_NORMAL: "normal",
+    pb.OPERATIONAL_STATE_COMMISSIONING_IDLE: "commissioning_idle",
+    pb.OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE: "commissioning_trim_active",
 }
 
 _CONFIG_STATUS_REASON_MAP: dict[int, ConfigStatusReason] = {
-    pb.CONFIG_STATUS_REASON_NONE: ConfigStatusReason.NONE,
-    pb.CONFIG_STATUS_REASON_UNCONFIGURED: ConfigStatusReason.UNCONFIGURED,
-    pb.CONFIG_STATUS_REASON_INVALID_CONFIG: ConfigStatusReason.INVALID_CONFIG,
+    pb.CONFIG_STATUS_REASON_NONE: "none",
+    pb.CONFIG_STATUS_REASON_UNCONFIGURED: "unconfigured",
+    pb.CONFIG_STATUS_REASON_INVALID_CONFIG: "invalid_config",
 }
-
-_STATE_REPORTING_REQUIRED_MSG = (
-    "Device firmware does not report operational/config status; "
-    "pyglaze requires firmware with config-status support."
-)
 
 
 @dataclass(frozen=True)
@@ -57,27 +44,27 @@ class DeviceState:
     @property
     def is_commissioning_idle(self) -> bool:
         """Whether the device is in shared commissioning idle."""
-        return self.operational_state is OperationalState.COMMISSIONING_IDLE
+        return self.operational_state == "commissioning_idle"
 
     @property
     def is_trim_active(self) -> bool:
         """Whether commissioning trim mode is active."""
-        return self.operational_state is OperationalState.COMMISSIONING_TRIM_ACTIVE
+        return self.operational_state == "commissioning_trim_active"
 
     @property
     def is_recovery_idle(self) -> bool:
         """Whether commissioning idle reflects a missing or invalid config."""
         return self.is_commissioning_idle and self.config_status_reason in {
-            ConfigStatusReason.UNCONFIGURED,
-            ConfigStatusReason.INVALID_CONFIG,
+            "unconfigured",
+            "invalid_config",
         }
 
     @property
     def blocks_normal_scan(self) -> bool:
         """Whether normal scan workflows should be blocked."""
         return self.operational_state in {
-            OperationalState.COMMISSIONING_IDLE,
-            OperationalState.COMMISSIONING_TRIM_ACTIVE,
+            "commissioning_idle",
+            "commissioning_trim_active",
         }
 
 
@@ -132,13 +119,7 @@ class DeviceStatus:
 def device_state_from_proto(
     operational_state: int, config_status_reason: int
 ) -> DeviceState:
-    """Convert MimLink proto enum values into pyglaze enums."""
-    if (
-        int(operational_state) == pb.OPERATIONAL_STATE_UNSPECIFIED
-        or int(config_status_reason) == pb.CONFIG_STATUS_REASON_UNSPECIFIED
-    ):
-        raise DeviceComError(_STATE_REPORTING_REQUIRED_MSG)
-
+    """Convert MimLink proto enum values into pyglaze types."""
     try:
         pyglaze_operational_state = _OPERATIONAL_STATE_MAP[int(operational_state)]
     except KeyError as exc:

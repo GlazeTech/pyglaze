@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pyglaze.device import ConfigStatusReason, DeviceState, OperationalState
 from pyglaze.device.configuration import Interval, LeDeviceConfiguration
 from pyglaze.device.exceptions import DeviceComError, DeviceStateError
 from pyglaze.device.scan_client import ScanClient
@@ -104,8 +103,8 @@ def test_get_device_info() -> None:
     assert info.serial_number == "M-9999"
     assert info.firmware_version == "v0.1.0"
     assert info.firmware_target == "le-2-3-0"
-    assert info.operational_state is OperationalState.NORMAL
-    assert info.config_status_reason is ConfigStatusReason.NONE
+    assert info.operational_state == "normal"
+    assert info.config_status_reason == "none"
     client.close()
 
 
@@ -119,8 +118,8 @@ def test_get_status() -> None:
     status = client.get_status()
     assert status.scan_ongoing is False
     assert status.list_length == config.n_points
-    assert status.operational_state is OperationalState.NORMAL
-    assert status.config_status_reason is ConfigStatusReason.NONE
+    assert status.operational_state == "normal"
+    assert status.config_status_reason == "none"
     client.close()
 
 
@@ -135,8 +134,8 @@ def test_normal_scan_workflow_blocked_in_recovery_idle() -> None:
         client.set_settings(
             config.n_points, config.integration_periods, use_ema=config.use_ema
         )
-    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
-    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
+    assert excinfo.value.state.operational_state == "commissioning_idle"
+    assert excinfo.value.state.config_status_reason == "invalid_config"
     client.close()
 
 
@@ -162,60 +161,8 @@ def test_start_scan_checks_blocked_state_after_start_rejection() -> None:
     with pytest.raises(DeviceStateError) as excinfo:
         client.start_scan()
 
-    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
-    assert excinfo.value.state.config_status_reason is ConfigStatusReason.INVALID_CONFIG
-    client.close()
-
-
-def test_try_get_device_state_reraises_device_state_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _config, client = _build()
-    state_error = DeviceStateError(
-        DeviceState(
-            operational_state=OperationalState.COMMISSIONING_IDLE,
-            config_status_reason=ConfigStatusReason.UNCONFIGURED,
-        ),
-        action="start a normal scan",
-    )
-
-    def _raise_state_error() -> None:
-        raise state_error
-
-    monkeypatch.setattr(client, "get_status", _raise_state_error)
-
-    with pytest.raises(DeviceStateError) as excinfo:
-        client._try_get_device_state()
-
-    assert excinfo.value is state_error
-    client.close()
-
-
-def test_get_status_rejects_missing_state_reporting() -> None:
-    _config, client = _build(
-        config=MockDeviceConfig(
-            operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
-            config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
-        ),
-    )
-
-    with pytest.raises(DeviceComError, match="config-status support"):
-        client.get_status()
-
-    client.close()
-
-
-def test_get_device_info_rejects_missing_state_reporting() -> None:
-    _config, client = _build(
-        config=MockDeviceConfig(
-            operational_state=pb.OPERATIONAL_STATE_UNSPECIFIED,
-            config_status_reason=pb.CONFIG_STATUS_REASON_UNSPECIFIED,
-        ),
-    )
-
-    with pytest.raises(DeviceComError, match="config-status support"):
-        client.get_device_info()
-
+    assert excinfo.value.state.operational_state == "commissioning_idle"
+    assert excinfo.value.state.config_status_reason == "invalid_config"
     client.close()
 
 

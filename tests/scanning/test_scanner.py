@@ -4,7 +4,7 @@ import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device import ConfigStatusReason, DeviceStateError, OperationalState
+from pyglaze.device import DeviceStateError
 from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.scanning._types import DeviceInfo
 from pyglaze.scanning.scanner import Scanner
@@ -63,20 +63,20 @@ def test_lescanner_get_device_info(
     assert info.serial_number != ""
     assert info.firmware_version != ""
     assert info.firmware_target != ""
-    assert info.operational_state is OperationalState.NORMAL
-    assert info.config_status_reason is ConfigStatusReason.NONE
+    assert info.operational_state == "normal"
+    assert info.config_status_reason == "none"
 
 
 @pytest.mark.parametrize(
     ("amp_port", "config_status_reason", "expected_state_kind"),
     [
-        ("mock_device_commissioning_idle", ConfigStatusReason.NONE, "commissioning"),
-        ("mock_device_unconfigured", ConfigStatusReason.UNCONFIGURED, "recovery"),
+        ("mock_device_commissioning_idle", "none", "commissioning"),
+        ("mock_device_unconfigured", "unconfigured", "recovery"),
     ],
 )
 def test_scanner_startup_surfaces_blocked_device_state(
     amp_port: str,
-    config_status_reason: ConfigStatusReason,
+    config_status_reason: str,
     expected_state_kind: str,
     le_device_config: DeviceConfiguration,
 ) -> None:
@@ -86,8 +86,8 @@ def test_scanner_startup_surfaces_blocked_device_state(
     with pytest.raises(DeviceStateError) as excinfo:
         Scanner(device_config)
 
-    assert excinfo.value.state.operational_state is OperationalState.COMMISSIONING_IDLE
-    assert excinfo.value.state.config_status_reason is config_status_reason
+    assert excinfo.value.state.operational_state == "commissioning_idle"
+    assert excinfo.value.state.config_status_reason == config_status_reason
     assert excinfo.value.state.is_recovery_idle is (expected_state_kind == "recovery")
 
 
