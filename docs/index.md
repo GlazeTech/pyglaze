@@ -17,6 +17,9 @@ This is the Pyglaze API documentation. Pyglaze is a python library used to opera
 
 Pyglaze provides two main interfaces for operating Glaze devices: The [`Scanner`](API%20Reference/scanning/Scanner.md) and the The [`GlazeClient`](API%20Reference/scanning/GlazeClient.md), where `Scanner`is a synchronous scanner, only scanning when requested, and `GlazeClient` is an asynchronous scanner, continuously scanning in the background.
 
+`pyglaze` requires device firmware that reports MimLink `operational_state`
+and `config_status_reason`. Devices that omit those fields are unsupported.
+
 ## Firmware Updates
 
 For firmware updates over MimLink, use [`FirmwareUpdater`](API%20Reference/device/FirmwareUpdater.md).

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.exceptions import FirmwareUpdateError
 from pyglaze.device.release_catalog import select_release_for_device_info
+from pyglaze.device.status import device_info_from_proto
 from pyglaze.device.transport import MimLinkTransport
 from pyglaze.mimlink import msg_types as mt
 from pyglaze.mimlink.crc import crc32
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
         CatalogSelectionResult,
         ManifestSource,
     )
+    from pyglaze.device.status import DeviceInfo
 
 _FW_CHUNK_SIZE = 256
 _FW_START_TIMEOUT_S = 10.0  # flash erase is slow
@@ -144,9 +146,9 @@ class FirmwareClient:
             env, mt.FW_UPDATE_STATUS_RESPONSE
         ).fw_update_status_response
 
-    def get_device_info(self) -> pb.GetDeviceInfoResponse:
-        """Query device info. Delegates to transport."""
-        return self._transport.get_device_info()
+    def get_device_info(self) -> DeviceInfo:
+        """Query device info and return a pyglaze-facing model."""
+        return device_info_from_proto(self._transport.get_device_info())
 
     def select_compatible_release(
         self,

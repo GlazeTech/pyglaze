@@ -9,7 +9,8 @@ import serial
 
 from pyglaze.device.configuration import AMP_BAUDRATE
 from pyglaze.device.discovery import discover_one
-from pyglaze.device.exceptions import DeviceComError
+from pyglaze.device.exceptions import DeviceComError, DeviceStateError
+from pyglaze.device.status import device_info_from_proto, device_status_from_proto
 from pyglaze.device.transport import (
     MAX_COMMAND_RETRIES,
     PROTOCOL_BASELINE_S,
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.device.status import DeviceInfo, DeviceState, DeviceStatus
     from pyglaze.helpers._types import FloatArray
     from pyglaze.mimlink.proto import envelope_pb2 as pb
 
@@ -119,6 +121,7 @@ class ScanClient:
             env, mt.SET_SETTINGS_RESPONSE
         ).set_settings_response
         if not resp.success:
+            self._raise_if_normal_scan_blocked(action="configure normal scanning")
             msg = f"Failed to set settings: {resp}"
             raise DeviceComError(msg)
 
@@ -144,6 +147,7 @@ class ScanClient:
             env, mt.SET_LIST_START_RESPONSE
         ).set_list_start_response
         if not resp.ready:
+            self._raise_if_normal_scan_blocked(action="upload a scan list")
             msg = f"Failed to start list upload: {resp}"
             raise DeviceComError(msg)
 
@@ -163,6 +167,7 @@ class ScanClient:
             complete.type != mt.SET_LIST_COMPLETE_RESPONSE
             or not complete.set_list_complete_response.success
         ):
+            self._raise_if_normal_scan_blocked(action="upload a scan list")
             msg = f"Failed to upload list: {complete}"
             raise DeviceComError(msg)
 
@@ -175,6 +180,7 @@ class ScanClient:
             env, mt.START_SCAN_RESPONSE, timeout=timeout
         ).start_scan_response
         if not resp.started:
+            self._raise_if_normal_scan_blocked(action="start a normal scan")
             msg = f"Failed to start scan: {resp}"
             raise DeviceComError(msg)
 
@@ -375,14 +381,28 @@ class ScanClient:
             sweep_length_ms * 1e-3 * _PROTOCOL_SWEEP_SAFETY_FACTOR + PROTOCOL_BASELINE_S
         )
 
-    def get_device_info(self) -> pb.GetDeviceInfoResponse:
-        """Query device info. Delegates to transport."""
-        return self._transport.get_device_info()
+    def get_device_info(self) -> DeviceInfo:
+        """Query device info and return a pyglaze-facing model."""
+        return device_info_from_proto(self._transport.get_device_info())
 
-    def get_status(self) -> pb.GetStatusResponse:
-        """Query device status. Delegates to transport."""
-        return self._transport.get_status()
+    def get_status(self) -> DeviceStatus:
+        """Query device status and return a pyglaze-facing model."""
+        return device_status_from_proto(self._transport.get_status())
 
     def close(self) -> None:
         """Close the connection. Delegates to transport."""
         self._transport.close()
+
+    def _raise_if_normal_scan_blocked(self, *, action: str) -> None:
+        state = self._try_get_device_state()
+        if state is not None and state.blocks_normal_scan:
+            raise DeviceStateError(state, action=action)
+
+    def _try_get_device_state(self) -> DeviceState | None:
+        try:
+            return self.get_status().state
+        except DeviceComError:
+            # This is a best-effort follow-up probe after a failed command. If the
+            # transport is already desynchronized, fall back to the original
+            # DeviceComError path rather than masking it with another failure.
+            return None

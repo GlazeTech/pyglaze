@@ -21,9 +21,21 @@ if TYPE_CHECKING:
     from pyglaze.mimlink.proto.envelope_pb2 import Envelope
 
 from pyglaze.mimlink.proto.envelope_pb2 import (
+    CONFIG_STATUS_REASON_INVALID_CONFIG,
+    CONFIG_STATUS_REASON_NONE,
+    CONFIG_STATUS_REASON_UNCONFIGURED,
+    OPERATIONAL_STATE_COMMISSIONING_IDLE,
+    OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE,
+    OPERATIONAL_STATE_NORMAL,
     TRANSFER_MODE_BULK,
     TRANSFER_MODE_PER_POINT,
     TransferMode,
+)
+from pyglaze.mimlink.proto.envelope_pb2 import (
+    ConfigStatusReason as ProtoConfigStatusReason,
+)
+from pyglaze.mimlink.proto.envelope_pb2 import (
+    OperationalState as ProtoOperationalState,
 )
 
 
@@ -40,6 +52,8 @@ class MockDeviceConfig:
     """Configuration for LeMockDevice behavior and fault injection."""
 
     transfer_mode: TransferMode = TRANSFER_MODE_BULK
+    operational_state: ProtoOperationalState = OPERATIONAL_STATE_NORMAL
+    config_status_reason: ProtoConfigStatusReason = CONFIG_STATUS_REASON_NONE
     fail_after: float = np.inf
     n_fails: float = np.inf
     empty_responses: bool = False
@@ -85,6 +99,9 @@ def list_mock_devices() -> list[str]:
     """List all available mock devices."""
     return [
         "mock_device",
+        "mock_device_commissioning_idle",
+        "mock_device_unconfigured",
+        "mock_device_invalid_config",
         "mock_device_per_point",
         "mock_device_scan_should_fail",
         "mock_device_empty_responses",
@@ -96,17 +113,43 @@ def _mock_device_factory(config: DeviceConfiguration) -> LeMockDevice:
 
     Sentinel values:
         ``"mock_device"`` — default mock (bulk transfer)
+        ``"mock_device_commissioning_idle"`` — commissioning idle with no config fault
+        ``"mock_device_unconfigured"`` — commissioning idle with missing config
+        ``"mock_device_invalid_config"`` — commissioning idle with invalid config
         ``"mock_device_per_point"`` — per-point transfer mode
         ``"mock_device_scan_should_fail"`` — scan fails immediately
         ``"mock_device_empty_responses"`` — silently ignores writes, returns empty reads
     """
     port = config.amp_port
-    if "mock_device_per_point" in port:
-        return LeMockDevice(MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT))
-    if "mock_device_scan_should_fail" in port:
-        return LeMockDevice(MockDeviceConfig(fail_after=0))
-    if "mock_device_empty_responses" in port:
-        return LeMockDevice(MockDeviceConfig(empty_responses=True))
+    overrides = (
+        (
+            "mock_device_commissioning_idle",
+            MockDeviceConfig(operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE),
+        ),
+        (
+            "mock_device_unconfigured",
+            MockDeviceConfig(
+                operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE,
+                config_status_reason=CONFIG_STATUS_REASON_UNCONFIGURED,
+            ),
+        ),
+        (
+            "mock_device_invalid_config",
+            MockDeviceConfig(
+                operational_state=OPERATIONAL_STATE_COMMISSIONING_IDLE,
+                config_status_reason=CONFIG_STATUS_REASON_INVALID_CONFIG,
+            ),
+        ),
+        (
+            "mock_device_per_point",
+            MockDeviceConfig(transfer_mode=TRANSFER_MODE_PER_POINT),
+        ),
+        ("mock_device_scan_should_fail", MockDeviceConfig(fail_after=0)),
+        ("mock_device_empty_responses", MockDeviceConfig(empty_responses=True)),
+    )
+    for sentinel, override in overrides:
+        if sentinel in port:
+            return LeMockDevice(override)
     return LeMockDevice()
 
 
@@ -309,10 +352,18 @@ class LeMockDevice(MockDevice):
         if handler is not None:
             handler(env)
 
+    @property
+    def _normal_scan_blocked(self) -> bool:
+        return self._config.operational_state in {
+            OPERATIONAL_STATE_COMMISSIONING_IDLE,
+            OPERATIONAL_STATE_COMMISSIONING_TRIM_ACTIVE,
+        }
+
     def _handle_set_settings(self, env: Envelope) -> None:
         req = env.set_settings_request
         valid = (
             not self._config.reject_settings
+            and not self._normal_scan_blocked
             and 1 <= req.list_length <= self.MAX_LIST_LENGTH
             and 1 <= req.integration_periods <= self.MAX_INTEGRATION_PERIODS
         )
@@ -330,6 +381,7 @@ class LeMockDevice(MockDevice):
         total = env.set_list_start_request.total_floats
         ready = (
             not self._config.reject_list_start
+            and not self._normal_scan_blocked
             and not self._is_scanning
             and self._list_length is not None
             and 0 < total <= self.MAX_LIST_LENGTH
@@ -358,11 +410,18 @@ class LeMockDevice(MockDevice):
             self._list_length is not None and self._integration_periods is not None
         )
         list_valid = len(self._scanning_list) > 0
-        started = not self._config.reject_scan_start and settings_valid and list_valid
+        started = (
+            not self._config.reject_scan_start
+            and not self._normal_scan_blocked
+            and settings_valid
+            and list_valid
+        )
         resp = self._codec.build_envelope(mt.START_SCAN_RESPONSE)
         r = resp.start_scan_response
         r.started = started
-        r.error = "" if started else "Settings/list missing"
+        r.error = (
+            "" if started else "Settings/list missing or operational state blocked"
+        )
         r.transfer_mode = self._config.transfer_mode
         self._queue_tx(resp)
         if not started:
@@ -385,6 +444,8 @@ class LeMockDevice(MockDevice):
             self._list_length is not None and self._integration_periods is not None
         )
         r.list_valid = bool(self._scanning_list)
+        r.operational_state = self._config.operational_state
+        r.config_status_reason = self._config.config_status_reason
         self._queue_tx(resp)
 
     def _handle_get_results(self, _env: Envelope) -> None:
@@ -401,6 +462,8 @@ class LeMockDevice(MockDevice):
         r.transfer_mode = self._config.transfer_mode
         r.hardware_type = "mock"
         r.hardware_revision = 0
+        r.operational_state = self._config.operational_state
+        r.config_status_reason = self._config.config_status_reason
         self._queue_tx(resp)
 
     def _handle_result_point_nak(self, env: Envelope) -> None:
