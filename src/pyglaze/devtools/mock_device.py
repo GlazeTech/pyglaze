@@ -31,6 +31,12 @@ from pyglaze.mimlink.proto.envelope_pb2 import (
     TRANSFER_MODE_PER_POINT,
     TransferMode,
 )
+from pyglaze.mimlink.proto.envelope_pb2 import (
+    ConfigStatusReason as ProtoConfigStatusReason,
+)
+from pyglaze.mimlink.proto.envelope_pb2 import (
+    OperationalState as ProtoOperationalState,
+)
 
 
 class MockDevice(ABC):
@@ -46,8 +52,8 @@ class MockDeviceConfig:
     """Configuration for LeMockDevice behavior and fault injection."""
 
     transfer_mode: TransferMode = TRANSFER_MODE_BULK
-    operational_state: int = OPERATIONAL_STATE_NORMAL
-    config_status_reason: int = CONFIG_STATUS_REASON_NONE
+    operational_state: ProtoOperationalState = OPERATIONAL_STATE_NORMAL
+    config_status_reason: ProtoConfigStatusReason = CONFIG_STATUS_REASON_NONE
     fail_after: float = np.inf
     n_fails: float = np.inf
     empty_responses: bool = False
