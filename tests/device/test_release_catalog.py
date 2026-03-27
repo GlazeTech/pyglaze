@@ -213,7 +213,7 @@ def test_select_release_for_target_returns_no_compatible_release() -> None:
 
 def test_select_release_for_target_selects_manifest_defined_dev_nucleo() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["firmware_target"] = "dev-nucleo-f446re"  # type: ignore[index]
+    _first_target(payload)["firmware_target"] = "dev-nucleo-f446re"
 
     result = select_release_for_target(payload, "dev-nucleo-f446re")
 

@@ -25,8 +25,6 @@ class CatalogSelectionStatus(str, Enum):
     """Outcome of catalog selection for a device target."""
 
     SELECTED = "selected"
-    # Kept for backward compatibility; manifest-driven selection no longer emits it.
-    NON_RELEASE_MANAGED_TARGET = "non_release_managed_target"
     NO_COMPATIBLE_RELEASE = "no_compatible_release"
     CONSUMER_UPGRADE_REQUIRED = "consumer_upgrade_required"
 
