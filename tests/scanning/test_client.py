@@ -1,14 +1,14 @@
-from typing import TYPE_CHECKING
+from copy import deepcopy
 
 import pytest
 from serial import serialutil
 
 from pyglaze.datamodels import UnprocessedWaveform
+from pyglaze.device import DeviceStateError
+from pyglaze.device.configuration import DeviceConfiguration
 from pyglaze.scanning import GlazeClient
+from pyglaze.scanning._types import DeviceInfo
 from tests.conftest import DEVICE_CONFIGS
-
-if TYPE_CHECKING:
-    from pyglaze.device.configuration import DeviceConfiguration
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
@@ -37,38 +37,42 @@ def test_wrong_address_handling(
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_raises_error_when_scan_fails(
-    config_name: str, request: pytest.FixtureRequest
+def test_get_device_info(config_name: str, request: pytest.FixtureRequest) -> None:
+    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
+    client = GlazeClient(device_config)
+    with client as c:
+        info = c.get_device_info()
+
+    assert isinstance(info, DeviceInfo)
+    assert info.serial_number != ""
+    assert info.firmware_version != ""
+    assert info.firmware_target != ""
+    assert info.operational_state == "normal"
+    assert info.config_status_reason == "none"
+
+
+@pytest.mark.parametrize(
+    ("amp_port", "config_status_reason", "expected_state_kind"),
+    [
+        ("mock_device_commissioning_idle", "none", "commissioning"),
+        ("mock_device_invalid_config", "invalid_config", "recovery"),
+    ],
+)
+def test_client_startup_surfaces_blocked_device_state(
+    amp_port: str,
+    config_status_reason: str,
+    expected_state_kind: str,
+    le_device_config: DeviceConfiguration,
 ) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    device_config.amp_port = "mock_device_scan_should_fail"
-    with (
-        pytest.raises(serialutil.SerialException),
-        GlazeClient(device_config) as client,
-    ):
-        client.read(n_pulses=1)
+    device_config = deepcopy(le_device_config)
+    device_config.amp_port = amp_port
 
+    with pytest.raises(DeviceStateError) as excinfo, GlazeClient(device_config):
+        pass
 
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_get_serial_number(config_name: str, request: pytest.FixtureRequest) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    client = GlazeClient(device_config)
-    with client as c:
-        serial_number = c.get_serial_number()
-
-    assert isinstance(serial_number, str)
-    assert serial_number != ""
-
-
-@pytest.mark.parametrize("config_name", DEVICE_CONFIGS)
-def test_get_firmware_version(config_name: str, request: pytest.FixtureRequest) -> None:
-    device_config: DeviceConfiguration = request.getfixturevalue(config_name)
-    client = GlazeClient(device_config)
-    with client as c:
-        firmware_version = c.get_firmware_version()
-
-    assert isinstance(firmware_version, str)
-    assert firmware_version != ""
+    assert excinfo.value.state.operational_state == "commissioning_idle"
+    assert excinfo.value.state.config_status_reason == config_status_reason
+    assert excinfo.value.state.is_recovery_idle is (expected_state_kind == "recovery")
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

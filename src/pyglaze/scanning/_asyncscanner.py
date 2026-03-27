@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from serial import SerialException, serialutil
 
 from pyglaze.datamodels.waveform import UnprocessedWaveform, _TimestampedWaveform
+from pyglaze.device.exceptions import DeviceComError
 from pyglaze.scanning.scanner import Scanner
 
 if TYPE_CHECKING:
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.scanning._types import DeviceInfo
 
 
 @dataclass
@@ -27,8 +29,7 @@ class _ScannerHealth:
 
 @dataclass
 class _ScannerMetadata:
-    serial_number: str
-    firmware_version: str
+    device_info: DeviceInfo
 
 
 @dataclass
@@ -119,18 +120,19 @@ class _AsyncScanner:
     def get_next(self: _AsyncScanner) -> UnprocessedWaveform:
         return self._get_scan().waveform
 
-    def get_serial_number(self: _AsyncScanner) -> str:
+    def get_device_info(self: _AsyncScanner) -> DeviceInfo:
         if not self.is_scanning:
             msg = "Scanner not connected"
             raise SerialException(msg)
-        return self._metadata.serial_number
+        return self._metadata.device_info
+
+    def get_serial_number(self: _AsyncScanner) -> str:
+        """Convenience wrapper for glaze-desktop compatibility. Delegates to get_device_info()."""
+        return self.get_device_info().serial_number
 
     def get_firmware_version(self: _AsyncScanner) -> str:
-        if not self.is_scanning:
-            msg = "Scanner not connected"
-            raise SerialException(msg)
-
-        return self._metadata.firmware_version
+        """Convenience wrapper for glaze-desktop compatibility. Delegates to get_device_info()."""
+        return self.get_device_info().firmware_version
 
     def get_phase_estimate(self: _AsyncScanner) -> float | None:
         """Get the current phase estimate from the scanner.
@@ -175,12 +177,11 @@ class _AsyncScanner:
                 config=config, initial_phase_estimate=initial_phase_estimate
             )
             device_metadata = _ScannerMetadata(
-                serial_number=scanner.get_serial_number(),
-                firmware_version=scanner.get_firmware_version(),
+                device_info=scanner.get_device_info(),
             )
             parent_conn.send(_ScannerHealth(is_alive=True, is_healthy=True, error=None))
             parent_conn.send(device_metadata)
-        except (serialutil.SerialException, TimeoutError) as e:
+        except (serialutil.SerialException, TimeoutError, DeviceComError) as e:
             parent_conn.send(_ScannerHealth(is_alive=False, is_healthy=False, error=e))
             return
 

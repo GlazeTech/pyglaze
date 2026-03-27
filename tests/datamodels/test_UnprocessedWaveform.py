@@ -3,10 +3,10 @@ from typing import Literal  # noqa: N999
 import numpy as np
 import pytest
 
-from pyglaze.datamodels import Pulse, UnprocessedWaveform
+from pyglaze.datamodels import UnprocessedWaveform
 
 
-def test_from_polar_output(gaussian_deriv_pulse_w_errors: Pulse) -> None:
+def test_from_polar_output(gaussian_deriv_pulse_w_errors: UnprocessedWaveform) -> None:
     # Convert a pulse to a raw output
     radius = np.abs(gaussian_deriv_pulse_w_errors.signal)
     sign = np.clip(np.sign(gaussian_deriv_pulse_w_errors.signal), a_min=0, a_max=1)
@@ -38,11 +38,7 @@ def test_reconstruct_unknown_method(
     unprocessed_waveform_nonuniform: UnprocessedWaveform,
 ) -> None:
     with pytest.raises(ValueError, match=r"Unknown reconstruction*"):
-        unprocessed_waveform_nonuniform.reconstruct(method="unknown_method")  # type: ignore[arg-type]
-
-
-def test_as_pulse(unprocessed_waveform_nonuniform: UnprocessedWaveform) -> None:
-    assert isinstance(unprocessed_waveform_nonuniform.as_pulse(), Pulse)
+        unprocessed_waveform_nonuniform.reconstruct(method="unknown_method")  # ty:ignore[invalid-argument-type]
 
 
 def test_waveform_average(unprocessed_waveform_nonuniform: UnprocessedWaveform) -> None:
@@ -70,11 +66,11 @@ def test_from_triangular_raises(
     unprocessed_waveform_nonuniform: UnprocessedWaveform,
 ) -> None:
     with pytest.raises(ValueError, match="'ramp' must be either 'up' or 'down'"):
-        unprocessed_waveform_nonuniform.from_triangular_waveform("wrong")  # type: ignore[arg-type]
+        unprocessed_waveform_nonuniform.from_triangular_waveform("wrong")  # ty:ignore[invalid-argument-type]
 
 
 def test_from_dict() -> None:
     d: dict[str, list[float]] = {"time": [0.0, 1.0, 2.0], "signal": [0.1, 0.2, 0.3]}
-    waveform = UnprocessedWaveform.from_dict(d)  # type: ignore[arg-type]
+    waveform = UnprocessedWaveform.from_dict(d)
     assert np.array_equal(waveform.time, np.array([0.0, 1.0, 2.0]))
     assert np.array_equal(waveform.signal, np.array([0.1, 0.2, 0.3]))

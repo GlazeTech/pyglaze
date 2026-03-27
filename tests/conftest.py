@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pyglaze.datamodels import Pulse, UnprocessedWaveform
+from pyglaze.datamodels import UnprocessedWaveform
 from pyglaze.device import Interval, LeDeviceConfiguration
 from pyglaze.devtools.thz_pulse import gaussian_derivative_pulse
 
@@ -16,15 +16,7 @@ def le_device_config() -> LeDeviceConfiguration:
         n_points=100,
         scan_intervals=[Interval(0.0, 1.0)],
         integration_periods=1,
-        amp_timeout_seconds=7,
     )
-
-
-@pytest.fixture(scope="session")
-def scan_data() -> Pulse:
-    t = np.linspace(0, 50, 51)
-    sig = np.sin(t)
-    return Pulse(t, sig)
 
 
 @pytest.fixture
@@ -60,15 +52,23 @@ def triangular_waveform_down_up() -> UnprocessedWaveform:
 
 
 @pytest.fixture
-def gaussian_deriv_pulse() -> Pulse:
+def gaussian_deriv_pulse() -> UnprocessedWaveform:
     dt = 0.1e-12
     times = np.arange(1000) * dt
-    return Pulse(
+    return UnprocessedWaveform(
         time=times,
         signal=gaussian_derivative_pulse(time=times, t0=10e-12, sigma=0.3e-12),
     )
 
 
 @pytest.fixture
-def gaussian_deriv_pulse_w_errors(gaussian_deriv_pulse: Pulse) -> Pulse:
-    return gaussian_deriv_pulse.add_white_noise(noise_std=1e-2, seed=42)
+def gaussian_deriv_pulse_w_errors(
+    gaussian_deriv_pulse: UnprocessedWaveform,
+) -> UnprocessedWaveform:
+    return UnprocessedWaveform(
+        time=gaussian_deriv_pulse.time,
+        signal=gaussian_deriv_pulse.signal
+        + np.random.default_rng(42).normal(
+            loc=0.0, scale=1e-2, size=len(gaussian_deriv_pulse.signal)
+        ),
+    )

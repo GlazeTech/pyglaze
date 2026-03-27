@@ -10,16 +10,16 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
       - name: Build and install package
         run: |
           uv sync --extra build
@@ -36,15 +36,23 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.12"
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1.50.0
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Run buf lint
+        run: buf lint
+      - name: Regenerate vendored protobuf artifacts
+        run: uv run ./scripts/generate_mimlink_proto.sh
+      - name: Check generated protobuf drift
+        run: git diff --exit-code -- src/pyglaze/mimlink/proto/envelope_pb2.py src/pyglaze/mimlink/proto/envelope_pb2.pyi
       - name: Run ruff linter
         run: uv run ruff check .
       - name: Run ruff formatter
@@ -56,13 +64,13 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: uv sync --extra docs
       - name: Test docs build
@@ -79,11 +87,11 @@ jobs:
           echo "${{ secrets.GLAZE_CICD_UTILS_SECRET }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - name: Install CI/CD utils
         run: pip install git+ssh://git@github.com/GlazeTech/CICD-utils.git
       - name: Validate version number

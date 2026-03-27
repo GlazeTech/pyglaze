@@ -1,0 +1,10 @@
+version: v2
+
+plugins:
+  - remote: buf.build/protocolbuffers/python:v33.0
+    out: src/pyglaze/mimlink/proto
+  - remote: buf.build/protocolbuffers/pyi:v33.0
+    out: src/pyglaze/mimlink/proto
+
+inputs:
+  - directory: src/pyglaze/mimlink/proto

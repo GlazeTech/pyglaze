@@ -1,20 +1,23 @@
 [project]
 name = "pyglaze"
-version = "0.5.1"
+version = "1.0.0"
 description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
     {name = "GLAZE Technologies ApS"},
 ]
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<3.15"
 
 dependencies = [
-    "numpy>=1.26.4,<2.0.0",
+    "numpy>=2.0.0",
     "pyserial>=3.5",
     "scipy>=1.7.3",
-    "bitstring>=4.1.2",
-    "typing_extensions>=4.12.2"
+    "typing_extensions>=4.12.2",
+    "protobuf>=6.33.0",
+    "cobs>=1.2.1",
+    "crccheck>=1.3.1",
+    "semver>=3.0.4,<4",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +45,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "semver>=2.13.0",
     "types-pyserial>=3.5.0.8",
+    "types-protobuf>=6.32.1",
     "bumpver>=2023.1129",
 ]
 
@@ -60,8 +64,13 @@ include-package-data = true
 
 [tool.pytest.ini_options]
 addopts = [
-    "--cov=pyglaze", 
+    "--cov=pyglaze",
     "--import-mode=importlib",
+]
+
+[tool.coverage.run]
+omit = [
+    "*/proto/*_pb2.py",
 ]
 
 [tool.coverage.report]
@@ -71,7 +80,8 @@ exclude_also = [
     ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
+extend-exclude = ["src/pyglaze/mimlink/proto/envelope_pb2.py", "src/pyglaze/mimlink/proto/envelope_pb2.pyi"]
 lint.select = ["ALL"]
 lint.ignore = [
     "D100",   # allow undocumented public modules
@@ -102,7 +112,7 @@ convention = "google"
 ]
 
 [tool.bumpver]
-current_version = "0.5.1"
+current_version = "1.0.0"
 version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
 commit_message = "BUMP VERSION {old_version} -> {new_version}"
 tag_message = "v{new_version}"
@@ -124,6 +134,9 @@ push = false
 "docs/index.md" = [
     '**Documentation Version**: {version}'
 ]
+
+[tool.ty.environment]
+extra-paths = ["typestubs"]
 
 [tool.ty.rules]
 unused-ignore-comment = "error"

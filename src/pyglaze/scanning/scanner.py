@@ -1,15 +1,60 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from math import modf
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+import numpy as np
 
 from pyglaze.datamodels import UnprocessedWaveform
-from pyglaze.device.ampcom import _LeAmpCom
 from pyglaze.device.configuration import DeviceConfiguration, LeDeviceConfiguration
+from pyglaze.device.scan_client import ScanClient
 from pyglaze.helpers._lockin import _LockinPhaseEstimator
 from pyglaze.scanning._exceptions import ScanError
 
+if TYPE_CHECKING:
+    from pyglaze.device.configuration import Interval
+    from pyglaze.scanning._types import DeviceInfo
+
 TConfig = TypeVar("TConfig", bound=DeviceConfiguration)
+
+
+def _points_per_interval(n_points: int, intervals: list[Interval]) -> list[int]:
+    """Divides a total number of points between intervals."""
+    interval_lengths = [interval.length for interval in intervals]
+    total_length = sum(interval_lengths)
+
+    points_per_interval_floats = [
+        n_points * length / total_length for length in interval_lengths
+    ]
+    points_per_interval = [int(e) for e in points_per_interval_floats]
+
+    # We must distribute the remainder from the int operation to get the right amount of total points
+    remainders = [modf(num)[0] for num in points_per_interval_floats]
+    sorted_indices = np.flip(np.argsort(remainders))
+    for i in range(int(0.5 + np.sum(remainders))):
+        points_per_interval[sorted_indices[i]] += 1
+
+    return points_per_interval
+
+
+def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[float]:
+    """Compute the scanning frequency list from config."""
+    scanning_list: list[float] = []
+    for interval, pts in zip(
+        intervals,
+        _points_per_interval(n_points, intervals),
+        strict=True,
+    ):
+        scanning_list.extend(
+            np.linspace(
+                interval.lower,
+                interval.upper,
+                pts,
+                endpoint=len(intervals) == 1,
+            ),
+        )
+    return scanning_list
 
 
 class _ScannerImplementation(ABC, Generic[TConfig]):
@@ -40,11 +85,7 @@ class _ScannerImplementation(ABC, Generic[TConfig]):
         pass
 
     @abstractmethod
-    def get_serial_number(self: _ScannerImplementation) -> str:
-        pass
-
-    @abstractmethod
-    def get_firmware_version(self: _ScannerImplementation) -> str:
+    def get_device_info(self: _ScannerImplementation) -> DeviceInfo:
         pass
 
     @abstractmethod
@@ -99,21 +140,13 @@ class Scanner:
         """Close serial connection."""
         self._scanner_impl.disconnect()
 
-    def get_serial_number(self: Scanner) -> str:
-        """Get the serial number of the connected device.
+    def get_device_info(self: Scanner) -> DeviceInfo:
+        """Get device information.
 
         Returns:
-            str: The serial number of the connected device.
+            DeviceInfo: Device identification and capabilities.
         """
-        return self._scanner_impl.get_serial_number()
-
-    def get_firmware_version(self: Scanner) -> str:
-        """Get the firmware version of the connected device.
-
-        Returns:
-            str: The firmware version of the connected device.
-        """
-        return self._scanner_impl.get_firmware_version()
+        return self._scanner_impl.get_device_info()
 
     def get_phase_estimate(self: Scanner) -> float | None:
         """Get the current phase estimate from the lock-in phase estimator.
@@ -139,7 +172,7 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         initial_phase_estimate: float | None = None,
     ) -> None:
         self._config: LeDeviceConfiguration
-        self._ampcom: _LeAmpCom | None = None
+        self._client: ScanClient | None = None
         self.config = config
         self._phase_estimator = _LockinPhaseEstimator(
             initial_phase_estimate=initial_phase_estimate
@@ -156,20 +189,66 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     @config.setter
     def config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
-        amp = _LeAmpCom(new_config)
-        if getattr(self, "_config", None):
-            if (
-                self._config.integration_periods != new_config.integration_periods
-                or self._config.n_points != new_config.n_points
-            ):
-                amp.write_list_length_and_integration_periods_and_use_ema()
-            if self._config.scan_intervals != new_config.scan_intervals:
-                amp.write_list()
-        else:
-            amp.write_all()
-
+        new_client = self._create_initialized_client(new_config)
+        old_client = self._client
+        self._client = new_client
         self._config = new_config
-        self._ampcom = amp
+        if old_client is not None:
+            old_client.close()
+
+    def _create_initialized_client(
+        self: LeScanner, new_config: LeDeviceConfiguration
+    ) -> ScanClient:
+        """Build and initialize a client for a prospective scanner config."""
+        new_client = ScanClient.from_config(new_config)
+        try:
+            settings_changed, list_changed = self._config_change_flags(new_config)
+            self._initialize_client(
+                new_client,
+                new_config,
+                settings_changed=settings_changed,
+                list_changed=list_changed,
+            )
+        except Exception:
+            new_client.close()
+            raise
+        return new_client
+
+    def _config_change_flags(
+        self: LeScanner, new_config: LeDeviceConfiguration
+    ) -> tuple[bool, bool]:
+        """Report whether device settings or scan-list inputs changed."""
+        if not getattr(self, "_config", None):
+            return True, True
+
+        settings_changed = (
+            self._config.integration_periods != new_config.integration_periods
+            or self._config.n_points != new_config.n_points
+            or self._config.use_ema != new_config.use_ema
+        )
+        list_changed = self._config.scan_intervals != new_config.scan_intervals
+        return settings_changed, list_changed
+
+    def _initialize_client(
+        self: LeScanner,
+        client: ScanClient,
+        new_config: LeDeviceConfiguration,
+        *,
+        settings_changed: bool,
+        list_changed: bool,
+    ) -> None:
+        """Apply the required device settings and scan list to a new client."""
+        if settings_changed:
+            client.set_settings(
+                new_config.n_points,
+                new_config.integration_periods,
+                use_ema=new_config.use_ema,
+            )
+        if list_changed or settings_changed:
+            scanning_list = _compute_scanning_list(
+                new_config.n_points, new_config.scan_intervals
+            )
+            client.upload_list(scanning_list)
 
     def scan(self: LeScanner) -> UnprocessedWaveform:
         """Perform a scan.
@@ -177,13 +256,13 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
         Returns:
             Unprocessed scan.
         """
-        if self._ampcom is None:
+        if self._client is None:
             msg = "Scanner not configured"
             raise ScanError(msg)
-        _, time, Xs, Ys = self._ampcom.start_scan()
+        times, Xs, Ys = self._client.start_scan()
         self._phase_estimator.update_estimate(Xs=Xs, Ys=Ys)
         return UnprocessedWaveform.from_inphase_quadrature(
-            time, Xs, Ys, self._phase_estimator.phase_estimate
+            times, Xs, Ys, self._phase_estimator.phase_estimate
         )
 
     def update_config(self: LeScanner, new_config: LeDeviceConfiguration) -> None:
@@ -196,33 +275,18 @@ class LeScanner(_ScannerImplementation[LeDeviceConfiguration]):
 
     def disconnect(self: LeScanner) -> None:
         """Close serial connection."""
-        if self._ampcom is None:
+        if self._client is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        self._ampcom.disconnect()
-        self._ampcom = None
+        self._client.close()
+        self._client = None
 
-    def get_serial_number(self: LeScanner) -> str:
-        """Get the serial number of the connected device.
-
-        Returns:
-            str: The serial number of the connected device.
-        """
-        if self._ampcom is None:
+    def get_device_info(self: LeScanner) -> DeviceInfo:
+        """Get device information."""
+        if self._client is None:
             msg = "Scanner not connected"
             raise ScanError(msg)
-        return self._ampcom.get_serial_number()
-
-    def get_firmware_version(self: LeScanner) -> str:
-        """Get the firmware version of the connected device.
-
-        Returns:
-            str: The firmware version of the connected device.
-        """
-        if self._ampcom is None:
-            msg = "Scanner not connected"
-            raise ScanError(msg)
-        return self._ampcom.get_firmware_version()
+        return self._client.get_device_info()
 
     def get_phase_estimate(self: LeScanner) -> float | None:
         """Get the current phase estimate from the lock-in phase estimator.

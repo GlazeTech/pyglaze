@@ -11,6 +11,7 @@ from ._asyncscanner import _AsyncScanner
 if TYPE_CHECKING:
     from pyglaze.datamodels import UnprocessedWaveform
     from pyglaze.device.configuration import DeviceConfiguration
+    from pyglaze.scanning._types import DeviceInfo
 
 
 class ScannerStartupError(Exception):
@@ -61,18 +62,10 @@ class GlazeClient:
         """
         return self._scanner.get_scans(n_pulses)
 
-    def get_serial_number(self: GlazeClient) -> str:
-        """Get the serial number of the connected device."""
+    def get_device_info(self: GlazeClient) -> DeviceInfo:
+        """Get device information."""
         try:
-            return self._scanner.get_serial_number()
-        except AttributeError as e:
-            msg = "No connection to device."
-            raise SerialException(msg) from e
-
-    def get_firmware_version(self: GlazeClient) -> str:
-        """Get the firmware version of the connected device."""
-        try:
-            return self._scanner.get_firmware_version()
+            return self._scanner.get_device_info()
         except AttributeError as e:
             msg = "No connection to device."
             raise SerialException(msg) from e

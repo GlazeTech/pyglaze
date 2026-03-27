@@ -1,0 +1,12 @@
+version: v2
+
+modules:
+  - path: src/pyglaze/mimlink/proto
+
+lint:
+  use:
+    - STANDARD
+  except:
+    - ENUM_ZERO_VALUE_SUFFIX
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_VERSION_SUFFIX

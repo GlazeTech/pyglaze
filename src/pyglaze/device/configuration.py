@@ -3,20 +3,15 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 T = TypeVar("T", bound="DeviceConfiguration")
 
-
-# Serial protocol constants for timeout calculation
-SERIAL_BITS_PER_BYTE = 10  # 8 data bits + start + stop bits
-N_CHANNELS = 3  # delays, X, Y arrays transmitted
-BYTES_PER_CHANNEL = 4  # 32-bit float = 4 bytes
-TIMEOUT_SAFETY_FACTOR = 2.5  # Safety multiplier for network/processing delays
-TIMEOUT_BASELINE_S = 0.05  # Fixed additive latency
+AMP_BAUDRATE = 1000000
 
 
 @dataclass
@@ -32,7 +27,7 @@ class Interval:
         return abs(self.upper - self.lower)
 
     @classmethod
-    def from_dict(cls: type[Interval], d: dict) -> Interval:
+    def from_dict(cls: type[Interval], d: Mapping[str, object]) -> Interval:
         """Create an instance of the Interval class from a dictionary.
 
         Args:
@@ -41,7 +36,12 @@ class Interval:
         Returns:
             Interval: An instance of the Interval class.
         """
-        return cls(**d)
+        lower = d.get("lower")
+        upper = d.get("upper")
+        if not isinstance(lower, (int, float)) or not isinstance(upper, (int, float)):
+            msg = "Interval dictionary must contain numeric 'lower' and 'upper' values"
+            raise TypeError(msg)
+        return cls(lower=lower, upper=upper)
 
     def __post_init__(self: Interval) -> None:  # noqa: D105
         if not 0.0 <= self.lower <= 1.0:
@@ -58,7 +58,7 @@ class Interval:
 class DeviceConfiguration(ABC):
     """Base class for device configurations."""
 
-    amp_timeout_seconds: float | None
+    amp_timeout_seconds: float
     amp_port: str
     amp_baudrate: ClassVar[int]
     n_points: int
@@ -101,21 +101,10 @@ class LeDeviceConfiguration(DeviceConfiguration):
     n_points: int = 1000
     scan_intervals: list[Interval] = field(default_factory=lambda: [Interval(0.0, 1.0)])
     integration_periods: int = 10
-    amp_timeout_seconds: float | None = None
+    amp_timeout_seconds: float = 0.1
     modulation_frequency: int = 10000  # Hz
 
-    amp_baudrate: ClassVar[int] = 1000000  # bit/s
-
-    def __post_init__(self: LeDeviceConfiguration) -> None:
-        """Calculate dynamic timeout if not explicitly set."""
-        if self.amp_timeout_seconds is None:
-            # Calculate timeout based on data transfer requirements
-            bytes_to_receive = self.n_points * N_CHANNELS * BYTES_PER_CHANNEL
-            bits_to_transfer = bytes_to_receive * SERIAL_BITS_PER_BYTE
-            transfer_time = bits_to_transfer / self.amp_baudrate
-            self.amp_timeout_seconds = (
-                transfer_time + TIMEOUT_BASELINE_S
-            ) * TIMEOUT_SAFETY_FACTOR
+    amp_baudrate: ClassVar[int] = AMP_BAUDRATE
 
     @property
     def _sweep_length_ms(self: LeDeviceConfiguration) -> float:
@@ -159,9 +148,17 @@ class LeDeviceConfiguration(DeviceConfiguration):
             msg = "'amp_config' is empty."
             raise ValueError(msg)
 
-        config = cls(**amp_config)
-        config.scan_intervals = [Interval.from_dict(d) for d in config.scan_intervals]  # type: ignore[arg-type]
-        return config
+        normalized_config = dict(amp_config)
+        raw_scan_intervals = normalized_config.get("scan_intervals")
+        if isinstance(raw_scan_intervals, list):
+            normalized_config["scan_intervals"] = [
+                interval
+                if isinstance(interval, Interval)
+                else Interval.from_dict(cast("Mapping[str, object]", interval))
+                for interval in raw_scan_intervals
+            ]
+
+        return cls(**normalized_config)
 
     @classmethod
     def load(
