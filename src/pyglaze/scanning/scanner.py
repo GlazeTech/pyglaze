@@ -44,6 +44,7 @@ def _compute_scanning_list(n_points: int, intervals: list[Interval]) -> list[flo
     for interval, pts in zip(
         intervals,
         _points_per_interval(n_points, intervals),
+        strict=True,
     ):
         scanning_list.extend(
             np.linspace(

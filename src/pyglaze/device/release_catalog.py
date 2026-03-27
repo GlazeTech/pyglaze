@@ -4,7 +4,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Union, cast
+from typing import cast
 
 import semver
 
@@ -75,11 +75,7 @@ class CatalogSelectionResult:
     warning_legacy_support: bool = False
 
 
-ManifestSource = Union[
-    FirmwareReleaseManifest,
-    str,
-    Mapping[str, object],
-]
+ManifestSource = FirmwareReleaseManifest | str | Mapping[str, object]
 
 
 def parse_release_manifest(source: ManifestSource) -> FirmwareReleaseManifest:

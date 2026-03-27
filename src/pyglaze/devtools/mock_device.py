@@ -290,7 +290,7 @@ class LeMockDevice(MockDevice):
         self, times: FloatArray, xs: FloatArray, ys: FloatArray
     ) -> dict[int, Envelope]:
         points: dict[int, Envelope] = {}
-        for idx, (t, x, y) in enumerate(zip(times, xs, ys)):
+        for idx, (t, x, y) in enumerate(zip(times, xs, ys, strict=True)):
             env = self._codec.build_envelope(mt.RESULT_POINT)
             p = env.result_point
             p.point_index = idx
