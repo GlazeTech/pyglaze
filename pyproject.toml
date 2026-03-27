@@ -7,7 +7,7 @@ license = { file = "LICENSE" }
 authors = [
     {name = "GLAZE Technologies ApS"},
 ]
-requires-python = ">=3.9,<3.15"
+requires-python = ">=3.10,<3.15"
 
 dependencies = [
     "numpy>=2.0.0",
@@ -80,7 +80,7 @@ exclude_also = [
     ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 extend-exclude = ["src/pyglaze/mimlink/proto/envelope_pb2.py", "src/pyglaze/mimlink/proto/envelope_pb2.pyi"]
 lint.select = ["ALL"]
 lint.ignore = [
