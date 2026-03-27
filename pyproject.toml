@@ -1,13 +1,13 @@
 [project]
 name = "pyglaze"
-version = "0.6.0"
+version = "1.0.0"
 description = "Pyglaze is a library used to operate the devices of Glaze Technologies"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
     {name = "GLAZE Technologies ApS"},
 ]
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.9,<3.15"
 
 dependencies = [
     "numpy>=2.0.0",
@@ -36,7 +36,6 @@ docs = [
     "mkdocstrings[python]>=0.18.1",
     "mike>=1.1.2",
     "Pygments>=2.12.0",
-    "matplotlib>=3.7.0",
     "bumpver>=2023.1129",
 ]
 dev = [
@@ -113,7 +112,7 @@ convention = "google"
 ]
 
 [tool.bumpver]
-current_version = "0.6.0"
+current_version = "1.0.0"
 version_pattern = "MAJOR.MINOR.PATCH[-TAG]"
 commit_message = "BUMP VERSION {old_version} -> {new_version}"
 tag_message = "v{new_version}"
