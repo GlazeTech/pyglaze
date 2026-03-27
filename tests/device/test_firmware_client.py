@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -40,13 +40,11 @@ def _fw_start_response(
     return env
 
 
-def _fw_chunk_ack(
-    codec: EnvelopeCodec, index: int, status: pb.FwChunkStatus
-) -> pb.Envelope:
+def _fw_chunk_ack(codec: EnvelopeCodec, index: int, status: int) -> pb.Envelope:
     env = codec.build_envelope(mt.FW_UPDATE_CHUNK_ACK)
     ack = env.fw_update_chunk_ack
     ack.chunk_index = index
-    ack.status = status
+    ack.status = cast("pb.FwChunkStatus", status)
     return env
 
 
@@ -214,7 +212,7 @@ def test_update_firmware_unexpected_chunk_status() -> None:
 
     envelopes = [
         _fw_start_response(codec, accepted=True),
-        _fw_chunk_ack(codec, 0, 99),  # type: ignore[arg-type]
+        _fw_chunk_ack(codec, 0, 99),
     ]
     data = _build_scripted_envelopes(codec, envelopes)
     client = _build_fw_client(data)

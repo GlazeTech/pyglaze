@@ -9,6 +9,7 @@ from scipy.interpolate import CubicSpline
 from pyglaze.helpers._lockin import _estimate_IQ_phase, _polar_to_IQ, _rotate_inphase
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
     from pyglaze.helpers._types import FloatArray
@@ -78,7 +79,7 @@ class UnprocessedWaveform:
 
     @classmethod
     def from_dict(
-        cls: type[UnprocessedWaveform], d: dict[str, FloatArray | list[float] | None]
+        cls: type[UnprocessedWaveform], d: Mapping[str, FloatArray | list[float] | None]
     ) -> UnprocessedWaveform:
         """Create an UnprocessedWaveform object from a dictionary.
 

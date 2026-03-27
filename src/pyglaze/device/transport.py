@@ -192,7 +192,11 @@ class MimLinkTransport:
                 msg = f"Unexpected response: expected {expected}, got {resp.type}"
                 raise DeviceComError(msg)
             return resp
-        raise last_err  # type: ignore[misc]
+        if last_err is not None:
+            raise last_err
+
+        msg = "Failed to receive device response"
+        raise DeviceComError(msg)
 
     def get_device_info(self) -> pb.GetDeviceInfoResponse:
         """Query device info. Returns the protobuf GetDeviceInfoResponse sub-message."""

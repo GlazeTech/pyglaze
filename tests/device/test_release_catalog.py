@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -47,6 +48,10 @@ def _manifest_dict() -> dict[str, object]:
     }
 
 
+def _first_target(payload: dict[str, object]) -> dict[str, object]:
+    return cast("list[dict[str, object]]", payload["targets"])[0]
+
+
 def test_parse_release_manifest_from_string() -> None:
     manifest = parse_release_manifest(json.dumps(_manifest_dict()))
 
@@ -65,7 +70,7 @@ def test_parse_release_manifest_passes_through_already_parsed() -> None:
 
 def test_parse_release_manifest_rejects_blank_required_strings() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["artifact_url"] = "   "  # type: ignore[index]
+    _first_target(payload)["artifact_url"] = "   "
 
     with pytest.raises(ValueError, match="artifact_url"):
         parse_release_manifest(payload)
@@ -83,7 +88,7 @@ def test_parse_release_manifest_rejects_non_object_root() -> None:
 
 def test_parse_release_manifest_rejects_duplicate_targets() -> None:
     payload = _manifest_dict()
-    duplicate_target = dict(payload["targets"][0])  # type: ignore[index]
+    duplicate_target = dict(_first_target(payload))
     payload["targets"] = [duplicate_target, duplicate_target]
 
     with pytest.raises(ValueError, match="duplicate firmware_target"):
@@ -132,7 +137,7 @@ def test_parse_release_manifest_rejects_non_object_target_entries() -> None:
 
 def test_parse_release_manifest_rejects_missing_required_target_field() -> None:
     payload = _manifest_dict()
-    del payload["targets"][0]["artifact_url"]  # type: ignore[index]
+    del _first_target(payload)["artifact_url"]
 
     with pytest.raises(TypeError, match="artifact_url"):
         parse_release_manifest(payload)
@@ -140,7 +145,7 @@ def test_parse_release_manifest_rejects_missing_required_target_field() -> None:
 
 def test_parse_release_manifest_rejects_invalid_format() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["format"] = "raw-bin"  # type: ignore[index]
+    _first_target(payload)["format"] = "raw-bin"
 
     with pytest.raises(ValueError, match="format"):
         parse_release_manifest(payload)
@@ -148,7 +153,7 @@ def test_parse_release_manifest_rejects_invalid_format() -> None:
 
 def test_parse_release_manifest_rejects_invalid_size_bytes() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["size_bytes"] = 0  # type: ignore[index]
+    _first_target(payload)["size_bytes"] = 0
 
     with pytest.raises(ValueError, match="size_bytes"):
         parse_release_manifest(payload)
@@ -156,7 +161,7 @@ def test_parse_release_manifest_rejects_invalid_size_bytes() -> None:
 
 def test_parse_release_manifest_rejects_non_object_minimum_consumer_versions() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["minimum_consumer_versions"] = "0.6.0"  # type: ignore[index]
+    _first_target(payload)["minimum_consumer_versions"] = "0.6.0"
 
     with pytest.raises(TypeError, match="minimum_consumer_versions"):
         parse_release_manifest(payload)
@@ -164,7 +169,7 @@ def test_parse_release_manifest_rejects_non_object_minimum_consumer_versions() -
 
 def test_parse_release_manifest_rejects_invalid_pyglaze_version_constraint() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["minimum_consumer_versions"] = {"pyglaze": "not-semver"}  # type: ignore[index]
+    _first_target(payload)["minimum_consumer_versions"] = {"pyglaze": "not-semver"}
 
     with pytest.raises(ValueError, match=r"minimum_consumer_versions\.pyglaze"):
         parse_release_manifest(payload)
@@ -172,7 +177,7 @@ def test_parse_release_manifest_rejects_invalid_pyglaze_version_constraint() -> 
 
 def test_parse_release_manifest_rejects_non_string_pyglaze_version_constraint() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["minimum_consumer_versions"] = {"pyglaze": 3}  # type: ignore[index]
+    _first_target(payload)["minimum_consumer_versions"] = {"pyglaze": 3}
 
     with pytest.raises(TypeError, match="pyglaze"):
         parse_release_manifest(payload)
@@ -180,7 +185,7 @@ def test_parse_release_manifest_rejects_non_string_pyglaze_version_constraint() 
 
 def test_parse_release_manifest_rejects_non_release_managed_target() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["firmware_target"] = "dev-nucleo-f446re"  # type: ignore[index]
+    _first_target(payload)["firmware_target"] = "dev-nucleo-f446re"
 
     with pytest.raises(ValueError, match="non-release-managed"):
         parse_release_manifest(payload)
@@ -214,7 +219,7 @@ def test_select_release_for_target_returns_non_release_managed_target() -> None:
 
 def test_select_release_for_target_reports_unmet_pyglaze_version() -> None:
     payload = _manifest_dict()
-    payload["targets"][0]["minimum_consumer_versions"] = {"pyglaze": "9.9.9"}  # type: ignore[index]
+    _first_target(payload)["minimum_consumer_versions"] = {"pyglaze": "9.9.9"}
 
     result = select_release_for_target(payload, "le-2-3-0")
 

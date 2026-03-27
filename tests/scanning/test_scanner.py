@@ -49,7 +49,7 @@ def test_no_connection_error(config_name: str, request: pytest.FixtureRequest) -
 
 def test_invalid_config_type() -> None:
     with pytest.raises(TypeError):
-        Scanner("invalid_config")  # type: ignore[type-var]
+        Scanner("invalid_config")  # ty:ignore[invalid-argument-type]
 
 
 @pytest.mark.parametrize("config_name", DEVICE_CONFIGS)

@@ -135,7 +135,11 @@ class ScanClient:
                 last_err = e
             else:
                 return
-        raise last_err  # type: ignore[misc]
+        if last_err is not None:
+            raise last_err
+
+        msg = "Failed to upload list"
+        raise DeviceComError(msg)
 
     def _upload_list_sequence(self, scanning_list: list[float]) -> None:
         """Execute the list upload sequence once."""

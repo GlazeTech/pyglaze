@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 T = TypeVar("T", bound="DeviceConfiguration")
@@ -26,7 +27,7 @@ class Interval:
         return abs(self.upper - self.lower)
 
     @classmethod
-    def from_dict(cls: type[Interval], d: dict) -> Interval:
+    def from_dict(cls: type[Interval], d: Mapping[str, object]) -> Interval:
         """Create an instance of the Interval class from a dictionary.
 
         Args:
@@ -35,7 +36,12 @@ class Interval:
         Returns:
             Interval: An instance of the Interval class.
         """
-        return cls(**d)
+        lower = d.get("lower")
+        upper = d.get("upper")
+        if not isinstance(lower, (int, float)) or not isinstance(upper, (int, float)):
+            msg = "Interval dictionary must contain numeric 'lower' and 'upper' values"
+            raise TypeError(msg)
+        return cls(lower=lower, upper=upper)
 
     def __post_init__(self: Interval) -> None:  # noqa: D105
         if not 0.0 <= self.lower <= 1.0:
@@ -142,9 +148,17 @@ class LeDeviceConfiguration(DeviceConfiguration):
             msg = "'amp_config' is empty."
             raise ValueError(msg)
 
-        config = cls(**amp_config)
-        config.scan_intervals = [Interval.from_dict(d) for d in config.scan_intervals]  # type: ignore[arg-type]
-        return config
+        normalized_config = dict(amp_config)
+        raw_scan_intervals = normalized_config.get("scan_intervals")
+        if isinstance(raw_scan_intervals, list):
+            normalized_config["scan_intervals"] = [
+                interval
+                if isinstance(interval, Interval)
+                else Interval.from_dict(cast("Mapping[str, object]", interval))
+                for interval in raw_scan_intervals
+            ]
+
+        return cls(**normalized_config)
 
     @classmethod
     def load(

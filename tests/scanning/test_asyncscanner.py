@@ -19,7 +19,8 @@ def test_start_stop(config_name: str, request: pytest.FixtureRequest) -> None:
     assert scanner.is_scanning
 
     scanner.stop_scan()
-    assert scanner._child_process._closed  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="process object is closed"):
+        scanner._child_process.is_alive()
     assert scanner.is_scanning is False
 
 
