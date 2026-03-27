@@ -20,14 +20,11 @@ __all__ = [
     "select_release_for_target",
 ]
 
-_KNOWN_NON_RELEASE_MANAGED_TARGETS = frozenset({"dev-nucleo-f446re"})
-
 
 class CatalogSelectionStatus(str, Enum):
     """Outcome of catalog selection for a device target."""
 
     SELECTED = "selected"
-    NON_RELEASE_MANAGED_TARGET = "non_release_managed_target"
     NO_COMPATIBLE_RELEASE = "no_compatible_release"
     CONSUMER_UPGRADE_REQUIRED = "consumer_upgrade_required"
 
@@ -127,13 +124,6 @@ def select_release_for_target(
     parsed_manifest = parse_release_manifest(manifest)
     normalized_target = firmware_target.strip()
 
-    if normalized_target in _KNOWN_NON_RELEASE_MANAGED_TARGETS:
-        return CatalogSelectionResult(
-            status=CatalogSelectionStatus.NON_RELEASE_MANAGED_TARGET,
-            target=None,
-            device_firmware_target=normalized_target,
-        )
-
     target = next(
         (
             candidate
@@ -208,12 +198,6 @@ def _parse_target(payload: object) -> FirmwareReleaseTarget:
 
     target = cast("dict[str, object]", payload)
     firmware_target = _expect_str(target, "firmware_target")
-    if firmware_target in _KNOWN_NON_RELEASE_MANAGED_TARGETS:
-        msg = (
-            "manifest targets must not include known non-release-managed "
-            "firmware_target values"
-        )
-        raise ValueError(msg)
 
     format_name = _expect_str(target, "format")
     if format_name != "mcuboot-signed-bin":

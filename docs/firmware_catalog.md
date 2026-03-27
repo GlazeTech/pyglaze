@@ -5,8 +5,14 @@ selection, and select the installable artifact that matches a device's canonical
 `firmware_target`.
 
 `pyglaze` does not fetch `manifest.json` or download release assets in this
-workflow. A caller such as `glaze-desktop` should fetch the manifest and pass it
-to `pyglaze`.
+workflow. A caller such as `glaze-desktop` should fetch the public stable
+manifest and pass it to `pyglaze`.
+
+Factory tooling may choose a different release surface before handing a single
+manifest into `pyglaze`, but `pyglaze` itself operates on the chosen manifest
+rather than on repository-specific policy. If the chosen manifest contains a
+target, `pyglaze` may select it; if the manifest omits a target, `pyglaze`
+reports no compatible release.
 
 ## Parse a Catalog
 
